@@ -53,8 +53,8 @@ async fn setup() -> Setup {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::default(),
-                limits: wgpu::Limits::default(),
+                features: adapter.features(),
+                limits: adapter.limits(),
             },
             trace_dir.ok().as_ref().map(std::path::Path::new),
         )
@@ -250,7 +250,7 @@ fn setup_scene(
     });
 
     let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-        label: None,
+        label: Some("Main Shader"),
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
