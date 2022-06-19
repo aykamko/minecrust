@@ -85,9 +85,11 @@ fn start(
         queue,
     }: Setup,
 ) {
-    let format = surface
-        .get_preferred_format(&adapter)
-        .expect("No suitable format found on the system!");
+    let format = *surface
+        .get_supported_formats(&adapter)
+        .unwrap()
+        .first()
+        .unwrap();
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: format,
