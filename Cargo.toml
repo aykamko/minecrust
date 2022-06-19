@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 futures = "0.3"
-pollster = "0.2"  # let's you block on futures (like await in Javascript)
+bytemuck = { version = "1.9.1", features = ["derive"] }
 winit = "0.26.1"
 wgpu = "0.12.0"
