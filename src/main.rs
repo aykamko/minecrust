@@ -1,14 +1,13 @@
 use winit::{
-    // event::{Event, WindowEvent},
-    event_loop::{/* ControlFlow, */ EventLoop},
-    // window::WindowBuilder,
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
 };
 use wgpu;
 use futures::executor::block_on;
 
 fn main() {
     let s = block_on(setup());
-    start(setup);
+    start(s);
 }
 
 // #[cfg(not(target_arch = "wasm32"))]
@@ -75,20 +74,39 @@ async fn setup() -> Setup {
         device,
         queue,
     }
-
-    // event_loop.run(move |event, _, control_flow| {
-    //     *control_flow = ControlFlow::Wait;
-
-    //     match event {
-    //         Event::WindowEvent {
-    //             event: WindowEvent::CloseRequested,
-    //             window_id,
-    //         } if window_id == window.id() => *control_flow = ControlFlow::Exit,
-    //         _ => (),
-    //     }
-    // });
 }
 
-fn start(setup: Setup) {
+fn start(Setup {
+        window,
+        event_loop,
+        instance,
+        size,
+        surface,
+        adapter,
+        device,
+        queue,
+}: Setup) {
+    let format = surface
+            .get_preferred_format(&adapter)
+            .expect("No suitable format found on the system!");
+    let mut config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: format,
+        width: size.width,
+        height: size.height,
+        present_mode: wgpu::PresentMode::Mailbox,
+    };
+    surface.configure(&device, &config);
 
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                window_id,
+            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
+            _ => (),
+        }
+    });
 }
