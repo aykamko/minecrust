@@ -460,6 +460,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.20.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f43e957e744be03f5801a55472f593d43fabdebf25a4585db250f04d86b1675f"
+
+[[package]]
 name = "glow"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -684,6 +690,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "futures",
+ "glam",
  "wgpu",
  "winit",
 ]

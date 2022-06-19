@@ -10,3 +10,4 @@ futures = "0.3"
 bytemuck = { version = "1.9.1", features = ["derive"] }
 winit = "0.26.1"
 wgpu = "0.12.0"
+glam = "0.20.5"
