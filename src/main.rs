@@ -248,20 +248,80 @@ fn setup_scene(
         usage: wgpu::BufferUsages::INDEX,
     });
 
+    // Create the texture
+    let texture_atlas_bytes = include_bytes!("../assets/minecruft_atlas.png");
+    let texture_atlas_bytes = image::load_from_memory(texture_atlas_bytes).unwrap();
+    let texture_atlas_rgba = texture_atlas_bytes.to_rgba8();
+
+    use image::GenericImageView;
+    let dimensions = texture_atlas_rgba.dimensions();
+
+    let texture_extent = wgpu::Extent3d {
+        width: dimensions.0,
+        height: dimensions.1,
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: texture_extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+    });
+    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &texture_atlas_rgba,
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
+            rows_per_image: std::num::NonZeroU32::new(dimensions.1),
+        },
+        texture_extent,
+    );
+
+    let diffuse_texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+
     // Create pipeline layout
     let vertex_bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    multisampled: false,
-                    sample_type: wgpu::TextureSampleType::Uint,
-                    view_dimension: wgpu::TextureViewDimension::D2,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    // This should match the filterable field of the
+                    // corresponding Texture entry above.
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
         });
     let camera_bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -283,35 +343,6 @@ fn setup_scene(
         push_constant_ranges: &[],
     });
 
-    // Create the texture
-    let size = 256u32;
-    let texels = create_mandelbrot_set_fractal_texels(size as usize);
-    let texture_extent = wgpu::Extent3d {
-        width: size,
-        height: size,
-        depth_or_array_layers: 1,
-    };
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size: texture_extent,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::R8Uint,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-    });
-    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    queue.write_texture(
-        texture.as_image_copy(),
-        &texels,
-        wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: Some(std::num::NonZeroU32::new(size).unwrap()),
-            rows_per_image: None,
-        },
-        texture_extent,
-    );
-
     // Camera
     let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Camera Buffer"),
@@ -329,10 +360,16 @@ fn setup_scene(
     // Create bind groups
     let vertex_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &vertex_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::TextureView(&texture_view),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+            },
+        ],
         label: None,
     });
     let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -520,24 +557,6 @@ fn render_scene(
     // spawner.spawn_local(ErrorFuture {
     //     inner: device.pop_error_scope(),
     // });
-}
-
-fn create_mandelbrot_set_fractal_texels(size: usize) -> Vec<u8> {
-    (0..size * size)
-        .map(|id| {
-            // get high five for recognizing this ;)
-            let cx = 3.0 * (id % size) as f32 / (size - 1) as f32 - 2.0;
-            let cy = 2.0 * (id / size) as f32 / (size - 1) as f32 - 1.0;
-            let (mut x, mut y, mut count) = (cx, cy, 0);
-            while count < 0xFF && x * x + y * y < 4.0 {
-                let old_x = x;
-                x = x * x - y * y + cx;
-                y = 2.0 * old_x * y + cy;
-                count += 1;
-            }
-            count
-        })
-        .collect()
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
