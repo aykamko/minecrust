@@ -32,7 +32,9 @@ struct Scene {
     index_buf: wgpu::Buffer,
     index_count: usize,
     vertex_bind_group: wgpu::BindGroup,
-    camera_bind_group_layout: wgpu::BindGroupLayout,
+    camera_bind_group: wgpu::BindGroup,
+    camera_buf: wgpu::Buffer,
+    camera_staging_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     // pipeline_wire: Option<wgpu::RenderPipeline>,
 }
@@ -111,9 +113,7 @@ fn start(
     };
     surface.configure(&device, &config);
 
-    let scene = setup_scene(&config, &adapter, &device, &queue);
-
-    let camera = camera::Camera {
+    let mut camera = camera::Camera {
         // position the camera one unit up and 2 units back
         // +z is out of the screen
         eye: (1.5f32, -5.0, 3.0).into(),
@@ -126,6 +126,10 @@ fn start(
         znear: 1.0,
         zfar: 10.0,
     };
+    let mut camera_uniform = camera::CameraUniform::new();
+    camera_uniform.update_view_proj(&camera);
+
+    let scene = setup_scene(&config, &adapter, &device, &queue, camera_uniform);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -138,16 +142,47 @@ fn start(
                     }
                 }
                 WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-                    Some(VirtualKeyCode::W) => {}
-                    Some(VirtualKeyCode::A) => {}
-                    Some(VirtualKeyCode::S) => {}
-                    Some(VirtualKeyCode::D) => {}
+                    Some(VirtualKeyCode::W) => {
+                        camera.eye.x += 0.1;
+                        update_camera(&camera, &mut camera_uniform);
+                        queue.write_buffer(
+                            &scene.camera_buf,
+                            0,
+                            bytemuck::cast_slice(&[camera_uniform]),
+                        );
+                    }
+                    Some(VirtualKeyCode::A) => {
+                        camera.eye.y -= 0.1;
+                        update_camera(&camera, &mut camera_uniform);
+                        queue.write_buffer(
+                            &scene.camera_buf,
+                            0,
+                            bytemuck::cast_slice(&[camera_uniform]),
+                        );
+                    }
+                    Some(VirtualKeyCode::S) => {
+                        camera.eye.x -= 0.1;
+                        update_camera(&camera, &mut camera_uniform);
+                        queue.write_buffer(
+                            &scene.camera_buf,
+                            0,
+                            bytemuck::cast_slice(&[camera_uniform]),
+                        );
+                    }
+                    Some(VirtualKeyCode::D) => {
+                        camera.eye.y += 0.1;
+                        update_camera(&camera, &mut camera_uniform);
+                        queue.write_buffer(
+                            &scene.camera_buf,
+                            0,
+                            bytemuck::cast_slice(&[camera_uniform]),
+                        );
+                    }
                     _ => (),
                 },
                 _ => (),
             },
 
-            // if window_id == window.id() => *control_flow = ControlFlow::Exit,
             Event::RedrawRequested(_) => {
                 let frame = match surface.get_current_texture() {
                     Ok(frame) => frame,
@@ -162,10 +197,16 @@ fn start(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                let camera_bind_group = generate_camera_position_bind_group(&camera, &scene.camera_bind_group_layout, &device);
-                render_scene(&view, &device, &queue, &scene, &camera_bind_group);
+                render_scene(&view, &device, &queue, &scene);
+                println!("Rendering scene");
 
                 frame.present();
+            }
+
+            Event::MainEventsCleared => {
+                // RedrawRequested will only trigger once, unless we manually
+                // request it.
+                window.request_redraw();
             }
 
             _ => (),
@@ -173,32 +214,9 @@ fn start(
     });
 }
 
-fn generate_camera_position_bind_group(
-    camera: &camera::Camera,
-    group_layout: &wgpu::BindGroupLayout,
-    device: &wgpu::Device,
-) -> wgpu::BindGroup {
-    let mut camera_uniform = CameraUniform::new();
+fn update_camera(camera: &camera::Camera, camera_uniform: &mut camera::CameraUniform) {
+    println!("Camera coords: {:?}", camera.eye);
     camera_uniform.update_view_proj(&camera);
-
-    let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Camera Buffer"),
-        contents: bytemuck::cast_slice(&[camera_uniform]),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-
-    let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buf.as_entire_binding(),
-            },
-        ],
-        label: None,
-    });
-
-    camera_bind_group
 }
 
 fn setup_scene(
@@ -206,6 +224,7 @@ fn setup_scene(
     _adapter: &wgpu::Adapter,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    camera_uniform: camera::CameraUniform,
 ) -> Scene {
     let vertex_size = mem::size_of::<Vertex>();
     let (vertex_data, index_data) = create_vertices();
@@ -285,15 +304,34 @@ fn setup_scene(
         texture_extent,
     );
 
+    // Camera
+    let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Camera Buffer"),
+        contents: bytemuck::cast_slice(&[camera_uniform]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let camera_staging_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Camera Staging Buffer"),
+        contents: bytemuck::cast_slice(&[camera_uniform]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+    });
+
     // Create bind groups
     let vertex_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &vertex_bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_view),
-            },
-        ],
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureView(&texture_view),
+        }],
+        label: None,
+    });
+    let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &camera_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: camera_buf.as_entire_binding(),
+        }],
         label: None,
     });
 
@@ -346,7 +384,9 @@ fn setup_scene(
         index_buf,
         index_count: index_data.len(),
         vertex_bind_group,
-        camera_bind_group_layout,
+        camera_bind_group,
+        camera_buf,
+        camera_staging_buf,
         pipeline,
     }
 }
@@ -356,7 +396,6 @@ fn render_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     scene: &Scene,
-    camera_bind_group: &wgpu::BindGroup,
     // spawner: &framework::Spawner,
 ) {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -383,9 +422,9 @@ fn render_scene(
         rpass.push_debug_group("Prepare data for draw.");
         rpass.set_pipeline(&scene.pipeline);
         rpass.set_bind_group(0, &scene.vertex_bind_group, &[]);
+        rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
         rpass.set_vertex_buffer(0, scene.vertex_buf.slice(..));
-        rpass.set_bind_group(1, &camera_bind_group, &[]);
         rpass.pop_debug_group();
         rpass.insert_debug_marker("Draw!");
         rpass.draw_indexed(0..scene.index_count as u32, 0, 0..1);
@@ -396,6 +435,13 @@ fn render_scene(
         //     rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
         // }
     }
+    // encoder.copy_buffer_to_buffer(
+    //     &scene.camera_staging_buf,
+    //     0,
+    //     &scene.camera_buf,
+    //     0,
+    //     mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
+    // );
 
     queue.submit(Some(encoder.finish()));
 
@@ -428,29 +474,6 @@ fn create_mandelbrot_set_fractal_texels(size: usize) -> Vec<u8> {
 struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
-}
-
-// We need this for Rust to store our data correctly for the shaders
-#[repr(C)]
-// This is so we can store this in a buffer
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    // We can't use cgmath with bytemuck directly so we'll have
-    // to convert the Matrix4 into a 4x4 f32 array
-    view_proj: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    fn new() -> Self {
-        use cgmath::SquareMatrix;
-        Self {
-            view_proj: cgmath::Matrix4::identity().into(),
-        }
-    }
-
-    fn update_view_proj(&mut self, camera: &camera::Camera) {
-        self.view_proj = camera.build_view_projection_matrix().into();
-    }
 }
 
 fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
