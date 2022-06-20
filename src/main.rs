@@ -255,8 +255,10 @@ fn setup_scene(
     let dimensions = texture_atlas_rgba.dimensions();
 
     let texture_extent = wgpu::Extent3d {
-        width: dimensions.0,
-        height: dimensions.1,
+        // width: dimensions.0,
+        // height: dimensions.1,
+        width: 16,
+        height: 16,
         depth_or_array_layers: 1,
     };
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -265,7 +267,7 @@ fn setup_scene(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     });
     queue.write_texture(
@@ -289,7 +291,7 @@ fn setup_scene(
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
+        mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
         mipmap_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
