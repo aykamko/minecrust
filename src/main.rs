@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{ElementState, Event, ModifiersState, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, ModifiersState, VirtualKeyCode, WindowEvent, DeviceEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -153,32 +153,31 @@ fn start(
                                 *control_flow = ControlFlow::Exit;
                                 return;
                             }
-                            camera_controller.process_events(&event);
+                            camera_controller.process_window_event(&event);
                         }
                         _ => {
-                            camera_controller.process_events(&event);
+                            camera_controller.process_window_event(&event);
                         }
                     }
                 }
-                WindowEvent::CursorMoved { position, .. } => {
-                    println!("Mouse position: {:?}", position);
+                WindowEvent::CursorMoved { .. } => {
                     if !cursor_grabbed {
-                        let window_pos = window
-                            .outer_position()
-                            .expect("Failed to get window position");
-                        let window_size = window.outer_size();
-                        window
-                            .set_cursor_position(winit::dpi::LogicalPosition::new(
-                                window_pos.x + (window_size.width / 2) as i32,
-                                window_pos.y + (window_size.height / 2) as i32,
-                            ))
-                            .expect("Failed to set cursor position");
-                        // window.set_cursor_grab(true).expect("Failed to grab curosr");
-                        // cursor_grabbed = true;
+                        window.set_cursor_grab(true).expect("Failed to grab curosr");
+                        window.set_cursor_visible(false);
+                        cursor_grabbed = true;
                     }
                 }
                 _ => (),
             },
+
+            Event::DeviceEvent { event, .. } => match event {
+                DeviceEvent::MouseMotion { .. } => {
+                    if cursor_grabbed {
+                        camera_controller.process_device_event(&event);
+                    }
+                }
+                _ => (),
+            }
 
             Event::RedrawRequested(_) => {
                 let frame = match surface.get_current_texture() {

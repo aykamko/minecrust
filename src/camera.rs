@@ -1,5 +1,5 @@
 use winit::{
-    event::{VirtualKeyCode, WindowEvent, ElementState},
+    event::{VirtualKeyCode, WindowEvent, ElementState, DeviceEvent},
 };
 
 pub struct Camera {
@@ -68,6 +68,7 @@ pub struct CameraController {
     is_backward_pressed: bool,
     is_left_pressed: bool,
     is_right_pressed: bool,
+    last_mouse_delta: (f64, f64),
 }
 
 impl CameraController {
@@ -78,10 +79,11 @@ impl CameraController {
             is_backward_pressed: false,
             is_left_pressed: false,
             is_right_pressed: false,
+            last_mouse_delta: (0.0, 0.0),
         }
     }
 
-    pub fn process_events(&mut self, event: &WindowEvent) -> bool {
+    pub fn process_window_event(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::KeyboardInput {
                 input: winit::event::KeyboardInput {
@@ -111,6 +113,17 @@ impl CameraController {
                     }
                     _ => false,
                 }
+            }
+            _ => false,
+        }
+    }
+
+    pub fn process_device_event(&mut self, event: &DeviceEvent) -> bool {
+        match event { 
+            DeviceEvent::MouseMotion { delta } => {
+                self.last_mouse_delta = *delta;
+                println!("last mouse delta: {:?}", self.last_mouse_delta);
+                true
             }
             _ => false,
         }
