@@ -1,9 +1,11 @@
+mod camera;
+
 use bytemuck::{Pod, Zeroable};
 use futures::executor::block_on;
 use std::{borrow::Cow, f32::consts, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{Event, WindowEvent},
+    event::{Event, WindowEvent, VirtualKeyCode},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -102,16 +104,28 @@ fn start(
     let scene = setup_scene(&config, &adapter, &device, &queue);
 
     event_loop.run(move |event, _, control_flow| {
-        // let _ = (&scene); // force ownership by the closure
-
         *control_flow = ControlFlow::Poll;
 
         match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                window_id,
-            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
+            Event::WindowEvent { event, window_id } => match event {
+                WindowEvent::CloseRequested => {
+                    if window_id == window.id() {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    match input.virtual_keycode {
+                        Some(VirtualKeyCode::W) => {},
+                        Some(VirtualKeyCode::A) => {},
+                        Some(VirtualKeyCode::S) => {},
+                        Some(VirtualKeyCode::D) => {},
+                        _ => (),
+                    }
+                }
+                _ => (),
+            },
 
+            // if window_id == window.id() => *control_flow = ControlFlow::Exit,
             Event::RedrawRequested(_) => {
                 let frame = match surface.get_current_texture() {
                     Ok(frame) => frame,
@@ -140,7 +154,7 @@ struct Scene {
     index_buf: wgpu::Buffer,
     index_count: usize,
     bind_group: wgpu::BindGroup,
-    uniform_buf: wgpu::Buffer,
+    camera_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     // pipeline_wire: Option<wgpu::RenderPipeline>,
 }
@@ -226,12 +240,26 @@ fn setup_scene(
         texture_extent,
     );
 
-    // Create other resources
-    let mx_total = generate_matrix(config.width as f32 / config.height as f32);
-    let mx_ref: &[f32; 16] = mx_total.as_ref();
-    let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Uniform Buffer"),
-        contents: bytemuck::cast_slice(mx_ref),
+    let camera = camera::Camera {
+        // position the camera one unit up and 2 units back
+        // +z is out of the screen
+        eye: (1.5f32, -5.0, 3.0).into(),
+        // have it look at the origin
+        target: (0.0, 0.0, 0.0).into(),
+        // which way is "up"
+        up: cgmath::Vector3::unit_z(),
+        aspect: config.width as f32 / config.height as f32,
+        fovy: 45.0,
+        znear: 1.0,
+        zfar: 10.0,
+    };
+
+    let mut camera_uniform = CameraUniform::new();
+    camera_uniform.update_view_proj(&camera);
+
+    let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Camera Buffer"),
+        contents: bytemuck::cast_slice(&[camera_uniform]),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
@@ -241,7 +269,7 @@ fn setup_scene(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform_buf.as_entire_binding(),
+                resource: camera_buf.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -300,7 +328,7 @@ fn setup_scene(
         index_buf,
         index_count: index_data.len(),
         bind_group,
-        uniform_buf,
+        camera_buf,
         pipeline,
     }
 }
@@ -357,16 +385,6 @@ fn render_scene(
     // });
 }
 
-fn generate_matrix(aspect_ratio: f32) -> glam::Mat4 {
-    let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 10.0);
-    let view = glam::Mat4::look_at_rh(
-        glam::Vec3::new(1.5f32, -5.0, 3.0),
-        glam::Vec3::ZERO,
-        glam::Vec3::Z,
-    );
-    projection * view
-}
-
 fn create_mandelbrot_set_fractal_texels(size: usize) -> Vec<u8> {
     (0..size * size)
         .map(|id| {
@@ -390,6 +408,29 @@ fn create_mandelbrot_set_fractal_texels(size: usize) -> Vec<u8> {
 struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
+}
+
+// We need this for Rust to store our data correctly for the shaders
+#[repr(C)]
+// This is so we can store this in a buffer
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraUniform {
+    // We can't use cgmath with bytemuck directly so we'll have
+    // to convert the Matrix4 into a 4x4 f32 array
+    view_proj: [[f32; 4]; 4],
+}
+
+impl CameraUniform {
+    fn new() -> Self {
+        use cgmath::SquareMatrix;
+        Self {
+            view_proj: cgmath::Matrix4::identity().into(),
+        }
+    }
+
+    fn update_view_proj(&mut self, camera: &camera::Camera) {
+        self.view_proj = camera.build_view_projection_matrix().into();
+    }
 }
 
 fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
