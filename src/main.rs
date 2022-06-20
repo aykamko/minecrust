@@ -12,11 +12,6 @@ use winit::{
 };
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
-const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-    0.0,
-);
 
 fn main() {
     let s = block_on(setup());
@@ -370,21 +365,25 @@ fn setup_scene(
     };
 
     let instances = (0..NUM_INSTANCES_PER_ROW)
-        .flat_map(|y| {
-            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+        .flat_map(|x| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |y| {
                 let position = cgmath::Vector3 {
-                    x: x as f32,
-                    y: y as f32,
+                    x: (x as f32 * 2.5),
+                    y: (y as f32 * 2.5),
                     z: 0.0,
-                } - INSTANCE_DISPLACEMENT;
-
-                let rotation = if position.is_zero() {
-                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                    // as Quaternions can effect scale if they're not created correctly
-                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                } else {
-                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                 };
+
+                // let rotation = if position.is_zero() {
+                //     // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                //     // as Quaternions can effect scale if they're not created correctly
+                //     cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
+                // } else {
+                //     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                // };
+                let rotation = cgmath::Quaternion::from_axis_angle(
+                    cgmath::Vector3::unit_y(),
+                    cgmath::Deg(0.0),
+                );
 
                 lib::Instance { position, rotation }
             })
@@ -475,7 +474,11 @@ fn render_scene(
         rpass.pop_debug_group();
         rpass.insert_debug_marker("Draw!");
 
-        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..scene.instances.len() as _);
+        rpass.draw_indexed(
+            0..scene.index_count as u32,
+            0,
+            0..scene.instances.len() as _,
+        );
 
         // TODO: wireframe
         // if let Some(ref pipe) = self.pipeline_wire {
