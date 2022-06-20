@@ -44,4 +44,3 @@ impl Texture {
         Self { texture, view, sampler }
     }
 }
- 

@@ -375,19 +375,19 @@ fn setup_scene(
                     z: 0.0,
                 };
 
-                let rotation = if position.is_zero() {
-                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                    // as Quaternions can effect scale if they're not created correctly
-                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                } else {
-                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                };
+                // let rotation = if position.is_zero() {
+                //     // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                //     // as Quaternions can effect scale if they're not created correctly
+                //     cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
+                // } else {
+                //     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                // };
 
-                // // No rotation
-                // let rotation = cgmath::Quaternion::from_axis_angle(
-                //     cgmath::Vector3::unit_y(),
-                //     cgmath::Deg(0.0),
-                // );
+                // No rotation
+                let rotation = cgmath::Quaternion::from_axis_angle(
+                    cgmath::Vector3::unit_y(),
+                    cgmath::Deg(0.0),
+                );
 
                 lib::Instance { position, rotation }
             })
