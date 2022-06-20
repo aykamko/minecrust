@@ -257,6 +257,8 @@ fn setup_scene(
     let texture_extent = wgpu::Extent3d {
         // width: dimensions.0,
         // height: dimensions.1,
+
+        // Hardcoded to 16,16 so that we only grab the first sprite from the texture atlas
         width: 16,
         height: 16,
         depth_or_array_layers: 1,
@@ -404,11 +406,11 @@ fn setup_scene(
 
     let instances = (0..NUM_INSTANCES_PER_ROW)
         .flat_map(|x| {
-            (0..NUM_INSTANCES_PER_ROW).map(move |y| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |z| {
                 let position = cgmath::Vector3 {
                     x: (x as f32 * 2.5),
-                    y: (y as f32 * 2.5),
-                    z: 0.0,
+                    y: 0.0,
+                    z: (z as f32 * 2.5),
                 };
 
                 // let rotation = if position.is_zero() {
