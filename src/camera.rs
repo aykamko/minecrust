@@ -64,6 +64,7 @@ impl CameraUniform {
 
 pub struct CameraController {
     speed: f32,
+    rotation_speed: f64,
     is_forward_pressed: bool,
     is_backward_pressed: bool,
     is_left_pressed: bool,
@@ -72,9 +73,10 @@ pub struct CameraController {
 }
 
 impl CameraController {
-    pub fn new(speed: f32) -> Self {
+    pub fn new(speed: f32, rotation_speed: f64) -> Self {
         Self {
             speed,
+            rotation_speed,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,
@@ -149,7 +151,10 @@ impl CameraController {
             camera.eye -= forward_norm * self.speed;
         }
 
+        // Strafing vector
         let right_norm = forward_norm.cross(camera.up);
+
+        // "Vertical" strafing vector
         let up_norm = right_norm.cross(forward).normalize();
 
         if self.is_right_pressed {
@@ -163,27 +168,20 @@ impl CameraController {
 
         let (x_delta, y_delta) = self.last_mouse_delta;
         if y_delta != 0.0 {
-            let theta = cgmath::Rad((-y_delta * 0.01 * consts::PI) as f32);
-            println!("y_delta is {:?}, theta is {:?}", y_delta, theta);
+            let theta = cgmath::Rad((-y_delta * self.rotation_speed * consts::PI) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(right_norm, theta);
-            let new_forward_norm = rot.rotate_vector(forward_norm);
-            let new_forward = new_forward_norm * forward_mag;
+            let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;
-            println!("old forward norm: {:?}\nnew forward norm {:?}\n", forward_norm, new_forward_norm);
             let new_target = camera.target + forward_diff;
             camera.target = new_target;
-            println!("camera target is {:?}", camera.target);
         }
         if x_delta != 0.0 {
-            let theta = cgmath::Rad((-x_delta * 0.01 * consts::PI) as f32);
+            let theta = cgmath::Rad((-x_delta * self.rotation_speed * consts::PI) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(up_norm, theta);
-            let new_forward_norm = rot.rotate_vector(forward_norm);
-            let new_forward = new_forward_norm * forward_mag;
+            let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;
-            println!("old forward norm: {:?}\nnew forward norm {:?}\n", forward_norm, new_forward_norm);
             let new_target = camera.target + forward_diff;
             camera.target = new_target;
-            println!("camera target is {:?}", camera.target);
         }
     }
 }
