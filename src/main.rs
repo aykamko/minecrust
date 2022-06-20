@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, ModifiersState, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -113,7 +113,7 @@ fn start(
     };
     surface.configure(&device, &config);
 
-    let mut camera_controller = camera::CameraController::new(0.2);
+    let mut camera_controller = camera::CameraController::new(0.15);
     let mut camera = camera::Camera {
         eye: (3.0, 2.0, 3.0).into(),
         // have it look at the origin
@@ -130,6 +130,8 @@ fn start(
 
     let scene = setup_scene(&config, &adapter, &device, &queue, camera_uniform);
 
+    let mut logo_held = false;
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -140,9 +142,30 @@ fn start(
                         *control_flow = ControlFlow::Exit;
                     }
                 }
-                _ => {
-                    camera_controller.process_events(&event);
+                WindowEvent::ModifiersChanged(modifiers) => {
+                    if !(modifiers & ModifiersState::LOGO).is_empty() {
+                        logo_held = true;
+                        println!("Logo held: true");
+                    } else {
+                        logo_held = false;
+                        println!("Logo held: false");
+                    }
                 }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    match (input.virtual_keycode, input.state) {
+                        (Some(VirtualKeyCode::W), ElementState::Pressed) => {
+                            if logo_held {
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                            camera_controller.process_events(&event);
+                        }
+                        _ => {
+                            camera_controller.process_events(&event);
+                        }
+                    }
+                }
+                _ => (),
             },
 
             Event::RedrawRequested(_) => {
