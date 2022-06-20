@@ -1,6 +1,8 @@
 mod camera;
+mod lib;
 
 use bytemuck::{Pod, Zeroable};
+use cgmath::prelude::*;
 use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
@@ -8,6 +10,13 @@ use winit::{
     event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    0.0,
+);
 
 fn main() {
     let s = block_on(setup());
@@ -37,6 +46,8 @@ struct Scene {
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+    instances: Vec<lib::Instance>,
+    instance_buf: wgpu::Buffer,
     // pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
@@ -131,7 +142,8 @@ fn start(
 
     let scene = setup_scene(&config, &adapter, &device, &queue, camera_uniform);
 
-    let mut curr_modifier_state: winit::event::ModifiersState = winit::event::ModifiersState::empty();
+    let mut curr_modifier_state: winit::event::ModifiersState =
+        winit::event::ModifiersState::empty();
     let mut cursor_grabbed = false;
 
     event_loop.run(move |event, _, control_flow| {
@@ -340,7 +352,7 @@ fn setup_scene(
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
-    let vertex_buffers = [wgpu::VertexBufferLayout {
+    let vertex_buffers = wgpu::VertexBufferLayout {
         array_stride: vertex_size as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &[
@@ -355,7 +367,39 @@ fn setup_scene(
                 shader_location: 1,
             },
         ],
-    }];
+    };
+
+    let instances = (0..NUM_INSTANCES_PER_ROW)
+        .flat_map(|y| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                let position = cgmath::Vector3 {
+                    x: x as f32,
+                    y: y as f32,
+                    z: 0.0,
+                } - INSTANCE_DISPLACEMENT;
+
+                let rotation = if position.is_zero() {
+                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                    // as Quaternions can effect scale if they're not created correctly
+                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
+                } else {
+                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                };
+
+                lib::Instance { position, rotation }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let instance_data = instances
+        .iter()
+        .map(lib::Instance::to_raw)
+        .collect::<Vec<_>>();
+    let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Instance Buffer"),
+        contents: bytemuck::cast_slice(&instance_data),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
@@ -363,7 +407,7 @@ fn setup_scene(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &vertex_buffers,
+            buffers: &[vertex_buffers, lib::InstanceRaw::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -388,6 +432,8 @@ fn setup_scene(
         camera_buf,
         camera_staging_buf,
         pipeline,
+        instances,
+        instance_buf,
     }
 }
 
@@ -425,9 +471,11 @@ fn render_scene(
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
         rpass.set_vertex_buffer(0, scene.vertex_buf.slice(..));
+        rpass.set_vertex_buffer(1, scene.instance_buf.slice(..));
         rpass.pop_debug_group();
         rpass.insert_debug_marker("Draw!");
-        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..1);
+
+        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..scene.instances.len() as _);
 
         // TODO: wireframe
         // if let Some(ref pipe) = self.pipeline_wire {
