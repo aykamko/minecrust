@@ -37,7 +37,7 @@ struct Scene {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     index_count: usize,
-    vertex_bind_group: wgpu::BindGroup,
+    texture_bind_group: wgpu::BindGroup,
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
@@ -252,8 +252,6 @@ fn setup_scene(
     let texture_atlas_bytes = include_bytes!("../assets/minecruft_atlas.png");
     let texture_atlas_bytes = image::load_from_memory(texture_atlas_bytes).unwrap();
     let texture_atlas_rgba = texture_atlas_bytes.to_rgba8();
-
-    use image::GenericImageView;
     let dimensions = texture_atlas_rgba.dimensions();
 
     let texture_extent = wgpu::Extent3d {
@@ -270,7 +268,6 @@ fn setup_scene(
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     });
-    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     queue.write_texture(
         wgpu::ImageCopyTexture {
             texture: &texture,
@@ -287,8 +284,8 @@ fn setup_scene(
         texture_extent,
     );
 
-    let diffuse_texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -299,7 +296,7 @@ fn setup_scene(
     });
 
     // Create pipeline layout
-    let vertex_bind_group_layout =
+    let texture_bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -339,7 +336,7 @@ fn setup_scene(
         });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&vertex_bind_group_layout, &camera_bind_group_layout],
+        bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
         push_constant_ranges: &[],
     });
 
@@ -358,16 +355,16 @@ fn setup_scene(
     });
 
     // Create bind groups
-    let vertex_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &vertex_bind_group_layout,
+    let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &texture_bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                resource: wgpu::BindingResource::TextureView(&texture_view),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                resource: wgpu::BindingResource::Sampler(&sampler),
             },
         ],
         label: None,
@@ -475,7 +472,7 @@ fn setup_scene(
         vertex_buf,
         index_buf,
         index_count: index_data.len(),
-        vertex_bind_group,
+        texture_bind_group,
         camera_bind_group,
         camera_buf,
         camera_staging_buf,
@@ -523,7 +520,7 @@ fn render_scene(
         });
         rpass.push_debug_group("Prepare data for draw.");
         rpass.set_pipeline(&scene.pipeline);
-        rpass.set_bind_group(0, &scene.vertex_bind_group, &[]);
+        rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
         rpass.set_vertex_buffer(0, scene.vertex_buf.slice(..));
