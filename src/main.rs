@@ -2,10 +2,10 @@ mod camera;
 
 use bytemuck::{Pod, Zeroable};
 use futures::executor::block_on;
-use std::{borrow::Cow, f32::consts, mem};
+use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{Event, WindowEvent, VirtualKeyCode},
+    event::{Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -25,6 +25,16 @@ struct Setup {
     queue: wgpu::Queue,
     // #[cfg(target_arch = "wasm32")]
     // offscreen_canvas_setup: Option<OffscreenCanvasSetup>,
+}
+
+struct Scene {
+    vertex_buf: wgpu::Buffer,
+    index_buf: wgpu::Buffer,
+    index_count: usize,
+    vertex_bind_group: wgpu::BindGroup,
+    camera_bind_group_layout: wgpu::BindGroupLayout,
+    pipeline: wgpu::RenderPipeline,
+    // pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
 async fn setup() -> Setup {
@@ -103,6 +113,20 @@ fn start(
 
     let scene = setup_scene(&config, &adapter, &device, &queue);
 
+    let camera = camera::Camera {
+        // position the camera one unit up and 2 units back
+        // +z is out of the screen
+        eye: (1.5f32, -5.0, 3.0).into(),
+        // have it look at the origin
+        target: (0.0, 0.0, 0.0).into(),
+        // which way is "up"
+        up: cgmath::Vector3::unit_z(),
+        aspect: config.width as f32 / config.height as f32,
+        fovy: 45.0,
+        znear: 1.0,
+        zfar: 10.0,
+    };
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -113,15 +137,13 @@ fn start(
                         *control_flow = ControlFlow::Exit;
                     }
                 }
-                WindowEvent::KeyboardInput { input, .. } => {
-                    match input.virtual_keycode {
-                        Some(VirtualKeyCode::W) => {},
-                        Some(VirtualKeyCode::A) => {},
-                        Some(VirtualKeyCode::S) => {},
-                        Some(VirtualKeyCode::D) => {},
-                        _ => (),
-                    }
-                }
+                WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
+                    Some(VirtualKeyCode::W) => {}
+                    Some(VirtualKeyCode::A) => {}
+                    Some(VirtualKeyCode::S) => {}
+                    Some(VirtualKeyCode::D) => {}
+                    _ => (),
+                },
                 _ => (),
             },
 
@@ -140,7 +162,8 @@ fn start(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                render_scene(&view, &device, &queue, &scene);
+                let camera_bind_group = generate_camera_position_bind_group(&camera, &scene.camera_bind_group_layout, &device);
+                render_scene(&view, &device, &queue, &scene, &camera_bind_group);
 
                 frame.present();
             }
@@ -149,14 +172,33 @@ fn start(
         }
     });
 }
-struct Scene {
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
-    index_count: usize,
-    bind_group: wgpu::BindGroup,
-    camera_buf: wgpu::Buffer,
-    pipeline: wgpu::RenderPipeline,
-    // pipeline_wire: Option<wgpu::RenderPipeline>,
+
+fn generate_camera_position_bind_group(
+    camera: &camera::Camera,
+    group_layout: &wgpu::BindGroupLayout,
+    device: &wgpu::Device,
+) -> wgpu::BindGroup {
+    let mut camera_uniform = CameraUniform::new();
+    camera_uniform.update_view_proj(&camera);
+
+    let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Camera Buffer"),
+        contents: bytemuck::cast_slice(&[camera_uniform]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buf.as_entire_binding(),
+            },
+        ],
+        label: None,
+    });
+
+    camera_bind_group
 }
 
 fn setup_scene(
@@ -180,10 +222,24 @@ fn setup_scene(
     });
 
     // Create pipeline layout
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
+    let vertex_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Uint,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
+                count: None,
+            }],
+        });
+    let camera_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
@@ -192,22 +248,11 @@ fn setup_scene(
                     min_binding_size: wgpu::BufferSize::new(64),
                 },
                 count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    multisampled: false,
-                    sample_type: wgpu::TextureSampleType::Uint,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                },
-                count: None,
-            },
-        ],
-    });
+            }],
+        });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&bind_group_layout],
+        bind_group_layouts: &[&vertex_bind_group_layout, &camera_bind_group_layout],
         push_constant_ranges: &[],
     });
 
@@ -240,39 +285,12 @@ fn setup_scene(
         texture_extent,
     );
 
-    let camera = camera::Camera {
-        // position the camera one unit up and 2 units back
-        // +z is out of the screen
-        eye: (1.5f32, -5.0, 3.0).into(),
-        // have it look at the origin
-        target: (0.0, 0.0, 0.0).into(),
-        // which way is "up"
-        up: cgmath::Vector3::unit_z(),
-        aspect: config.width as f32 / config.height as f32,
-        fovy: 45.0,
-        znear: 1.0,
-        zfar: 10.0,
-    };
-
-    let mut camera_uniform = CameraUniform::new();
-    camera_uniform.update_view_proj(&camera);
-
-    let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Camera Buffer"),
-        contents: bytemuck::cast_slice(&[camera_uniform]),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-
-    // Create bind group
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &bind_group_layout,
+    // Create bind groups
+    let vertex_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &vertex_bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: camera_buf.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
                 resource: wgpu::BindingResource::TextureView(&texture_view),
             },
         ],
@@ -327,8 +345,8 @@ fn setup_scene(
         vertex_buf,
         index_buf,
         index_count: index_data.len(),
-        bind_group,
-        camera_buf,
+        vertex_bind_group,
+        camera_bind_group_layout,
         pipeline,
     }
 }
@@ -338,6 +356,7 @@ fn render_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     scene: &Scene,
+    camera_bind_group: &wgpu::BindGroup,
     // spawner: &framework::Spawner,
 ) {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -363,9 +382,10 @@ fn render_scene(
         });
         rpass.push_debug_group("Prepare data for draw.");
         rpass.set_pipeline(&scene.pipeline);
-        rpass.set_bind_group(0, &scene.bind_group, &[]);
+        rpass.set_bind_group(0, &scene.vertex_bind_group, &[]);
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
         rpass.set_vertex_buffer(0, scene.vertex_buf.slice(..));
+        rpass.set_bind_group(1, &camera_bind_group, &[]);
         rpass.pop_debug_group();
         rpass.insert_debug_marker("Draw!");
         rpass.draw_indexed(0..scene.index_count as u32, 0, 0..1);
