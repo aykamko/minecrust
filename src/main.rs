@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{Event, VirtualKeyCode, WindowEvent},
+    event::{Event, VirtualKeyCode, WindowEvent, ElementState},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -141,39 +141,39 @@ fn start(
                         *control_flow = ControlFlow::Exit;
                     }
                 }
-                WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-                    Some(VirtualKeyCode::W) => {
-                        camera.eye.x += 0.1;
+                WindowEvent::KeyboardInput { input, .. } => match (input.virtual_keycode, input.state) {
+                    (Some(VirtualKeyCode::W), ElementState::Pressed) => {
+                        camera.eye.x += 0.4;
                         update_camera(&camera, &mut camera_uniform);
                         queue.write_buffer(
-                            &scene.camera_buf,
+                            &scene.camera_staging_buf,
                             0,
                             bytemuck::cast_slice(&[camera_uniform]),
                         );
                     }
-                    Some(VirtualKeyCode::A) => {
-                        camera.eye.y -= 0.1;
+                    (Some(VirtualKeyCode::A), ElementState::Pressed) => {
+                        camera.eye.y -= 0.4;
                         update_camera(&camera, &mut camera_uniform);
                         queue.write_buffer(
-                            &scene.camera_buf,
+                            &scene.camera_staging_buf,
                             0,
                             bytemuck::cast_slice(&[camera_uniform]),
                         );
                     }
-                    Some(VirtualKeyCode::S) => {
-                        camera.eye.x -= 0.1;
+                    (Some(VirtualKeyCode::S), ElementState::Pressed) => {
+                        camera.eye.x -= 0.4;
                         update_camera(&camera, &mut camera_uniform);
                         queue.write_buffer(
-                            &scene.camera_buf,
+                            &scene.camera_staging_buf,
                             0,
                             bytemuck::cast_slice(&[camera_uniform]),
                         );
                     }
-                    Some(VirtualKeyCode::D) => {
-                        camera.eye.y += 0.1;
+                    (Some(VirtualKeyCode::D), ElementState::Pressed) => {
+                        camera.eye.y += 0.4;
                         update_camera(&camera, &mut camera_uniform);
                         queue.write_buffer(
-                            &scene.camera_buf,
+                            &scene.camera_staging_buf,
                             0,
                             bytemuck::cast_slice(&[camera_uniform]),
                         );
@@ -435,13 +435,13 @@ fn render_scene(
         //     rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
         // }
     }
-    // encoder.copy_buffer_to_buffer(
-    //     &scene.camera_staging_buf,
-    //     0,
-    //     &scene.camera_buf,
-    //     0,
-    //     mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
-    // );
+    encoder.copy_buffer_to_buffer(
+        &scene.camera_staging_buf,
+        0,
+        &scene.camera_buf,
+        0,
+        mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
+    );
 
     queue.submit(Some(encoder.finish()));
 
