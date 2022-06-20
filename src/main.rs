@@ -1,5 +1,6 @@
 mod camera;
 mod lib;
+mod texture;
 
 use bytemuck::{Pod, Zeroable};
 use cgmath::prelude::*;
@@ -40,9 +41,10 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    pipeline: wgpu::RenderPipeline,
     instances: Vec<lib::Instance>,
     instance_buf: wgpu::Buffer,
+    depth_texture: texture::Texture,
+    pipeline: wgpu::RenderPipeline,
     // pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
@@ -402,6 +404,8 @@ fn setup_scene(
         usage: wgpu::BufferUsages::VERTEX,
     });
 
+    let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
+
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
@@ -419,7 +423,13 @@ fn setup_scene(
             cull_mode: Some(wgpu::Face::Back),
             ..Default::default()
         },
-        depth_stencil: None,
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: texture::Texture::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
     });
@@ -432,9 +442,10 @@ fn setup_scene(
         camera_bind_group,
         camera_buf,
         camera_staging_buf,
-        pipeline,
         instances,
         instance_buf,
+        depth_texture,
+        pipeline,
     }
 }
 
@@ -464,7 +475,14 @@ fn render_scene(
                     store: true,
                 },
             }],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &scene.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
         });
         rpass.push_debug_group("Prepare data for draw.");
         rpass.set_pipeline(&scene.pipeline);
