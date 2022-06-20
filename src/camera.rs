@@ -64,7 +64,7 @@ impl CameraUniform {
 
 pub struct CameraController {
     speed: f32,
-    rotation_speed: f64,
+    mouse_sensitivity: f64,
     is_forward_pressed: bool,
     is_backward_pressed: bool,
     is_left_pressed: bool,
@@ -73,10 +73,10 @@ pub struct CameraController {
 }
 
 impl CameraController {
-    pub fn new(speed: f32, rotation_speed: f64) -> Self {
+    pub fn new(speed: f32, mouse_sensitivity: f64) -> Self {
         Self {
             speed,
-            rotation_speed,
+            mouse_sensitivity,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,
@@ -168,7 +168,7 @@ impl CameraController {
 
         let (x_delta, y_delta) = self.last_mouse_delta;
         if y_delta != 0.0 {
-            let theta = cgmath::Rad((-y_delta * self.rotation_speed * consts::PI) as f32);
+            let theta = cgmath::Rad((-y_delta * self.mouse_sensitivity) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(right_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;
@@ -176,7 +176,7 @@ impl CameraController {
             camera.target = new_target;
         }
         if x_delta != 0.0 {
-            let theta = cgmath::Rad((-x_delta * self.rotation_speed * consts::PI) as f32);
+            let theta = cgmath::Rad((-x_delta * self.mouse_sensitivity) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(up_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;

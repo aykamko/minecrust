@@ -113,9 +113,9 @@ fn start(
     };
     surface.configure(&device, &config);
 
-    let mut camera_controller = camera::CameraController::new(0.15, 0.01);
+    let mut camera_controller = camera::CameraController::new(0.15, 0.03);
     let mut camera = camera::Camera {
-        eye: (0.0, 2.0, 3.0).into(),
+        eye: (3.0, 2.0, 3.0).into(),
         // have it look at the origin
         target: (0.0, 0.0, 0.0).into(),
         // which way is "up"
@@ -123,14 +123,14 @@ fn start(
         aspect: config.width as f32 / config.height as f32,
         fovy: 45.0,
         znear: 1.0,
-        zfar: 10.0,
+        zfar: 100.0,
     };
     let mut camera_uniform = camera::CameraUniform::new();
     camera_uniform.update_view_proj(&camera);
 
     let scene = setup_scene(&config, &adapter, &device, &queue, camera_uniform);
 
-    let mut logo_held = false;
+    let mut curr_modifier_state: winit::event::ModifiersState = winit::event::ModifiersState::empty();
     let mut cursor_grabbed = false;
 
     event_loop.run(move |event, _, control_flow| {
@@ -144,12 +144,12 @@ fn start(
                     }
                 }
                 WindowEvent::ModifiersChanged(modifiers) => {
-                    logo_held = !(modifiers & ModifiersState::LOGO).is_empty();
+                    curr_modifier_state = modifiers;
                 }
                 WindowEvent::KeyboardInput { input, .. } => {
                     match (input.virtual_keycode, input.state) {
                         (Some(VirtualKeyCode::W), ElementState::Pressed) => {
-                            if logo_held {
+                            if curr_modifier_state.logo() {
                                 *control_flow = ControlFlow::Exit;
                                 return;
                             }
