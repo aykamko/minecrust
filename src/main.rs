@@ -113,7 +113,7 @@ fn start(
     };
     surface.configure(&device, &config);
 
-    let mut camera_controller = camera::CameraController::new(0.15);
+    let mut camera_controller = camera::CameraController::new(0.15, 0.01);
     let mut camera = camera::Camera {
         eye: (0.0, 2.0, 3.0).into(),
         // have it look at the origin
