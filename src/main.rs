@@ -143,16 +143,7 @@ fn start(
                     }
                 }
                 _ => {
-                    let processed = camera_controller.process_events(&event);
-                    if processed {
-                        camera_controller.update_camera(&mut camera);
-                        camera_uniform.update_view_proj(&camera);
-                        queue.write_buffer(
-                            &scene.camera_staging_buf,
-                            0,
-                            bytemuck::cast_slice(&[camera_uniform]),
-                        );
-                    }
+                    camera_controller.process_events(&event);
                 }
             },
 
@@ -170,6 +161,13 @@ fn start(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
+                camera_controller.update_camera(&mut camera);
+                camera_uniform.update_view_proj(&camera);
+                queue.write_buffer(
+                    &scene.camera_staging_buf,
+                    0,
+                    bytemuck::cast_slice(&[camera_uniform]),
+                );
                 render_scene(&view, &device, &queue, &scene);
 
                 frame.present();
