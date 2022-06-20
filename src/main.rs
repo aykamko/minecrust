@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{Event, VirtualKeyCode, WindowEvent, ElementState},
+    event::{ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -113,6 +113,7 @@ fn start(
     };
     surface.configure(&device, &config);
 
+    let mut camera_controller = camera::CameraController::new(0.2);
     let mut camera = camera::Camera {
         // position the camera one unit up and 2 units back
         // +z is out of the screen
@@ -141,46 +142,18 @@ fn start(
                         *control_flow = ControlFlow::Exit;
                     }
                 }
-                WindowEvent::KeyboardInput { input, .. } => match (input.virtual_keycode, input.state) {
-                    (Some(VirtualKeyCode::W), ElementState::Pressed) => {
-                        camera.eye.x += 0.4;
-                        update_camera(&camera, &mut camera_uniform);
+                _ => {
+                    let processed = camera_controller.process_events(&event);
+                    if processed {
+                        camera_controller.update_camera(&mut camera);
+                        camera_uniform.update_view_proj(&camera);
                         queue.write_buffer(
                             &scene.camera_staging_buf,
                             0,
                             bytemuck::cast_slice(&[camera_uniform]),
                         );
                     }
-                    (Some(VirtualKeyCode::A), ElementState::Pressed) => {
-                        camera.eye.y -= 0.4;
-                        update_camera(&camera, &mut camera_uniform);
-                        queue.write_buffer(
-                            &scene.camera_staging_buf,
-                            0,
-                            bytemuck::cast_slice(&[camera_uniform]),
-                        );
-                    }
-                    (Some(VirtualKeyCode::S), ElementState::Pressed) => {
-                        camera.eye.x -= 0.4;
-                        update_camera(&camera, &mut camera_uniform);
-                        queue.write_buffer(
-                            &scene.camera_staging_buf,
-                            0,
-                            bytemuck::cast_slice(&[camera_uniform]),
-                        );
-                    }
-                    (Some(VirtualKeyCode::D), ElementState::Pressed) => {
-                        camera.eye.y += 0.4;
-                        update_camera(&camera, &mut camera_uniform);
-                        queue.write_buffer(
-                            &scene.camera_staging_buf,
-                            0,
-                            bytemuck::cast_slice(&[camera_uniform]),
-                        );
-                    }
-                    _ => (),
-                },
-                _ => (),
+                }
             },
 
             Event::RedrawRequested(_) => {
@@ -198,7 +171,6 @@ fn start(
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
                 render_scene(&view, &device, &queue, &scene);
-                println!("Rendering scene");
 
                 frame.present();
             }
@@ -212,11 +184,6 @@ fn start(
             _ => (),
         }
     });
-}
-
-fn update_camera(camera: &camera::Camera, camera_uniform: &mut camera::CameraUniform) {
-    println!("Camera coords: {:?}", camera.eye);
-    camera_uniform.update_view_proj(&camera);
 }
 
 fn setup_scene(
@@ -310,11 +277,12 @@ fn setup_scene(
         contents: bytemuck::cast_slice(&[camera_uniform]),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
-
     let camera_staging_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Camera Staging Buffer"),
         contents: bytemuck::cast_slice(&[camera_uniform]),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        usage: wgpu::BufferUsages::UNIFORM
+            | wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::COPY_DST,
     });
 
     // Create bind groups
