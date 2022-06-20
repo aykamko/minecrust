@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{ElementState, Event, ModifiersState, VirtualKeyCode, WindowEvent, DeviceEvent},
+    event::{DeviceEvent, ElementState, Event, ModifiersState, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -115,7 +115,7 @@ fn start(
 
     let mut camera_controller = camera::CameraController::new(0.15);
     let mut camera = camera::Camera {
-        eye: (3.0, 2.0, 3.0).into(),
+        eye: (0.0, 2.0, 3.0).into(),
         // have it look at the origin
         target: (0.0, 0.0, 0.0).into(),
         // which way is "up"
@@ -177,7 +177,7 @@ fn start(
                     }
                 }
                 _ => (),
-            }
+            },
 
             Event::RedrawRequested(_) => {
                 let frame = match surface.get_current_texture() {
@@ -203,6 +203,7 @@ fn start(
                 render_scene(&view, &device, &queue, &scene);
 
                 frame.present();
+                camera_controller.reset_mouse_delta();
             }
 
             Event::MainEventsCleared => {

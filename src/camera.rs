@@ -1,6 +1,6 @@
-use winit::{
-    event::{VirtualKeyCode, WindowEvent, ElementState, DeviceEvent},
-};
+use cgmath::Rotation;
+use std::f64::consts;
+use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
     pub eye: cgmath::Point3<f32>,
@@ -86,11 +86,12 @@ impl CameraController {
     pub fn process_window_event(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::KeyboardInput {
-                input: winit::event::KeyboardInput {
-                    state,
-                    virtual_keycode: Some(keycode),
-                    ..
-                },
+                input:
+                    winit::event::KeyboardInput {
+                        state,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;
@@ -119,14 +120,17 @@ impl CameraController {
     }
 
     pub fn process_device_event(&mut self, event: &DeviceEvent) -> bool {
-        match event { 
+        match event {
             DeviceEvent::MouseMotion { delta } => {
                 self.last_mouse_delta = *delta;
-                println!("last mouse delta: {:?}", self.last_mouse_delta);
                 true
             }
             _ => false,
         }
+    }
+
+    pub fn reset_mouse_delta(&mut self) {
+        self.last_mouse_delta = (0.0, 0.0);
     }
 
     pub fn update_camera(&self, camera: &mut Camera) {
@@ -154,6 +158,21 @@ impl CameraController {
         if self.is_left_pressed {
             camera.eye -= right_norm * self.speed;
             camera.target -= right_norm * self.speed;
+        }
+
+        let (x_delta, y_delta) = self.last_mouse_delta;
+        if y_delta != 0.0 {
+            //let theta = cgmath::Rad((y_delta * consts::PI) as f32);
+            let theta = cgmath::Rad((y_delta * 0.01 * consts::PI) as f32);
+            println!("y_delta is {:?}, theta is {:?}", y_delta, theta);
+            let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_angle_x(theta);
+            let new_forward_norm = rot.rotate_vector(forward_norm);
+            let new_forward = new_forward_norm * forward_mag;
+            let forward_diff = new_forward - forward;
+            println!("old forward norm: {:?}\nnew forward norm {:?}\n", forward_norm, new_forward_norm);
+            let new_target = camera.target + forward_diff;
+            camera.target = new_target;
+            println!("camera target is {:?}", camera.target);
         }
     }
 }
