@@ -118,6 +118,7 @@ impl CameraController {
 
     pub fn update_camera(&self, camera: &mut Camera) {
         use cgmath::InnerSpace;
+        // Vector pointing out of the camera's eye towards the target
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
@@ -131,20 +132,15 @@ impl CameraController {
             camera.eye -= forward_norm * self.speed;
         }
 
-        let right = forward_norm.cross(camera.up);
-
-        // Redo radius calc in case the fowrard/backward is pressed.
-        let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
+        let right_norm = forward_norm.cross(camera.up);
 
         if self.is_right_pressed {
-            // Rescale the distance between the target and eye so 
-            // that it doesn't change. The eye therefore still 
-            // lies on the circle made by the target and eye.
-            camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
+            camera.eye += right_norm * self.speed;
+            camera.target += right_norm * self.speed;
         }
         if self.is_left_pressed {
-            camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
+            camera.eye -= right_norm * self.speed;
+            camera.target -= right_norm * self.speed;
         }
     }
 }

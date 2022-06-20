@@ -115,13 +115,11 @@ fn start(
 
     let mut camera_controller = camera::CameraController::new(0.2);
     let mut camera = camera::Camera {
-        // position the camera one unit up and 2 units back
-        // +z is out of the screen
-        eye: (1.5f32, -5.0, 3.0).into(),
+        eye: (3.0, 2.0, 3.0).into(),
         // have it look at the origin
         target: (0.0, 0.0, 0.0).into(),
         // which way is "up"
-        up: cgmath::Vector3::unit_z(),
+        up: cgmath::Vector3::unit_y(),
         aspect: config.width as f32 / config.height as f32,
         fovy: 45.0,
         znear: 1.0,
