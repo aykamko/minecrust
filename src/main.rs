@@ -5,7 +5,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{DeviceEvent, ElementState, Event, ModifiersState, VirtualKeyCode, WindowEvent},
+    event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -17,6 +17,7 @@ fn main() {
 struct Setup {
     window: winit::window::Window,
     event_loop: EventLoop<()>,
+    #[allow(dead_code)]
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface,
@@ -91,7 +92,7 @@ fn start(
     Setup {
         window,
         event_loop,
-        instance,
+        instance: _,
         size,
         surface,
         adapter,
@@ -104,7 +105,7 @@ fn start(
         .unwrap()
         .first()
         .unwrap();
-    let mut config = wgpu::SurfaceConfiguration {
+    let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: format,
         width: size.width,

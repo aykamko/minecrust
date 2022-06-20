@@ -1,5 +1,4 @@
 use cgmath::Rotation;
-use std::f64::consts;
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
