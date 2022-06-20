@@ -131,6 +131,7 @@ fn start(
     let scene = setup_scene(&config, &adapter, &device, &queue, camera_uniform);
 
     let mut logo_held = false;
+    let mut cursor_grabbed = false;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -143,13 +144,7 @@ fn start(
                     }
                 }
                 WindowEvent::ModifiersChanged(modifiers) => {
-                    if !(modifiers & ModifiersState::LOGO).is_empty() {
-                        logo_held = true;
-                        println!("Logo held: true");
-                    } else {
-                        logo_held = false;
-                        println!("Logo held: false");
-                    }
+                    logo_held = !(modifiers & ModifiersState::LOGO).is_empty();
                 }
                 WindowEvent::KeyboardInput { input, .. } => {
                     match (input.virtual_keycode, input.state) {
@@ -163,6 +158,23 @@ fn start(
                         _ => {
                             camera_controller.process_events(&event);
                         }
+                    }
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    println!("Mouse position: {:?}", position);
+                    if !cursor_grabbed {
+                        let window_pos = window
+                            .outer_position()
+                            .expect("Failed to get window position");
+                        let window_size = window.outer_size();
+                        window
+                            .set_cursor_position(winit::dpi::LogicalPosition::new(
+                                window_pos.x + (window_size.width / 2) as i32,
+                                window_pos.y + (window_size.height / 2) as i32,
+                            ))
+                            .expect("Failed to set cursor position");
+                        // window.set_cursor_grab(true).expect("Failed to grab curosr");
+                        // cursor_grabbed = true;
                     }
                 }
                 _ => (),
