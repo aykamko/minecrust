@@ -13,6 +13,7 @@ use winit::{
 };
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
+const BLOCK_SIZE: f32 = 2.0;
 
 fn main() {
     let s = block_on(setup());
@@ -412,9 +413,9 @@ fn setup_scene(
         .flat_map(|x| {
             (0..NUM_INSTANCES_PER_ROW).map(move |z| {
                 let position = cgmath::Vector3 {
-                    x: (x as f32 * 2.5),
+                    x: (x as f32 * BLOCK_SIZE),
                     y: 0.0,
-                    z: (z as f32 * 2.5),
+                    z: (z as f32 * BLOCK_SIZE),
                 };
 
                 // let rotation = if position.is_zero() {
