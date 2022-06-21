@@ -143,11 +143,14 @@ impl CameraController {
 
         // Prevents glitching when camera gets too close to the
         // center of the scene.
-        if self.is_forward_pressed && forward_mag > self.speed {
+        //if self.is_forward_pressed && forward_mag > self.speed {
+        if self.is_forward_pressed {
             camera.eye += forward_norm * self.speed;
+            camera.target += forward_norm * self.speed;
         }
         if self.is_backward_pressed {
             camera.eye -= forward_norm * self.speed;
+            camera.target -= forward_norm * self.speed;
         }
 
         // Strafing vector
@@ -182,5 +185,10 @@ impl CameraController {
             let new_target = camera.target + forward_diff;
             camera.target = new_target;
         }
+
+        // println!(
+        //     "Camera eye: {:?}\nCamera target: {:?}\nForward mag: {:?}\n",
+        //     camera.eye, camera.target, forward_mag
+        // );
     }
 }
