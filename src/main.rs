@@ -255,12 +255,8 @@ fn setup_scene(
     let dimensions = texture_atlas_rgba.dimensions();
 
     let texture_extent = wgpu::Extent3d {
-        // width: dimensions.0,
-        // height: dimensions.1,
-
-        // Hardcoded to 16,16 so that we only grab the first sprite from the texture atlas
-        width: 16,
-        height: 16,
+        width: dimensions.0,
+        height: dimensions.1,
         depth_or_array_layers: 1,
     };
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -391,15 +387,23 @@ fn setup_scene(
         array_stride: vertex_size as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &[
+            // position
             wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Float32x4,
                 offset: 0,
                 shader_location: 0,
             },
+            // tex_coord
             wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Float32x2,
                 offset: 4 * 4,
                 shader_location: 1,
+            },
+            // texture_atlas_offset (sprite offset)
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x2,
+                offset: (4 * 4) + (2 * 4),
+                shader_location: 2,
             },
         ],
     };
@@ -565,47 +569,49 @@ fn render_scene(
 struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
+    _atlas_offset: [f32; 2],
 }
 
-fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
+fn vertex(pos: [i8; 3], tc: [i8; 2], ao: [i8; 2]) -> Vertex {
     Vertex {
         _pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
         _tex_coord: [tc[0] as f32, tc[1] as f32],
+        _atlas_offset: [ao[0] as f32, ao[1] as f32],
     }
 }
 
 fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     let vertex_data = [
         // top (0, 0, 1)
-        vertex([-1, -1, 1], [0, 0]),
-        vertex([1, -1, 1], [1, 0]),
-        vertex([1, 1, 1], [1, 1]),
-        vertex([-1, 1, 1], [0, 1]),
+        vertex([-1, -1, 1], [0, 0], [1, 0]),
+        vertex([1, -1, 1], [1, 0], [1, 0]),
+        vertex([1, 1, 1], [1, 1], [1, 0]),
+        vertex([-1, 1, 1], [0, 1], [1, 0]),
         // bottom (0, 0, -1)
-        vertex([-1, 1, -1], [1, 0]),
-        vertex([1, 1, -1], [0, 0]),
-        vertex([1, -1, -1], [0, 1]),
-        vertex([-1, -1, -1], [1, 1]),
+        vertex([-1, 1, -1], [1, 0], [2, 0]),
+        vertex([1, 1, -1], [0, 0], [2, 0]),
+        vertex([1, -1, -1], [0, 1], [2, 0]),
+        vertex([-1, -1, -1], [1, 1], [2, 0]),
         // right (1, 0, 0)
-        vertex([1, -1, -1], [0, 0]),
-        vertex([1, 1, -1], [1, 0]),
-        vertex([1, 1, 1], [1, 1]),
-        vertex([1, -1, 1], [0, 1]),
+        vertex([1, -1, -1], [0, 0], [0, 0]),
+        vertex([1, 1, -1], [1, 0], [0, 0]),
+        vertex([1, 1, 1], [1, 1], [0, 0]),
+        vertex([1, -1, 1], [0, 1], [0, 0]),
         // left (-1, 0, 0)
-        vertex([-1, -1, 1], [1, 0]),
-        vertex([-1, 1, 1], [0, 0]),
-        vertex([-1, 1, -1], [0, 1]),
-        vertex([-1, -1, -1], [1, 1]),
+        vertex([-1, -1, 1], [1, 0], [0, 0]),
+        vertex([-1, 1, 1], [0, 0], [0, 0]),
+        vertex([-1, 1, -1], [0, 1], [0, 0]),
+        vertex([-1, -1, -1], [1, 1], [0, 0]),
         // front (0, 1, 0)
-        vertex([1, 1, -1], [1, 0]),
-        vertex([-1, 1, -1], [0, 0]),
-        vertex([-1, 1, 1], [0, 1]),
-        vertex([1, 1, 1], [1, 1]),
+        vertex([1, 1, -1], [1, 0], [0, 0]),
+        vertex([-1, 1, -1], [0, 0], [0, 0]),
+        vertex([-1, 1, 1], [0, 1], [0, 0]),
+        vertex([1, 1, 1], [1, 1], [0, 0]),
         // back (0, -1, 0)
-        vertex([1, -1, 1], [0, 0]),
-        vertex([-1, -1, 1], [1, 0]),
-        vertex([-1, -1, -1], [1, 1]),
-        vertex([1, -1, -1], [0, 1]),
+        vertex([1, -1, 1], [0, 0], [0, 0]),
+        vertex([-1, -1, 1], [1, 0], [0, 0]),
+        vertex([-1, -1, -1], [1, 1], [0, 0]),
+        vertex([1, -1, -1], [0, 1], [0, 0]),
     ];
 
     let index_data: &[u16] = &[

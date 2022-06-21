@@ -1,11 +1,13 @@
 struct VertexInput {
     @location(0) position: vec4<f32>,
     @location(1) tex_coord: vec2<f32>,
+    @location(2) atlas_offset: vec2<f32>,
 }
 
 struct VertexOutput {
     @location(0) tex_coord: vec2<f32>,
     @builtin(position) position: vec4<f32>,
+    @location(1) atlas_offset: vec2<f32>,
 };
 
 struct CameraUniform {
@@ -38,6 +40,7 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coord = model.tex_coord;
     out.position = camera_position.view_proj * model_matrix * model.position;
+    out.atlas_offset = model.atlas_offset;
     return out;
 }
 
@@ -50,7 +53,11 @@ var s_diffuse: sampler;
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(t_diffuse, s_diffuse, vertex.tex_coord);
+    var unit_offset: f32 = 1.0 / 32.0;
+    var atlas_scaled_coords = vertex.tex_coord / 32.0;
+    var offset_coords = atlas_scaled_coords + (unit_offset * vertex.atlas_offset);
+
+    return textureSample(t_diffuse, s_diffuse, offset_coords);
 }
 
 @fragment
