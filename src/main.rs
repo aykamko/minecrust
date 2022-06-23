@@ -1,8 +1,8 @@
-mod vertex;
-mod cube;
 mod camera;
+mod cube;
 mod lib;
 mod texture;
+mod vertex;
 
 use cgmath::prelude::*;
 use futures::executor::block_on;
@@ -36,7 +36,7 @@ struct Setup {
 }
 
 struct Scene {
-    vertex_buf: wgpu::Buffer,
+    vertex_buffers: [wgpu::Buffer; 2],
     index_buf: wgpu::Buffer,
     index_count: usize,
     texture_bind_group: wgpu::BindGroup,
@@ -237,16 +237,26 @@ fn setup_scene(
     camera_uniform: camera::CameraUniform,
 ) -> Scene {
     let vertex_size = mem::size_of::<vertex::Vertex>();
-    let (vertex_data, index_data) = vertex::create_vertices();
-    let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(&vertex_data),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
+
+    let grass_block = cube::Cube::new_grass_block();
+    let dirt_block = cube::Cube::new_dirt_block();
+
+    let vertex_buffers = [
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Grass Vertex Buffer"),
+            contents: bytemuck::cast_slice(&grass_block.vertex_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Dirt Vertex Buffer"),
+            contents: bytemuck::cast_slice(&dirt_block.vertex_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+    ];
 
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: bytemuck::cast_slice(&index_data),
+        label: Some("Block Index Buffer"),
+        contents: bytemuck::cast_slice(&grass_block.index_data),
         usage: wgpu::BufferUsages::INDEX,
     });
 
@@ -385,7 +395,7 @@ fn setup_scene(
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
-    let vertex_buffers = wgpu::VertexBufferLayout {
+    let vertex_buffer_layout = wgpu::VertexBufferLayout {
         array_stride: vertex_size as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
         attributes: &[
@@ -456,7 +466,7 @@ fn setup_scene(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[vertex_buffers, lib::InstanceRaw::desc()],
+            buffers: &[vertex_buffer_layout, lib::InstanceRaw::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -479,9 +489,9 @@ fn setup_scene(
     });
 
     Scene {
-        vertex_buf,
+        vertex_buffers,
         index_buf,
-        index_count: index_data.len(),
+        index_count: grass_block.index_data.len(),
         texture_bind_group,
         camera_bind_group,
         camera_buf,
@@ -528,20 +538,26 @@ fn render_scene(
                 stencil_ops: None,
             }),
         });
-        rpass.push_debug_group("Prepare data for draw.");
         rpass.set_pipeline(&scene.pipeline);
         rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-        rpass.set_vertex_buffer(0, scene.vertex_buf.slice(..));
         rpass.set_vertex_buffer(1, scene.instance_buf.slice(..));
-        rpass.pop_debug_group();
-        rpass.insert_debug_marker("Draw!");
 
+        // Draw grass blocks
+        rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.draw_indexed(
             0..scene.index_count as u32,
             0,
-            0..scene.instances.len() as _,
+            0..50 as _,
+        );
+
+        // Draw dirt blocks
+        rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+        rpass.draw_indexed(
+            0..scene.index_count as u32,
+            0,
+            50..scene.instances.len() as _,
         );
 
         // TODO: wireframe
