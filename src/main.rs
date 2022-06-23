@@ -1,8 +1,9 @@
+mod vertex;
+mod cube;
 mod camera;
 mod lib;
 mod texture;
 
-use bytemuck::{Pod, Zeroable};
 use cgmath::prelude::*;
 use futures::executor::block_on;
 use std::{borrow::Cow, mem};
@@ -123,7 +124,7 @@ fn start(
     };
     surface.configure(&device, &config);
 
-    let mut camera_controller = camera::CameraController::new(0.15, 0.03);
+    let mut camera_controller = camera::CameraController::new(0.15, 0.01);
     let mut camera = camera::Camera {
         eye: (3.0, 2.0, 3.0).into(),
         // have it look at the origin
@@ -235,8 +236,8 @@ fn setup_scene(
     queue: &wgpu::Queue,
     camera_uniform: camera::CameraUniform,
 ) -> Scene {
-    let vertex_size = mem::size_of::<Vertex>();
-    let (vertex_data, index_data) = create_vertices();
+    let vertex_size = mem::size_of::<vertex::Vertex>();
+    let (vertex_data, index_data) = vertex::create_vertices();
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertex_data),
@@ -563,66 +564,4 @@ fn render_scene(
     // spawner.spawn_local(ErrorFuture {
     //     inner: device.pop_error_scope(),
     // });
-}
-
-#[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-struct Vertex {
-    _pos: [f32; 4],
-    _tex_coord: [f32; 2],
-    _atlas_offset: [f32; 2],
-}
-
-fn vertex(pos: [i8; 3], tc: [i8; 2], ao: [i8; 2]) -> Vertex {
-    Vertex {
-        _pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
-        _tex_coord: [tc[0] as f32, tc[1] as f32],
-        _atlas_offset: [ao[0] as f32, ao[1] as f32],
-    }
-}
-
-fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
-    let vertex_data = [
-        // front (0, 0, 1)
-        vertex([-1, -1, 1], [1, 1], [0, 0]),
-        vertex([1, -1, 1], [0, 1], [0, 0]),
-        vertex([1, 1, 1], [0, 0], [0, 0]),
-        vertex([-1, 1, 1], [1, 0], [0, 0]),
-        // back (0, 0, -1)
-        vertex([-1, 1, -1], [1, 0], [0, 0]),
-        vertex([1, 1, -1], [0, 0], [0, 0]),
-        vertex([1, -1, -1], [0, 1], [0, 0]),
-        vertex([-1, -1, -1], [1, 1], [0, 0]),
-        // right (1, 0, 0)
-        vertex([1, -1, -1], [1, 1], [0, 0]),
-        vertex([1, 1, -1], [1, 0], [0, 0]),
-        vertex([1, 1, 1], [0, 0], [0, 0]),
-        vertex([1, -1, 1], [0, 1], [0, 0]),
-        // left (-1, 0, 0)
-        vertex([-1, -1, 1], [0, 1], [0, 0]),
-        vertex([-1, 1, 1], [0, 0], [0, 0]),
-        vertex([-1, 1, -1], [1, 0], [0, 0]),
-        vertex([-1, -1, -1], [1, 1], [0, 0]),
-        // top (0, 1, 0)
-        vertex([1, 1, -1], [1, 0], [1, 0]),
-        vertex([-1, 1, -1], [0, 0], [1, 0]),
-        vertex([-1, 1, 1], [0, 1], [1, 0]),
-        vertex([1, 1, 1], [1, 1], [1, 0]),
-        // bottom (0, -1, 0)
-        vertex([1, -1, 1], [0, 0], [2, 0]),
-        vertex([-1, -1, 1], [1, 0], [2, 0]),
-        vertex([-1, -1, -1], [1, 1], [2, 0]),
-        vertex([1, -1, -1], [0, 1], [2, 0]),
-    ];
-
-    let index_data: &[u16] = &[
-        0, 1, 2, 2, 3, 0, // front
-        4, 5, 6, 6, 7, 4, // back
-        8, 9, 10, 10, 11, 8, // right
-        12, 13, 14, 14, 15, 12, // left
-        16, 17, 18, 18, 19, 16, // top
-        20, 21, 22, 22, 23, 20, // bottom
-    ];
-
-    (vertex_data.to_vec(), index_data.to_vec())
 }
