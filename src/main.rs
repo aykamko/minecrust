@@ -155,6 +155,8 @@ fn start(
         &world_state,
     );
 
+    let mut instance_lens = [scene.instance_data[0].len(), scene.instance_data[1].len()];
+
     let mut curr_modifier_state: winit::event::ModifiersState =
         winit::event::ModifiersState::empty();
     let mut cursor_grabbed = false;
@@ -241,8 +243,8 @@ fn start(
                     world_state.break_block(&camera);
 
                     let (
-                        _grass_instances,
-                        _dirt_instances,
+                        grass_instances,
+                        dirt_instances,
                         grass_instance_data,
                         dirt_instance_data,
                     ) = world_state.generate_vertex_data();
@@ -256,9 +258,11 @@ fn start(
                         0,
                         bytemuck::cast_slice(&dirt_instance_data),
                     );
+
+                    instance_lens = [grass_instances.len(), dirt_instances.len()];
                 }
 
-                render_scene(&view, &device, &queue, &scene);
+                render_scene(&view, &device, &queue, &scene, instance_lens);
 
                 frame.present();
                 camera_controller.reset_mouse_delta();
@@ -533,6 +537,7 @@ fn render_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     scene: &Scene,
+    instance_lens: [usize; 2],
     // spawner: &framework::Spawner,
 ) {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -571,20 +576,12 @@ fn render_scene(
         // Draw grass blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_vertex_buffer(1, scene.instance_buffers[0].slice(..));
-        rpass.draw_indexed(
-            0..scene.index_count as u32,
-            0,
-            0..scene.instance_data[0].len() as _,
-        );
+        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
 
         // Draw dirt blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
         rpass.set_vertex_buffer(1, scene.instance_buffers[1].slice(..));
-        rpass.draw_indexed(
-            0..scene.index_count as u32,
-            0,
-            0..scene.instance_data[1].len() as _,
-        );
+        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
 
         // TODO: wireframe
         // if let Some(ref pipe) = self.pipeline_wire {

@@ -43,6 +43,7 @@ impl WorldState {
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
             self.blocks[x][0][z].block_type = 2; // dirt
             self.blocks[x][1][z].block_type = 1; // grass
+            println!("Block at {},{},{}", x, 1, z);
         }
     }
 
@@ -109,21 +110,27 @@ impl WorldState {
 
         let forward_unit = (camera.target - camera.eye).normalize();
 
+        println!("Camera eye is at {:?}", camera.eye / BLOCK_SIZE);
+
         let mut curr_pos = camera.eye;
         curr_pos -= forward_unit;
 
         const MAX_ITER: usize = 20 + 1;
         for _ in 0..MAX_ITER {
             curr_pos += forward_unit;
-            all_candidate_cubes.push([
-                curr_pos.x as usize,
-                curr_pos.y as usize,
-                curr_pos.z as usize,
-            ]);
+            let cube = [
+                (curr_pos.x / BLOCK_SIZE).floor() as usize,
+                (curr_pos.y / BLOCK_SIZE).floor() as usize,
+                (curr_pos.z / BLOCK_SIZE).floor() as usize,
+            ];
+            println!("Adding cube {:?}", cube);
+            all_candidate_cubes.push(cube);
             // TODO: add neighboring cubes too
         }
 
-        for cube in all_candidate_cubes.iter().rev() {
+        for cube in all_candidate_cubes.iter() {
+            let val = self.blocks[cube[0]][cube[1]][cube[2]].block_type;
+            println!("Checking cube {:?}: {}", cube, val);
             if self.blocks[cube[0]][cube[1]][cube[2]].block_type != 0 {
                 self.blocks[cube[0]][cube[1]][cube[2]].block_type = 0;
                 break;
