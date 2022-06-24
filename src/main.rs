@@ -1,9 +1,11 @@
-mod world;
+#[macro_use] extern crate itertools;
+
 mod camera;
 mod cube;
 mod lib;
 mod texture;
 mod vertex;
+mod world;
 
 use cgmath::prelude::*;
 use futures::executor::block_on;
@@ -44,8 +46,8 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    instances: Vec<lib::Instance>,
-    instance_buf: wgpu::Buffer,
+    instance_data: [Vec<lib::Instance>; 2],
+    instance_buffers: [wgpu::Buffer; 2],
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
     // pipeline_wire: Option<wgpu::RenderPipeline>,
@@ -140,9 +142,17 @@ fn start(
     let mut camera_uniform = camera::CameraUniform::new();
     camera_uniform.update_view_proj(&camera);
 
-    let mut world = world::WorldState::new();
+    let mut world_state = world::WorldState::new();
+    world_state.initial_setup();
 
-    let scene = setup_scene(&config, &adapter, &device, &queue, camera_uniform);
+    let scene = setup_scene(
+        &config,
+        &adapter,
+        &device,
+        &queue,
+        camera_uniform,
+        &world_state,
+    );
 
     let mut curr_modifier_state: winit::event::ModifiersState =
         winit::event::ModifiersState::empty();
@@ -238,6 +248,7 @@ fn setup_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     camera_uniform: camera::CameraUniform,
+    world_state: &world::WorldState,
 ) -> Scene {
     let vertex_size = mem::size_of::<vertex::Vertex>();
 
@@ -423,43 +434,21 @@ fn setup_scene(
         ],
     };
 
-    let instances = (0..NUM_INSTANCES_PER_ROW)
-        .flat_map(|x| {
-            (0..NUM_INSTANCES_PER_ROW).map(move |z| {
-                let position = cgmath::Vector3 {
-                    x: (x as f32 * BLOCK_SIZE),
-                    y: 0.0,
-                    z: (z as f32 * BLOCK_SIZE),
-                };
+    let (grass_instances, dirt_instances, grass_instance_data, dirt_instance_data) =
+        world_state.generate_vertex_data();
 
-                // let rotation = if position.is_zero() {
-                //     // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                //     // as Quaternions can effect scale if they're not created correctly
-                //     cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                // } else {
-                //     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                // };
-
-                // No rotation
-                let rotation = cgmath::Quaternion::from_axis_angle(
-                    cgmath::Vector3::unit_y(),
-                    cgmath::Deg(0.0),
-                );
-
-                lib::Instance { position, rotation }
-            })
-        })
-        .collect::<Vec<_>>();
-
-    let instance_data = instances
-        .iter()
-        .map(lib::Instance::to_raw)
-        .collect::<Vec<_>>();
-    let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Instance Buffer"),
-        contents: bytemuck::cast_slice(&instance_data),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
+    let instance_buffers = [
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Grass Instance Buffer"),
+            contents: bytemuck::cast_slice(&grass_instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Dirt Instance Buffer"),
+            contents: bytemuck::cast_slice(&dirt_instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+    ];
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
@@ -499,8 +488,8 @@ fn setup_scene(
         camera_bind_group,
         camera_buf,
         camera_staging_buf,
-        instances,
-        instance_buf,
+        instance_data: [grass_instances, dirt_instances],
+        instance_buffers,
         depth_texture,
         pipeline,
     }
@@ -545,22 +534,19 @@ fn render_scene(
         rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-        rpass.set_vertex_buffer(1, scene.instance_buf.slice(..));
 
         // Draw grass blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
-        rpass.draw_indexed(
-            0..scene.index_count as u32,
-            0,
-            0..50 as _,
-        );
+        rpass.set_vertex_buffer(1, scene.instance_buffers[0].slice(..));
+        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..scene.instance_data[0].len() as _);
 
         // Draw dirt blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+        rpass.set_vertex_buffer(1, scene.instance_buffers[1].slice(..));
         rpass.draw_indexed(
             0..scene.index_count as u32,
             0,
-            50..scene.instances.len() as _,
+            0..scene.instance_data[1].len() as _,
         );
 
         // TODO: wireframe
