@@ -1,4 +1,5 @@
-#[macro_use] extern crate itertools;
+#[macro_use]
+extern crate itertools;
 
 mod camera;
 mod cube;
@@ -12,7 +13,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent, MouseButton},
+    event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -193,15 +194,13 @@ fn start(
                         cursor_grabbed = true;
                     }
                 }
-                WindowEvent::MouseInput { state , button, .. } => {
-                    match (state, button) {
-                        (ElementState::Pressed, MouseButton::Left) => {
-                            println!("Left mouse clicked");
-                            mouse_clicked = true;
-                        }
-                        _ => ()
+                WindowEvent::MouseInput { state, button, .. } => match (state, button) {
+                    (ElementState::Pressed, MouseButton::Left) => {
+                        println!("Left mouse clicked");
+                        mouse_clicked = true;
                     }
-                }
+                    _ => (),
+                },
                 _ => (),
             },
 
@@ -235,6 +234,30 @@ fn start(
                     0,
                     bytemuck::cast_slice(&[camera_uniform]),
                 );
+
+                // Break a block with the camera!
+                if mouse_clicked {
+                    mouse_clicked = false;
+                    world_state.break_block(&camera);
+
+                    let (
+                        _grass_instances,
+                        _dirt_instances,
+                        grass_instance_data,
+                        dirt_instance_data,
+                    ) = world_state.generate_vertex_data();
+                    queue.write_buffer(
+                        &scene.instance_buffers[0],
+                        0,
+                        bytemuck::cast_slice(&grass_instance_data),
+                    );
+                    queue.write_buffer(
+                        &scene.instance_buffers[1],
+                        0,
+                        bytemuck::cast_slice(&dirt_instance_data),
+                    );
+                }
+
                 render_scene(&view, &device, &queue, &scene);
 
                 frame.present();
@@ -451,12 +474,12 @@ fn setup_scene(
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Grass Instance Buffer"),
             contents: bytemuck::cast_slice(&grass_instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         }),
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Dirt Instance Buffer"),
             contents: bytemuck::cast_slice(&dirt_instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         }),
     ];
 
@@ -548,7 +571,11 @@ fn render_scene(
         // Draw grass blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_vertex_buffer(1, scene.instance_buffers[0].slice(..));
-        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..scene.instance_data[0].len() as _);
+        rpass.draw_indexed(
+            0..scene.index_count as u32,
+            0,
+            0..scene.instance_data[0].len() as _,
+        );
 
         // Draw dirt blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));

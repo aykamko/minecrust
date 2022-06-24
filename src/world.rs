@@ -69,14 +69,12 @@ impl WorldState {
             };
             match self.blocks[x][y][z].block_type {
                 1 => {
-                    // println!("grass @ {},{},{}", x, y, z);
                     grass_instances.push(super::lib::Instance {
                         position,
                         rotation: null_rotation,
                     });
                 }
                 2 => {
-                    // println!("dirt @ {},{},{}", x, y, z);
                     dirt_instances.push(super::lib::Instance {
                         position,
                         rotation: null_rotation,
@@ -105,4 +103,48 @@ impl WorldState {
             dirt_instance_data,
         )
     }
+
+    pub fn break_block(&mut self, camera: &super::camera::Camera) {
+        let mut all_candidate_cubes: Vec<[usize; 3]> = vec![];
+
+        let forward_unit = (camera.target - camera.eye).normalize();
+
+        let mut curr_pos = camera.eye;
+        curr_pos -= forward_unit;
+
+        const MAX_ITER: usize = 20 + 1;
+        for _ in 0..MAX_ITER {
+            curr_pos += forward_unit;
+            all_candidate_cubes.push([
+                curr_pos.x as usize,
+                curr_pos.y as usize,
+                curr_pos.z as usize,
+            ]);
+            // TODO: add neighboring cubes too
+        }
+
+        for cube in all_candidate_cubes.iter().rev() {
+            if self.blocks[cube[0]][cube[1]][cube[2]].block_type != 0 {
+                self.blocks[cube[0]][cube[1]][cube[2]].block_type = 0;
+                break;
+            }
+        }
+    }
+    /*
+    # Ray intersection algo v2:
+
+    start at eye e
+    all_candidate_cubes = []
+    repeat for N steps  # N = 20ish
+      add unit vector in direction t  # t = target
+      candidate_cubes_this_iter = []
+      for all possible intersecting cubes  # possible intersection means we added +1 to the axis
+        if cube exists in world
+          add cube to candidate_cubes_this_iter
+      all_candidate_cubes.extend(candidate_cubes_this_iter)
+      if candidate_cubes_this_iter === 7:  # optimization: we had to have hit something here
+        break
+    for cube in all_candidate_cubes:
+      check intersection using ray-tracing-lin-alg  # https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+     */
 }
