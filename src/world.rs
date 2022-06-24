@@ -12,7 +12,7 @@ struct Block {
 // const WORLD_Y_SIZE: usize = 256;
 const WORLD_XZ_SIZE: usize = 16;
 const WORLD_Y_SIZE: usize = 256;
-const BLOCK_SIZE: f32 = 2.0;
+const BLOCK_SIZE: f32 = 1.0;
 
 impl Default for Block {
     fn default() -> Block {

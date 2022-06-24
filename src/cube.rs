@@ -13,35 +13,35 @@ impl Cube {
         let (tao, bao, sao) = (top_atlas_offset, bottom_atlas_offset, side_atlas_offset);
         let vertex_data = [
             // front (0, 0, 1)
-            Vertex::new([-1, -1, 1], [1, 1], sao),
-            Vertex::new([1, -1, 1], [0, 1], sao),
+            Vertex::new([0, 0, 1], [1, 1], sao),
+            Vertex::new([1, 0, 1], [0, 1], sao),
             Vertex::new([1, 1, 1], [0, 0], sao),
-            Vertex::new([-1, 1, 1], [1, 0], sao),
-            // back (0, 0, -1)
-            Vertex::new([-1, 1, -1], [1, 0], sao),
-            Vertex::new([1, 1, -1], [0, 0], sao),
-            Vertex::new([1, -1, -1], [0, 1], sao),
-            Vertex::new([-1, -1, -1], [1, 1], sao),
+            Vertex::new([0, 1, 1], [1, 0], sao),
+            // back (0, 0, 0)
+            Vertex::new([0, 1, 0], [1, 0], sao),
+            Vertex::new([1, 1, 0], [0, 0], sao),
+            Vertex::new([1, 0, 0], [0, 1], sao),
+            Vertex::new([0, 0, 0], [1, 1], sao),
             // right (1, 0, 0)
-            Vertex::new([1, -1, -1], [1, 1], sao),
-            Vertex::new([1, 1, -1], [1, 0], sao),
+            Vertex::new([1, 0, 0], [1, 1], sao),
+            Vertex::new([1, 1, 0], [1, 0], sao),
             Vertex::new([1, 1, 1], [0, 0], sao),
-            Vertex::new([1, -1, 1], [0, 1], sao),
-            // left (-1, 0, 0)
-            Vertex::new([-1, -1, 1], [0, 1], sao),
-            Vertex::new([-1, 1, 1], [0, 0], sao),
-            Vertex::new([-1, 1, -1], [1, 0], sao),
-            Vertex::new([-1, -1, -1], [1, 1], sao),
+            Vertex::new([1, 0, 1], [0, 1], sao),
+            // left (0, 0, 0)
+            Vertex::new([0, 0, 1], [0, 1], sao),
+            Vertex::new([0, 1, 1], [0, 0], sao),
+            Vertex::new([0, 1, 0], [1, 0], sao),
+            Vertex::new([0, 0, 0], [1, 1], sao),
             // top (0, 1, 0)
-            Vertex::new([1, 1, -1], [1, 0], tao),
-            Vertex::new([-1, 1, -1], [0, 0], tao),
-            Vertex::new([-1, 1, 1], [0, 1], tao),
+            Vertex::new([1, 1, 0], [1, 0], tao),
+            Vertex::new([0, 1, 0], [0, 0], tao),
+            Vertex::new([0, 1, 1], [0, 1], tao),
             Vertex::new([1, 1, 1], [1, 1], tao),
-            // bottom (0, -1, 0)
-            Vertex::new([1, -1, 1], [0, 0], bao),
-            Vertex::new([-1, -1, 1], [1, 0], bao),
-            Vertex::new([-1, -1, -1], [1, 1], bao),
-            Vertex::new([1, -1, -1], [0, 1], bao),
+            // bottom (0, 0, 0)
+            Vertex::new([1, 0, 1], [0, 0], bao),
+            Vertex::new([0, 0, 1], [1, 0], bao),
+            Vertex::new([0, 0, 0], [1, 1], bao),
+            Vertex::new([1, 0, 0], [0, 1], bao),
         ];
 
         let index_data: &[u16] = &[
