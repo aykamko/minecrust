@@ -1,3 +1,4 @@
+mod world;
 mod camera;
 mod cube;
 mod lib;
@@ -138,6 +139,8 @@ fn start(
     };
     let mut camera_uniform = camera::CameraUniform::new();
     camera_uniform.update_view_proj(&camera);
+
+    let mut world = world::WorldState::new();
 
     let scene = setup_scene(&config, &adapter, &device, &queue, camera_uniform);
 

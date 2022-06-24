@@ -194,3 +194,21 @@ impl CameraController {
         // );
     }
 }
+
+/*
+# Ray intersection algo v2:
+
+start at eye e
+all_candidate_cubes = []
+repeat for N steps  # N = 20ish
+  add unit vector in direction t  # t = target
+  candidate_cubes_this_iter = []
+  for all possible intersecting cubes  # possible intersection means we added +1 to the axis
+    if cube exists in world
+      add cube to candidate_cubes_this_iter
+  all_candidate_cubes.extend(candidate_cubes_this_iter)
+  if candidate_cubes_this_iter === 7:  # optimization: we had to have hit something here
+    break
+for cube in all_candidate_cubes:
+  check intersection using ray-tracing-lin-alg  # https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+ */
