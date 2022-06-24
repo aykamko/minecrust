@@ -1,4 +1,6 @@
 use cgmath::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 
 #[derive(Copy, Clone)]
 struct Block {
@@ -39,8 +41,8 @@ impl WorldState {
 
     pub fn initial_setup(&mut self) {
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
-            self.blocks[x][0][z].block_type = 1; // grass
-            self.blocks[x][1][z].block_type = 2; // dirt
+            self.blocks[x][0][z].block_type = 2; // dirt
+            self.blocks[x][1][z].block_type = 1; // grass
         }
     }
 
@@ -52,6 +54,8 @@ impl WorldState {
         Vec<super::lib::InstanceRaw>,
         Vec<super::lib::InstanceRaw>,
     ) {
+        let func_start = Instant::now();
+
         let null_rotation =
             cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(0.0));
         let mut grass_instances: Vec<super::lib::Instance> = vec![];
@@ -90,6 +94,9 @@ impl WorldState {
             .iter()
             .map(super::lib::Instance::to_raw)
             .collect::<Vec<_>>();
+
+        let elapsed_time = func_start.elapsed().as_millis();
+        println!("Took {}ms to generate vertex data", elapsed_time);
 
         (
             grass_instances,

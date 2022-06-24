@@ -12,7 +12,7 @@ use futures::executor::block_on;
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent},
+    event::{DeviceEvent, ElementState, Event, VirtualKeyCode, WindowEvent, MouseButton},
     event_loop::{ControlFlow, EventLoop},
 };
 
@@ -157,6 +157,7 @@ fn start(
     let mut curr_modifier_state: winit::event::ModifiersState =
         winit::event::ModifiersState::empty();
     let mut cursor_grabbed = false;
+    let mut mouse_clicked = false;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -190,6 +191,15 @@ fn start(
                         window.set_cursor_grab(true).expect("Failed to grab curosr");
                         window.set_cursor_visible(false);
                         cursor_grabbed = true;
+                    }
+                }
+                WindowEvent::MouseInput { state , button, .. } => {
+                    match (state, button) {
+                        (ElementState::Pressed, MouseButton::Left) => {
+                            println!("Left mouse clicked");
+                            mouse_clicked = true;
+                        }
+                        _ => ()
                     }
                 }
                 _ => (),
