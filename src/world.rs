@@ -12,7 +12,6 @@ struct Block {
 // const WORLD_Y_SIZE: usize = 256;
 const WORLD_XZ_SIZE: usize = 16;
 const WORLD_Y_SIZE: usize = 256;
-const BLOCK_SIZE: f32 = 1.0;
 
 impl Default for Block {
     fn default() -> Block {
@@ -64,9 +63,9 @@ impl WorldState {
 
         for (x, y, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_Y_SIZE, 0..WORLD_XZ_SIZE) {
             let position = cgmath::Vector3 {
-                x: x as f32 * BLOCK_SIZE,
-                y: y as f32 * BLOCK_SIZE,
-                z: z as f32 * BLOCK_SIZE,
+                x: x as f32,
+                y: y as f32,
+                z: z as f32,
             };
             match self.blocks[x][y][z].block_type {
                 1 => {
@@ -110,7 +109,7 @@ impl WorldState {
 
         let forward_unit = (camera.target - camera.eye).normalize();
 
-        println!("Camera eye is at {:?}", camera.eye / BLOCK_SIZE);
+        println!("Camera eye is at {:?}", camera.eye);
 
         let mut curr_pos = camera.eye;
         curr_pos -= forward_unit;
@@ -119,9 +118,9 @@ impl WorldState {
         for _ in 0..MAX_ITER {
             curr_pos += forward_unit;
             let cube = [
-                (curr_pos.x / BLOCK_SIZE).floor() as usize,
-                (curr_pos.y / BLOCK_SIZE).floor() as usize,
-                (curr_pos.z / BLOCK_SIZE).floor() as usize,
+                curr_pos.x as usize,
+                curr_pos.y as usize,
+                curr_pos.z as usize,
             ];
             println!("Adding cube {:?}", cube);
             all_candidate_cubes.push(cube);
