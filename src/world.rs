@@ -105,6 +105,20 @@ impl WorldState {
         )
     }
 
+    // Ray intersection algo pseudocode:
+    //   start at eye e
+    //   all_candidate_cubes = []
+    //   repeat for N steps  # N = 20ish
+    //     add unit vector in direction t  # t = target
+    //     candidate_cubes_this_iter = []
+    //     for all possible intersecting cubes  # possible intersection means we added +1 to the axis
+    //       if cube exists in world
+    //         add cube to candidate_cubes_this_iter
+    //     all_candidate_cubes.extend(candidate_cubes_this_iter)
+    //     if candidate_cubes_this_iter === 7:  # optimization: we had to have hit something here
+    //       break
+    //   for cube in all_candidate_cubes:
+    //     check intersection using ray tracing linear algebra  # https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
     pub fn break_block(&mut self, camera: &super::camera::Camera) {
         use cgmath_17::{InnerSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
@@ -154,27 +168,9 @@ impl WorldState {
             if self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type != 0
                 && collision_ray.intersects(&collision_cube)
             {
-                // collision::algorithm::broad_phase::BruteForce::find_collider_pairs([collision_ray, collision_cube]);
                 self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type = 0;
                 break;
             }
         }
     }
-    /*
-    # Ray intersection algo v2:
-
-    start at eye e
-    all_candidate_cubes = []
-    repeat for N steps  # N = 20ish
-      add unit vector in direction t  # t = target
-      candidate_cubes_this_iter = []
-      for all possible intersecting cubes  # possible intersection means we added +1 to the axis
-        if cube exists in world
-          add cube to candidate_cubes_this_iter
-      all_candidate_cubes.extend(candidate_cubes_this_iter)
-      if candidate_cubes_this_iter === 7:  # optimization: we had to have hit something here
-        break
-    for cube in all_candidate_cubes:
-      check intersection using ray-tracing-lin-alg  # https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
-     */
 }

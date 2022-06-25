@@ -7,10 +7,12 @@ mod lib;
 mod texture;
 mod vertex;
 mod world;
+mod spawner;
 
+use spawner::Spawner;
 use cgmath::prelude::*;
 use futures::executor::block_on;
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, mem, future::Future, task, pin::Pin};
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
@@ -51,7 +53,7 @@ struct Scene {
     instance_buffers: [wgpu::Buffer; 2],
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
-    // pipeline_wire: Option<wgpu::RenderPipeline>,
+    pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
 async fn setup() -> Setup {
@@ -162,6 +164,8 @@ fn start(
     let mut cursor_grabbed = false;
     let mut mouse_clicked = false;
 
+    let spawner = Spawner::new();
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -242,12 +246,8 @@ fn start(
                     mouse_clicked = false;
                     world_state.break_block(&camera);
 
-                    let (
-                        grass_instances,
-                        dirt_instances,
-                        grass_instance_data,
-                        dirt_instance_data,
-                    ) = world_state.generate_vertex_data();
+                    let (grass_instances, dirt_instances, grass_instance_data, dirt_instance_data) =
+                        world_state.generate_vertex_data();
                     queue.write_buffer(
                         &scene.instance_buffers[0],
                         0,
@@ -262,7 +262,7 @@ fn start(
                     instance_lens = [grass_instances.len(), dirt_instances.len()];
                 }
 
-                render_scene(&view, &device, &queue, &scene, instance_lens);
+                render_scene(&view, &device, &queue, &scene, &spawner, instance_lens);
 
                 frame.present();
                 camera_controller.reset_mouse_delta();
@@ -272,6 +272,9 @@ fn start(
                 // RedrawRequested will only trigger once, unless we manually
                 // request it.
                 window.request_redraw();
+
+                #[cfg(not(target_arch = "wasm32"))]
+                spawner.run_until_stalled();
             }
 
             _ => (),
@@ -489,13 +492,15 @@ fn setup_scene(
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
+    let buffers = &[vertex_buffer_layout, lib::InstanceRaw::desc()];
+
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[vertex_buffer_layout, lib::InstanceRaw::desc()],
+            buffers,
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -517,6 +522,56 @@ fn setup_scene(
         multiview: None,
     });
 
+    let pipeline_wire = if device
+        .features()
+        .contains(wgpu::Features::POLYGON_MODE_LINE)
+    {
+        let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_wire",
+                targets: &[wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            operation: wgpu::BlendOperation::Add,
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                        },
+                        alpha: wgpu::BlendComponent::REPLACE,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                }],
+            }),
+            primitive: wgpu::PrimitiveState {
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Line,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            // depth_stencil: Some(wgpu::DepthStencilState {
+            //     format: texture::Texture::DEPTH_FORMAT,
+            //     depth_write_enabled: true,
+            //     depth_compare: wgpu::CompareFunction::Greater,
+            //     stencil: wgpu::StencilState::default(),
+            //     bias: wgpu::DepthBiasState::default(),
+            // }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+        });
+        Some(pipeline_wire)
+    } else {
+        None
+    };
+
     Scene {
         vertex_buffers,
         index_buf,
@@ -529,6 +584,7 @@ fn setup_scene(
         instance_buffers,
         depth_texture,
         pipeline,
+        pipeline_wire,
     }
 }
 
@@ -537,8 +593,8 @@ fn render_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     scene: &Scene,
+    spawner: &Spawner,
     instance_lens: [usize; 2],
-    // spawner: &framework::Spawner,
 ) {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =
@@ -583,11 +639,10 @@ fn render_scene(
         rpass.set_vertex_buffer(1, scene.instance_buffers[1].slice(..));
         rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
 
-        // TODO: wireframe
-        // if let Some(ref pipe) = self.pipeline_wire {
-        //     rpass.set_pipeline(pipe);
-        //     rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
-        // }
+        if let Some(ref pipe) = &scene.pipeline_wire {
+            rpass.set_pipeline(pipe);
+            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..1);
+        }
     }
     encoder.copy_buffer_to_buffer(
         &scene.camera_staging_buf,
@@ -600,7 +655,29 @@ fn render_scene(
     queue.submit(Some(encoder.finish()));
 
     // If an error occurs, report it and panic.
-    // spawner.spawn_local(ErrorFuture {
-    //     inner: device.pop_error_scope(),
-    // });
+    spawner.spawn_local(ErrorFuture {
+        inner: device.pop_error_scope(),
+    });
+}
+
+/// A wrapper for `pop_error_scope` futures that panics if an error occurs.
+///
+/// Given a future `inner` of an `Option<E>` for some error type `E`,
+/// wait for the future to be ready, and panic if its value is `Some`.
+///
+/// This can be done simpler with `FutureExt`, but we don't want to add
+/// a dependency just for this small case.
+struct ErrorFuture<F> {
+    inner: F,
+}
+impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<()> {
+        let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
+        inner.poll(cx).map(|error| {
+            if let Some(e) = error {
+                panic!("Rendering {}", e);
+            }
+        })
+    }
 }
