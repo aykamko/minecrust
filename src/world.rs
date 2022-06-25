@@ -1,6 +1,6 @@
 use cgmath::prelude::*;
 use cgmath_17::MetricSpace;
-use collision::Discrete;
+use collision::{Continuous, Discrete};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
@@ -162,37 +162,40 @@ impl WorldState {
 
         let collision_ray = collision::Ray::new(camera_eye_cgmath17, forward_unit);
 
-        let mut colliders: Vec<Point3<f32>> = vec![];
+        let mut closest_collider: (f32 /* closest distance */, [usize; 3]) =
+            (std::f32::INFINITY, [0, 0, 0]);
+        let mut hit_first_collision = false;
+        let mut additional_checks = 0;
 
         for cube in all_candidate_cubes.iter() {
             let collision_cube = collision::Aabb3::new(
                 *cube,
                 cgmath_17::Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0),
             );
-            if self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type != 0
-                && collision_ray.intersects(&collision_cube)
-            {
-                colliders.push(cgmath_17::Point3::new(
-                    cube.x + 0.5,
-                    cube.y + 0.5,
-                    cube.z + 0.5,
-                ));
-                // Once we have 7 colliders, time to find the closest one
-                if colliders.len() >= 7 {
-                    break;
+
+            if self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type != 0 {
+                let maybe_collision = collision_ray.intersection(&collision_cube);
+
+                if let Some(ref collision_point) = maybe_collision {
+                    hit_first_collision = true;
+                    let collision_distance = collision_point.distance(camera_eye_cgmath17);
+                    if collision_distance < closest_collider.0 {
+                        closest_collider = (
+                            collision_distance,
+                            [cube.x as usize, cube.y as usize, cube.z as usize],
+                        )
+                    }
                 }
+            }
+            if hit_first_collision {
+                additional_checks += 1;
+            }
+            if additional_checks > 6 {
+                break;
             }
         }
 
-        colliders.sort_by(|u, v| {
-            let u_dist = u.distance(camera_eye_cgmath17);
-            let v_dist = v.distance(camera_eye_cgmath17);
-            u_dist.partial_cmp(&v_dist).unwrap()
-        });
-
-        let closest_collider = colliders[0];
-        self.blocks[closest_collider.x.floor() as usize][closest_collider.y.floor() as usize]
-            [closest_collider.z.floor() as usize]
+        self.blocks[closest_collider.1[0]][closest_collider.1[1]][closest_collider.1[2]]
             .block_type = 0;
     }
 }
