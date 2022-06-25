@@ -4,23 +4,20 @@ extern crate itertools;
 mod camera;
 mod cube;
 mod lib;
+mod spawner;
 mod texture;
 mod vertex;
 mod world;
-mod spawner;
 
-use spawner::Spawner;
 use cgmath::prelude::*;
 use futures::executor::block_on;
-use std::{borrow::Cow, mem, future::Future, task, pin::Pin};
+use spawner::Spawner;
+use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
-
-const NUM_INSTANCES_PER_ROW: u32 = 10;
-const BLOCK_SIZE: f32 = 2.0;
 
 fn main() {
     let s = block_on(setup());
@@ -42,8 +39,9 @@ struct Setup {
 }
 
 struct Scene {
-    vertex_buffers: [wgpu::Buffer; 2],
+    vertex_buffers: [wgpu::Buffer; 3],
     index_buf: wgpu::Buffer,
+    line_index_buf: wgpu::Buffer,
     index_count: usize,
     texture_bind_group: wgpu::BindGroup,
     camera_bind_group: wgpu::BindGroup,
@@ -259,6 +257,18 @@ fn start(
                         bytemuck::cast_slice(&dirt_instance_data),
                     );
 
+                    let forward = (camera.target - camera.eye).normalize();
+                    let horizon_target = camera.target + (forward * 100.0);
+                    queue.write_buffer(
+                        &scene.vertex_buffers[2],
+                        0,
+                        bytemuck::cast_slice(&[
+                            vertex::Vertex::new_from_pos(camera.eye.into()),
+                            vertex::Vertex::new_from_pos(horizon_target.into()),
+                            vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
+                        ]),
+                    );
+
                     instance_lens = [grass_instances.len(), dirt_instances.len()];
                 }
 
@@ -306,11 +316,27 @@ fn setup_scene(
             contents: bytemuck::cast_slice(&dirt_block.vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         }),
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Line Buffer"),
+            contents: bytemuck::cast_slice(&[
+                vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
+                vertex::Vertex::new_from_pos([10.0, 10.0, 10.0]),
+                vertex::Vertex::new_from_pos([10.0, 0.0, 10.0]),
+            ]),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        }),
     ];
 
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Block Index Buffer"),
         contents: bytemuck::cast_slice(&grass_block.index_data),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    let line_index_data: &[u16] = &[0, 1, 2, 2, 1, 0];
+    let line_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Line Index Buffer"),
+        contents: bytemuck::cast_slice(&line_index_data),
         usage: wgpu::BufferUsages::INDEX,
     });
 
@@ -574,6 +600,7 @@ fn setup_scene(
     Scene {
         vertex_buffers,
         index_buf,
+        line_index_buf,
         index_count: grass_block.index_data.len(),
         texture_bind_group,
         camera_bind_group,
@@ -647,6 +674,12 @@ fn render_scene(
         if let Some(ref pipe) = &scene.pipeline_wire {
             rpass.set_pipeline(pipe);
             rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
+
+            // Draw camera line
+            rpass.set_index_buffer(scene.line_index_buf.slice(..), wgpu::IndexFormat::Uint16);
+            rpass.set_vertex_buffer(0, scene.vertex_buffers[2].slice(..));
+            rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
+
             rpass.set_pipeline(&scene.pipeline);
         }
     }
