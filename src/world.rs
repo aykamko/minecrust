@@ -1,4 +1,5 @@
 use cgmath::prelude::*;
+use collision::Discrete;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
@@ -105,33 +106,56 @@ impl WorldState {
     }
 
     pub fn break_block(&mut self, camera: &super::camera::Camera) {
-        let mut all_candidate_cubes: Vec<[usize; 3]> = vec![];
+        use cgmath_17::{InnerSpace, Point3};
+        let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
-        let forward_unit = (camera.target - camera.eye).normalize();
+        let camera_eye_cgmath17 = Point3::new(camera.eye.x, camera.eye.y, camera.eye.z);
+        all_candidate_cubes.push(Point3::new(
+            camera_eye_cgmath17.x.floor(),
+            camera_eye_cgmath17.y.floor(),
+            camera_eye_cgmath17.z.floor(),
+        ));
+
+        let camera_target_cgmath17 = Point3::new(camera.target.x, camera.target.y, camera.target.z);
+
+        let forward_unit = (camera_target_cgmath17 - camera_eye_cgmath17).normalize();
+
+        let x_dir = forward_unit.x.signum();
+        let y_dir = forward_unit.y.signum();
+        let z_dir = forward_unit.z.signum();
 
         println!("Camera eye is at {:?}", camera.eye);
 
-        let mut curr_pos = camera.eye;
-        curr_pos -= forward_unit;
+        let mut curr_pos = camera_eye_cgmath17;
 
         const MAX_ITER: usize = 20 + 1;
         for _ in 0..MAX_ITER {
             curr_pos += forward_unit;
-            let cube = [
-                curr_pos.x as usize,
-                curr_pos.y as usize,
-                curr_pos.z as usize,
-            ];
+            let cube = Point3::new(curr_pos.x.floor(), curr_pos.y.floor(), curr_pos.z.floor());
             println!("Adding cube {:?}", cube);
             all_candidate_cubes.push(cube);
-            // TODO: add neighboring cubes too
+
+            // Add all possible neighbors as the ray moves forward
+            for (x_diff, y_diff, z_diff) in iproduct!([0.0, -x_dir], [0.0, -y_dir], [0.0, -z_dir]) {
+                all_candidate_cubes.push(Point3::new(
+                    cube.x + x_diff,
+                    cube.y + y_diff,
+                    cube.z + z_diff,
+                ));
+            }
         }
 
+        let collision_ray = collision::Ray::new(camera_eye_cgmath17, forward_unit);
         for cube in all_candidate_cubes.iter() {
-            let val = self.blocks[cube[0]][cube[1]][cube[2]].block_type;
-            println!("Checking cube {:?}: {}", cube, val);
-            if self.blocks[cube[0]][cube[1]][cube[2]].block_type != 0 {
-                self.blocks[cube[0]][cube[1]][cube[2]].block_type = 0;
+            let collision_cube = collision::Aabb3::new(
+                *cube,
+                cgmath_17::Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0),
+            );
+            if self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type != 0
+                && collision_ray.intersects(&collision_cube)
+            {
+                // collision::algorithm::broad_phase::BruteForce::find_collider_pairs([collision_ray, collision_cube]);
+                self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type = 0;
                 break;
             }
         }

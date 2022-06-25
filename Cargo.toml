@@ -11,5 +11,7 @@ bytemuck = { version = "1.9.1", features = ["derive"] }
 winit = "0.26.1"
 wgpu = { git = "https://github.com/gfx-rs/wgpu" }
 cgmath = "0.18"
+cgmath-17 = { package = "cgmath", version = "0.17" }
 image = { version = "0.24", default-features = false, features = ["png"] }
 itertools = "0.5.9"
+collision = "0.20.1"
