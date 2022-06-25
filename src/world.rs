@@ -138,17 +138,14 @@ impl WorldState {
         let y_dir = forward_unit.y.signum();
         let z_dir = forward_unit.z.signum();
 
-        println!("Camera eye is at {:?}", camera.eye);
-
         let mut curr_pos = camera_eye_cgmath17;
 
         const MAX_ITER: usize = 20 + 1;
         for _ in 0..MAX_ITER {
             curr_pos += forward_unit;
             let cube = Point3::new(curr_pos.x.floor(), curr_pos.y.floor(), curr_pos.z.floor());
-            println!("Adding cube {:?}", cube);
 
-            // Add all possible neighbors as the ray moves forward
+            // Add all possible intersecting neighbors as the ray moves forward
             for (x_diff, y_diff, z_diff) in iproduct!([0.0, -x_dir], [0.0, -y_dir], [0.0, -z_dir]) {
                 all_candidate_cubes.push(Point3::new(
                     cube.x + x_diff,
@@ -190,6 +187,7 @@ impl WorldState {
             if hit_first_collision {
                 additional_checks += 1;
             }
+            // TODO: should this be 7???
             if additional_checks > 6 {
                 break;
             }
