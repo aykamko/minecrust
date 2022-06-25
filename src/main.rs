@@ -556,14 +556,13 @@ fn setup_scene(
                 polygon_mode: wgpu::PolygonMode::Line,
                 ..Default::default()
             },
-            depth_stencil: None,
-            // depth_stencil: Some(wgpu::DepthStencilState {
-            //     format: texture::Texture::DEPTH_FORMAT,
-            //     depth_write_enabled: true,
-            //     depth_compare: wgpu::CompareFunction::Greater,
-            //     stencil: wgpu::StencilState::default(),
-            //     bias: wgpu::DepthBiasState::default(),
-            // }),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
@@ -634,6 +633,12 @@ fn render_scene(
         rpass.set_vertex_buffer(1, scene.instance_buffers[0].slice(..));
         rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
 
+        if let Some(ref pipe) = &scene.pipeline_wire {
+            rpass.set_pipeline(pipe);
+            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
+            rpass.set_pipeline(&scene.pipeline);
+        }
+
         // Draw dirt blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
         rpass.set_vertex_buffer(1, scene.instance_buffers[1].slice(..));
@@ -641,7 +646,8 @@ fn render_scene(
 
         if let Some(ref pipe) = &scene.pipeline_wire {
             rpass.set_pipeline(pipe);
-            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..1);
+            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
+            rpass.set_pipeline(&scene.pipeline);
         }
     }
     encoder.copy_buffer_to_buffer(
