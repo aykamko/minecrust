@@ -14,4 +14,12 @@ impl Vertex {
             atlas_offset: [ao[0] as f32, ao[1] as f32],
         }
     }
+
+    pub fn new_from_pos(pos: [f32; 3]) -> Self {
+        Self {
+            pos: [pos[0], pos[1], pos[2], 1.0],
+            tex_coord: [0.0, 0.0],
+            atlas_offset: [0.0, 0.0],
+        }
+    }
 }

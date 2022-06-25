@@ -4,15 +4,15 @@ extern crate itertools;
 mod camera;
 mod cube;
 mod lib;
+mod spawner;
 mod texture;
 mod vertex;
 mod world;
-mod spawner;
 
-use spawner::Spawner;
 use cgmath::prelude::*;
 use futures::executor::block_on;
-use std::{borrow::Cow, mem, future::Future, task, pin::Pin};
+use spawner::Spawner;
+use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
@@ -53,6 +53,12 @@ struct Scene {
     instance_buffers: [wgpu::Buffer; 2],
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
+
+    camera_ray_buffer: wgpu::Buffer,
+    camera_ray_index_buf: wgpu::Buffer,
+    camera_ray_index_count: usize,
+    pipeline_lines: wgpu::RenderPipeline,
+
     pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
@@ -258,6 +264,15 @@ fn start(
                         0,
                         bytemuck::cast_slice(&dirt_instance_data),
                     );
+                    queue.write_buffer(
+                        &scene.camera_ray_buffer,
+                        0,
+                        bytemuck::cast_slice(&[
+                            vertex::Vertex::new_from_pos(camera.eye.into()),
+                            vertex::Vertex::new_from_pos(camera.target.into()),
+                            vertex::Vertex::new_from_pos(camera.eye.into()),
+                        ]),
+                    );
 
                     instance_lens = [grass_instances.len(), dirt_instances.len()];
                 }
@@ -307,6 +322,21 @@ fn setup_scene(
             usage: wgpu::BufferUsages::VERTEX,
         }),
     ];
+    let camera_ray_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Camera Ray Buffer"),
+        contents: bytemuck::cast_slice(&[
+            vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
+            vertex::Vertex::new_from_pos([10.0, 10.0, 10.0]),
+            vertex::Vertex::new_from_pos([10.0, 0.0, 10.0]),
+        ]),
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    });
+    let camera_ray_index_data: &[u16] = &[0, 1, 0];
+    let camera_ray_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Camera Ray Index Buffer"),
+        contents: bytemuck::cast_slice(&camera_ray_index_data),
+        usage: wgpu::BufferUsages::INDEX,
+    });
 
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Block Index Buffer"),
@@ -492,15 +522,13 @@ fn setup_scene(
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
-    let buffers = &[vertex_buffer_layout, lib::InstanceRaw::desc()];
-
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers,
+            buffers: &[vertex_buffer_layout.clone(), lib::InstanceRaw::desc()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -509,6 +537,47 @@ fn setup_scene(
         }),
         primitive: wgpu::PrimitiveState {
             cull_mode: Some(wgpu::Face::Back),
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: texture::Texture::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+    });
+
+    let pipeline_lines = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: "vs_line",
+            buffers: &[vertex_buffer_layout.clone()],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: "fs_wire",
+            targets: &[wgpu::ColorTargetState {
+                format: config.format,
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        operation: wgpu::BlendOperation::Add,
+                        src_factor: wgpu::BlendFactor::SrcAlpha,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    },
+                    alpha: wgpu::BlendComponent::REPLACE,
+                }),
+                write_mask: wgpu::ColorWrites::ALL,
+            }],
+        }),
+        primitive: wgpu::PrimitiveState {
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            polygon_mode: wgpu::PolygonMode::Line,
             ..Default::default()
         },
         depth_stencil: Some(wgpu::DepthStencilState {
@@ -532,7 +601,7 @@ fn setup_scene(
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers,
+                buffers: &[vertex_buffer_layout.clone(), lib::InstanceRaw::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -583,6 +652,12 @@ fn setup_scene(
         instance_buffers,
         depth_texture,
         pipeline,
+
+        camera_ray_buffer,
+        camera_ray_index_buf,
+        camera_ray_index_count: camera_ray_index_data.len(),
+        pipeline_lines,
+
         pipeline_wire,
     }
 }
@@ -598,6 +673,14 @@ fn render_scene(
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    encoder.copy_buffer_to_buffer(
+        &scene.camera_staging_buf,
+        0,
+        &scene.camera_buf,
+        0,
+        mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
+    );
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -649,14 +732,16 @@ fn render_scene(
             rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
             rpass.set_pipeline(&scene.pipeline);
         }
+
+        // Draw lines
+        rpass.set_pipeline(&scene.pipeline_lines);
+        rpass.set_index_buffer(
+            scene.camera_ray_index_buf.slice(..),
+            wgpu::IndexFormat::Uint16,
+        );
+        rpass.set_vertex_buffer(0, scene.camera_ray_buffer.slice(..));
+        rpass.draw_indexed(0..scene.camera_ray_index_count as u32, 0, 0..1 as _);
     }
-    encoder.copy_buffer_to_buffer(
-        &scene.camera_staging_buf,
-        0,
-        &scene.camera_buf,
-        0,
-        mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
-    );
 
     queue.submit(Some(encoder.finish()));
 
