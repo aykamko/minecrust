@@ -44,17 +44,6 @@ fn vs_main(
     return out;
 }
 
-@vertex
-fn vs_line(
-    model: VertexInput,
-) -> VertexOutput {
-    var out: VertexOutput;
-    out.tex_coord = model.tex_coord;
-    out.position = camera_position.view_proj * model.position;
-    out.atlas_offset = model.atlas_offset;
-    return out;
-}
-
 @group(0)
 @binding(0)
 var t_diffuse: texture_2d<f32>;
@@ -73,7 +62,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_wire(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+    return vec4<f32>(0.0, 0.5, 0.0, 0.5);
 }
 
 // Older dialect of WGSL (wgpu 0.12)
