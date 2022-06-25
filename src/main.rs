@@ -660,11 +660,11 @@ fn render_scene(
         rpass.set_vertex_buffer(1, scene.instance_buffers[0].slice(..));
         rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
 
-        if let Some(ref pipe) = &scene.pipeline_wire {
-            rpass.set_pipeline(pipe);
-            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
-            rpass.set_pipeline(&scene.pipeline);
-        }
+        // if let Some(ref pipe) = &scene.pipeline_wire {
+        //     rpass.set_pipeline(pipe);
+        //     rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
+        //     rpass.set_pipeline(&scene.pipeline);
+        // }
 
         // Draw dirt blocks
         rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
@@ -673,7 +673,7 @@ fn render_scene(
 
         if let Some(ref pipe) = &scene.pipeline_wire {
             rpass.set_pipeline(pipe);
-            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
+            // rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
 
             // Draw camera line
             rpass.set_index_buffer(scene.line_index_buf.slice(..), wgpu::IndexFormat::Uint16);

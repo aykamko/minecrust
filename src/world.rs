@@ -1,4 +1,5 @@
 use cgmath::prelude::*;
+use cgmath_17::MetricSpace;
 use collision::Discrete;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -43,7 +44,6 @@ impl WorldState {
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
             self.blocks[x][0][z].block_type = 2; // dirt
             self.blocks[x][1][z].block_type = 1; // grass
-            println!("Block at {},{},{}", x, 1, z);
         }
     }
 
@@ -147,7 +147,6 @@ impl WorldState {
             curr_pos += forward_unit;
             let cube = Point3::new(curr_pos.x.floor(), curr_pos.y.floor(), curr_pos.z.floor());
             println!("Adding cube {:?}", cube);
-            all_candidate_cubes.push(cube);
 
             // Add all possible neighbors as the ray moves forward
             for (x_diff, y_diff, z_diff) in iproduct!([0.0, -x_dir], [0.0, -y_dir], [0.0, -z_dir]) {
@@ -157,9 +156,14 @@ impl WorldState {
                     cube.z + z_diff,
                 ));
             }
+
+            all_candidate_cubes.push(cube);
         }
 
         let collision_ray = collision::Ray::new(camera_eye_cgmath17, forward_unit);
+
+        let mut colliders: Vec<Point3<f32>> = vec![];
+
         for cube in all_candidate_cubes.iter() {
             let collision_cube = collision::Aabb3::new(
                 *cube,
@@ -168,9 +172,27 @@ impl WorldState {
             if self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type != 0
                 && collision_ray.intersects(&collision_cube)
             {
-                self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type = 0;
-                break;
+                colliders.push(cgmath_17::Point3::new(
+                    cube.x + 0.5,
+                    cube.y + 0.5,
+                    cube.z + 0.5,
+                ));
+                // Once we have 7 colliders, time to find the closest one
+                if colliders.len() >= 7 {
+                    break;
+                }
             }
         }
+
+        colliders.sort_by(|u, v| {
+            let u_dist = u.distance(camera_eye_cgmath17);
+            let v_dist = v.distance(camera_eye_cgmath17);
+            u_dist.partial_cmp(&v_dist).unwrap()
+        });
+
+        let closest_collider = colliders[0];
+        self.blocks[closest_collider.x.floor() as usize][closest_collider.y.floor() as usize]
+            [closest_collider.z.floor() as usize]
+            .block_type = 0;
     }
 }
