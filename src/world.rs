@@ -12,7 +12,8 @@ struct Block {
 
 // const WORLD_XZ_SIZE: usize = 846;
 // const WORLD_Y_SIZE: usize = 256;
-const WORLD_XZ_SIZE: usize = 16;
+//const WORLD_XZ_SIZE: usize = 16 * 3;
+const WORLD_XZ_SIZE: usize = 512;
 const WORLD_Y_SIZE: usize = 256;
 
 impl Default for Block {
@@ -30,20 +31,28 @@ Jun 23:
 
  */
 pub struct WorldState {
-    blocks: [[[Block; WORLD_XZ_SIZE]; WORLD_Y_SIZE]; WORLD_XZ_SIZE],
+    blocks: Vec<Block>,
 }
 
 impl WorldState {
     pub fn new() -> Self {
         Self {
-            blocks: [[[Block { block_type: 0 }; WORLD_XZ_SIZE]; WORLD_Y_SIZE]; WORLD_XZ_SIZE],
+            blocks: vec![Block { block_type: 0 }; WORLD_XZ_SIZE * WORLD_Y_SIZE * WORLD_XZ_SIZE],
         }
+    }
+
+    fn block_at(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
+        &mut self.blocks[x + (y * WORLD_XZ_SIZE) + (z * WORLD_XZ_SIZE * WORLD_Y_SIZE)]
+    }
+
+    fn readonly_block_at(&self, x: usize, y: usize, z: usize) -> &Block {
+        &self.blocks[x + (y * WORLD_XZ_SIZE) + (z * WORLD_XZ_SIZE * WORLD_Y_SIZE)]
     }
 
     pub fn initial_setup(&mut self) {
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
-            self.blocks[x][0][z].block_type = 2; // dirt
-            self.blocks[x][1][z].block_type = 1; // grass
+            self.block_at(x, 0, z).block_type = 2; // dirt
+            self.block_at(x, 1, z).block_type = 1; // grass
         }
     }
 
@@ -68,18 +77,20 @@ impl WorldState {
                 y: y as f32,
                 z: z as f32,
             };
-            match self.blocks[x][y][z].block_type {
+            match self.readonly_block_at(x, y, z).block_type {
                 1 => {
                     grass_instances.push(super::lib::Instance {
                         position,
                         rotation: null_rotation,
                     });
+                    // println!("Grass block at {},{},{}", x, y, z);
                 }
                 2 => {
                     dirt_instances.push(super::lib::Instance {
                         position,
                         rotation: null_rotation,
                     });
+                    // println!("Dirt block at {},{},{}", x, y, z);
                 }
                 _ => {}
             }
@@ -173,7 +184,7 @@ impl WorldState {
                 cgmath_17::Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0),
             );
 
-            if self.blocks[cube.x as usize][cube.y as usize][cube.z as usize].block_type != 0 {
+            if self.block_at(cube.x as usize, cube.y as usize, cube.z as usize).block_type != 0 {
                 let maybe_collision = collision_ray.intersection(&collision_cube);
 
                 if let Some(ref collision_point) = maybe_collision {
@@ -196,7 +207,7 @@ impl WorldState {
             }
         }
 
-        self.blocks[closest_collider.1[0]][closest_collider.1[1]][closest_collider.1[2]]
+        self.block_at(closest_collider.1[0], closest_collider.1[1], closest_collider.1[2])
             .block_type = 0;
     }
 }
