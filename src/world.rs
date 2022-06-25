@@ -110,15 +110,18 @@ impl WorldState {
     //   all_candidate_cubes = []
     //   repeat for N steps  # N = 20ish
     //     add unit vector in direction t  # t = target
-    //     candidate_cubes_this_iter = []
-    //     for all possible intersecting cubes  # possible intersection means we added +1 to the axis
-    //       if cube exists in world
-    //         add cube to candidate_cubes_this_iter
-    //     all_candidate_cubes.extend(candidate_cubes_this_iter)
-    //     if candidate_cubes_this_iter === 7:  # optimization: we had to have hit something here
-    //       break
+    //     for all possible intersecting cubes  # possible intersection means we added/subtracted 1 to an axis
+    //       add cube to all_candidate_cubes
+    //   colliding_cubes = []
     //   for cube in all_candidate_cubes:
-    //     check intersection using ray tracing linear algebra  # https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+    //     if cube doesn't exist, skip
+    //     if cube exists
+    //       check intersection using ray tracing linear algebra  # https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+    //       if intersection
+    //         add to colliding cubes
+    //         only iterate 6 more times  # optimization
+    //   pick closest colliding cube to camera eye
+    //   break cube
     pub fn break_block(&mut self, camera: &super::camera::Camera) {
         use cgmath_17::{InnerSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
@@ -140,7 +143,7 @@ impl WorldState {
 
         let mut curr_pos = camera_eye_cgmath17;
 
-        const MAX_ITER: usize = 20 + 1;
+        const MAX_ITER: usize = 20;
         for _ in 0..MAX_ITER {
             curr_pos += forward_unit;
             let cube = Point3::new(curr_pos.x.floor(), curr_pos.y.floor(), curr_pos.z.floor());
