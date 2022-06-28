@@ -10,10 +10,7 @@ struct Block {
     block_type: u8,
 }
 
-// const WORLD_XZ_SIZE: usize = 846;
-// const WORLD_Y_SIZE: usize = 256;
-//const WORLD_XZ_SIZE: usize = 16 * 3;
-const WORLD_XZ_SIZE: usize = 512;
+const WORLD_XZ_SIZE: usize = 128;
 const WORLD_Y_SIZE: usize = 256;
 
 impl Default for Block {
@@ -22,14 +19,6 @@ impl Default for Block {
     }
 }
 
-/*
-Jun 23:
-- this won't work! How will I quickly find which block to render? I'd have to iterate through this entire array
-- even if I start at the eye and render outwards, it would take a really long time
-- good for ray tracing though...
-- CONCLUSION: whatever, ill deal with it later
-
- */
 pub struct WorldState {
     blocks: Vec<Block>,
 }
@@ -83,16 +72,14 @@ impl WorldState {
                         position,
                         rotation: null_rotation,
                     });
-                    // println!("Grass block at {},{},{}", x, y, z);
                 }
                 2 => {
                     dirt_instances.push(super::lib::Instance {
                         position,
                         rotation: null_rotation,
                     });
-                    // println!("Dirt block at {},{},{}", x, y, z);
                 }
-                _ => {}
+                _ => ()
             }
         }
 
