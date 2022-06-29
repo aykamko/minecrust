@@ -18,6 +18,8 @@ struct Block {
 const WORLD_XZ_SIZE: usize = 128;
 const WORLD_Y_SIZE: usize = 256;
 
+pub const CHUNK_SIZE_IN_BLOCKS: usize = WORLD_XZ_SIZE * WORLD_XZ_SIZE * WORLD_Y_SIZE;
+
 impl Default for Block {
     fn default() -> Block {
         Block {
@@ -87,7 +89,7 @@ impl WorldState {
     }
 
     pub fn initial_setup(&mut self) {
-        for (x, z) in iproduct!(0..4, 0..4) {
+        for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
             self.set_block(x, 0, z, 1); // dirt
             self.set_block(x, 1, z, 1); // grass
         }

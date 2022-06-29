@@ -27,6 +27,11 @@ impl Instance {
 }
 
 impl InstanceRaw {
+    pub fn size() -> usize {
+        use std::mem;
+        mem::size_of::<InstanceRaw>()
+    }
+
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         use std::mem;
         wgpu::VertexBufferLayout {

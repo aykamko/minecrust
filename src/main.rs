@@ -484,14 +484,31 @@ fn setup_scene(
     };
 
     let (instances, instance_data) = world_state.generate_vertex_data();
+    let instance_byte_contents: &[u8] = bytemuck::cast_slice(&instance_data);
 
-    let instance_buffers = [
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        }),
-    ];
+    let unpadded_size: u64 = (world::CHUNK_SIZE_IN_BLOCKS * instance::InstanceRaw::size())
+        .try_into()
+        .unwrap();
+    // // Valid vulkan usage is
+    // // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
+    // // 2. buffer size must be greater than 0.
+    // // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
+    let align_mask = wgpu::COPY_BUFFER_ALIGNMENT - 1;
+    let padded_size = ((unpadded_size + align_mask) & !align_mask).max(wgpu::COPY_BUFFER_ALIGNMENT);
+
+    let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Instance Buffer"),
+        size: padded_size,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: true,
+    });
+
+    instance_buffer.slice(..).get_mapped_range_mut()[..instance_byte_contents.len() as usize]
+        .copy_from_slice(instance_byte_contents);
+    instance_buffer.unmap();
+
+    let instance_buffers = [instance_buffer];
+
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
