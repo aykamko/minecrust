@@ -8,6 +8,7 @@ mod spawner;
 mod texture;
 mod vertex;
 mod world;
+mod Vec3d;
 
 use cgmath::prelude::*;
 use futures::executor::block_on;
@@ -616,8 +617,8 @@ fn render_scene(
     spawner: &Spawner,
     instance_lens: [usize; 1],
 ) {
-    static RENDER_WIREFRAME: bool = true;
-    static RENDER_CAMERA_RAY: bool = true;
+    static RENDER_WIREFRAME: bool = false;
+    static RENDER_CAMERA_RAY: bool = false;
 
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =

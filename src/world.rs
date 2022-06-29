@@ -1,3 +1,4 @@
+use crate::Vec3d::Vec3d;
 use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};
@@ -14,10 +15,11 @@ struct Block {
     neighbors: Bitmap<8>, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
 }
 
-const WORLD_XZ_SIZE: usize = 128;
-const WORLD_Y_SIZE: usize = 256;
+const CHUNK_XZ_SIZE: usize = 16;
+const CHUNK_Y_SIZE: usize = 256;
+pub const CHUNK_SIZE_IN_BLOCKS: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
-pub const CHUNK_SIZE_IN_BLOCKS: usize = WORLD_XZ_SIZE * WORLD_XZ_SIZE * WORLD_Y_SIZE;
+const WORLD_CHUNK_WIDTH: usize = 16;
 
 impl Default for Block {
     fn default() -> Block {
@@ -29,66 +31,65 @@ impl Default for Block {
 }
 
 pub struct WorldState {
-    blocks: Vec<Block>,
+    blocks: Vec3d<Block>,
 }
 
 impl WorldState {
     pub fn new() -> Self {
         Self {
-            blocks: vec![
-                Block {
-                    ..Default::default()
-                };
-                WORLD_XZ_SIZE * WORLD_Y_SIZE * WORLD_XZ_SIZE
-            ],
+            blocks: Vec3d::new(
+                vec![
+                    Block {
+                        ..Default::default()
+                    };
+                    CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
+                ],
+                [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
+            ),
         }
     }
 
-    fn index(x: usize, y: usize, z: usize) -> usize {
-        x + (y * WORLD_XZ_SIZE) + (z * WORLD_XZ_SIZE * WORLD_Y_SIZE)
-    }
-
     fn set_block(&mut self, x: usize, y: usize, z: usize, block_type: u8) {
-        let block = &mut self.blocks[WorldState::index(x, y, z)];
+        let block = &mut self.blocks[[x, y, z]];
         block.block_type = block_type;
 
-        if y != WORLD_Y_SIZE - 1 {
-            let top_neighbor = &mut self.blocks[WorldState::index(x, y + 1, z)];
+        if y != CHUNK_Y_SIZE - 1 {
+            let top_neighbor = &mut self.blocks[[x, y + 1, z]];
             top_neighbor.neighbors.set(1, block_type != 0);
         }
 
         if y != 0 {
-            let bottom_neighbor = &mut self.blocks[WorldState::index(x, y - 1, z)];
+            let bottom_neighbor = &mut self.blocks[[x, y - 1, z]];
             bottom_neighbor.neighbors.set(0, block_type != 0);
         }
 
-        if x != WORLD_XZ_SIZE - 1 {
-            let left_neighbor = &mut self.blocks[WorldState::index(x + 1, y, z)];
+        if x != CHUNK_XZ_SIZE - 1 {
+            let left_neighbor = &mut self.blocks[[x + 1, y, z]];
             left_neighbor.neighbors.set(3, block_type != 0);
         }
 
         if x != 0 {
-            let right_neighbor = &mut self.blocks[WorldState::index(x - 1, y, z)];
+            let right_neighbor = &mut self.blocks[[x - 1, y, z]];
             right_neighbor.neighbors.set(2, block_type != 0);
         }
 
-        if z != WORLD_XZ_SIZE - 1 {
-            let front_neighbor = &mut self.blocks[WorldState::index(x, y, z + 1)];
+        if z != CHUNK_XZ_SIZE - 1 {
+            let front_neighbor = &mut self.blocks[[x, y, z + 1]];
             front_neighbor.neighbors.set(5, block_type != 0);
         }
 
         if z != 0 {
-            let back_neighbor = &mut self.blocks[WorldState::index(x, y, z - 1)];
+            let back_neighbor = &mut self.blocks[[x, y, z - 1]];
             back_neighbor.neighbors.set(4, block_type != 0);
         }
     }
 
     fn block_at(&self, x: usize, y: usize, z: usize) -> &Block {
-        &self.blocks[WorldState::index(x, y, z)]
+        &self.blocks[[x, y, z]]
     }
 
     pub fn initial_setup(&mut self) {
-        for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
+        for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
             self.set_block(x, 0, z, 1); // dirt
             self.set_block(x, 1, z, 1); // grass
         }
@@ -111,7 +112,7 @@ impl WorldState {
 
         let mut instances: Vec<Instance> = vec![];
 
-        for (x, y, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_Y_SIZE, 0..WORLD_XZ_SIZE) {
+        for (x, y, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE) {
             let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
             let block = self.block_at(x, y, z);
             match block.block_type {
