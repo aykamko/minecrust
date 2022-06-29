@@ -1,4 +1,4 @@
-use crate::Vec3d::Vec3d;
+use crate::vec_extra::{Vec3d, Vec2d};
 use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};
@@ -124,8 +124,9 @@ impl WorldState {
 
     pub fn initial_setup(&mut self) {
         for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
-            self.set_block(x, 0, z, BlockType::Dirt); // dirt
-            self.set_block(x, 1, z, BlockType::Grass); // grass
+            self.set_block(x, 0, z, BlockType::Debug);
+            self.set_block(x, 1, z, BlockType::Dirt);
+            self.set_block(x, 2, z, BlockType::Grass);
         }
     }
 

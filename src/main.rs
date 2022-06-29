@@ -8,7 +8,7 @@ mod spawner;
 mod texture;
 mod vertex;
 mod world;
-mod Vec3d;
+mod vec_extra;
 
 use cgmath::prelude::*;
 use futures::executor::block_on;
