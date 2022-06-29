@@ -486,13 +486,15 @@ fn setup_scene(
     let (instances, instance_data) = world_state.generate_vertex_data();
     let instance_byte_contents: &[u8] = bytemuck::cast_slice(&instance_data);
 
-    let unpadded_size: u64 = (world::CHUNK_SIZE_IN_BLOCKS * instance::InstanceRaw::size())
-        .try_into()
-        .unwrap();
-    // // Valid vulkan usage is
-    // // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
-    // // 2. buffer size must be greater than 0.
-    // // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
+    const NUM_FACES: usize = 6;
+    // Divide by 2 since worst case is a "3D checkerboard" where every other space is filled
+    let max_number_faces_possible = world::CHUNK_SIZE_IN_BLOCKS * instance::InstanceRaw::size() * NUM_FACES / 2;
+    let unpadded_size: u64 = max_number_faces_possible.try_into().unwrap();
+
+    // Valid vulkan usage is
+    // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
+    // 2. buffer size must be greater than 0.
+    // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
     let align_mask = wgpu::COPY_BUFFER_ALIGNMENT - 1;
     let padded_size = ((unpadded_size + align_mask) & !align_mask).max(wgpu::COPY_BUFFER_ALIGNMENT);
 
@@ -508,7 +510,6 @@ fn setup_scene(
     instance_buffer.unmap();
 
     let instance_buffers = [instance_buffer];
-
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
