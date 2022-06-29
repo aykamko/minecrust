@@ -20,7 +20,7 @@ enum BlockType {
 
 impl BlockType {
     // top, bottom, sides
-    fn atlas_offsets(&self) -> [[f32; 2]; 3] {
+    fn texture_atlas_offsets(&self) -> [[f32; 2]; 3] {
         match self {
             BlockType::Grass => [[1.0, 0.0], [2.0, 0.0], [0.0, 0.0]],
             BlockType::Dirt => [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]],
@@ -153,14 +153,14 @@ impl WorldState {
                 continue;
             }
 
-            let [top_offset, bottom_offset, side_offset] = block.block_type.atlas_offsets();
+            let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
 
             // bottom
             if !block.neighbors.get(1) {
                 instances.push(Instance {
                     position,
                     rotation: no_rotation,
-                    atlas_offset: bottom_offset,
+                    texture_atlas_offset: bottom_offset,
                 });
             }
             // top
@@ -168,7 +168,7 @@ impl WorldState {
                 instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_top,
-                    atlas_offset: top_offset,
+                    texture_atlas_offset: top_offset,
                 });
             }
             // left
@@ -176,7 +176,7 @@ impl WorldState {
                 instances.push(Instance {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
                     rotation: flip_to_left,
-                    atlas_offset: side_offset,
+                    texture_atlas_offset: side_offset,
                 });
             }
             // right
@@ -184,7 +184,7 @@ impl WorldState {
                 instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_right,
-                    atlas_offset: side_offset,
+                    texture_atlas_offset: side_offset,
                 });
             }
             // front
@@ -192,7 +192,7 @@ impl WorldState {
                 instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
                     rotation: flip_to_front,
-                    atlas_offset: side_offset,
+                    texture_atlas_offset: side_offset,
                 });
             }
             // back
@@ -200,7 +200,7 @@ impl WorldState {
                 instances.push(Instance {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
                     rotation: flip_to_back,
-                    atlas_offset: side_offset,
+                    texture_atlas_offset: side_offset,
                 });
             }
         }
