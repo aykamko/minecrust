@@ -1,4 +1,3 @@
-use crate::face::Face;
 use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};

@@ -2,7 +2,6 @@
 extern crate itertools;
 
 mod camera;
-mod cube;
 mod face;
 mod instance;
 mod spawner;
