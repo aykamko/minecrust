@@ -1,4 +1,5 @@
 use crate::cube::Cube;
+use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};
 use cgmath::prelude::*;
@@ -11,6 +12,7 @@ use std::time::Instant;
 struct Block {
     // TODO: should be an enum
     block_type: u8,
+    neighbors: Bitmap<8>, // top, bottom, left, right, front, back
 }
 
 const WORLD_XZ_SIZE: usize = 128;
@@ -18,7 +20,10 @@ const WORLD_Y_SIZE: usize = 256;
 
 impl Default for Block {
     fn default() -> Block {
-        Block { block_type: 0 }
+        Block {
+            block_type: 0,
+            neighbors: Bitmap::new(),
+        }
     }
 }
 
@@ -29,22 +34,62 @@ pub struct WorldState {
 impl WorldState {
     pub fn new() -> Self {
         Self {
-            blocks: vec![Block { block_type: 0 }; WORLD_XZ_SIZE * WORLD_Y_SIZE * WORLD_XZ_SIZE],
+            blocks: vec![
+                Block {
+                    ..Default::default()
+                };
+                WORLD_XZ_SIZE * WORLD_Y_SIZE * WORLD_XZ_SIZE
+            ],
         }
     }
 
-    fn block_at(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
-        &mut self.blocks[x + (y * WORLD_XZ_SIZE) + (z * WORLD_XZ_SIZE * WORLD_Y_SIZE)]
+    fn index(x: usize, y: usize, z: usize) -> usize {
+        x + (y * WORLD_XZ_SIZE) + (z * WORLD_XZ_SIZE * WORLD_Y_SIZE)
     }
 
-    fn readonly_block_at(&self, x: usize, y: usize, z: usize) -> &Block {
-        &self.blocks[x + (y * WORLD_XZ_SIZE) + (z * WORLD_XZ_SIZE * WORLD_Y_SIZE)]
+    fn set_block(&mut self, x: usize, y: usize, z: usize, block_type: u8) {
+        let block = &mut self.blocks[WorldState::index(x, y, z)];
+        block.block_type = block_type;
+
+        if y != WORLD_Y_SIZE - 1 {
+            let top_neighbor = &mut self.blocks[WorldState::index(x, y + 1, z)];
+            top_neighbor.neighbors.set(1, block_type != 0);
+        }
+
+        if y != 0 {
+            let bottom_neighbor = &mut self.blocks[WorldState::index(x, y - 1, z)];
+            bottom_neighbor.neighbors.set(0, block_type != 0);
+        }
+
+        if x != WORLD_XZ_SIZE - 1 {
+            let left_neighbor = &mut self.blocks[WorldState::index(x + 1, y, z)];
+            left_neighbor.neighbors.set(3, block_type != 0);
+        }
+
+        if x != 0 {
+            let right_neighbor = &mut self.blocks[WorldState::index(x - 1, y, z)];
+            right_neighbor.neighbors.set(2, block_type != 0);
+        }
+
+        if z != WORLD_XZ_SIZE - 1 {
+            let front_neighbor = &mut self.blocks[WorldState::index(x, y, z + 1)];
+            front_neighbor.neighbors.set(5, block_type != 0);
+        }
+
+        if z != 0 {
+            let back_neighbor = &mut self.blocks[WorldState::index(x, y, z - 1)];
+            back_neighbor.neighbors.set(4, block_type != 0);
+        }
+    }
+
+    fn block_at(&self, x: usize, y: usize, z: usize) -> &Block {
+        &self.blocks[WorldState::index(x, y, z)]
     }
 
     pub fn initial_setup(&mut self) {
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
-            self.block_at(x, 0, z).block_type = 2; // dirt
-            self.block_at(x, 1, z).block_type = 1; // grass
+            self.set_block(x, 0, z, 2); // dirt
+            self.set_block(x, 1, z, 1); // grass
         }
     }
 
@@ -61,7 +106,7 @@ impl WorldState {
                 y: y as f32,
                 z: z as f32,
             };
-            match self.readonly_block_at(x, y, z).block_type {
+            match self.block_at(x, y, z).block_type {
                 1 => {
                     instances.push(Instance {
                         position,
@@ -80,10 +125,7 @@ impl WorldState {
             }
         }
 
-        let instance_data = instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
 
         let elapsed_time = func_start.elapsed().as_millis();
         println!("Took {}ms to generate vertex data", elapsed_time);
@@ -186,11 +228,11 @@ impl WorldState {
             }
         }
 
-        self.block_at(
+        self.set_block(
             closest_collider.1[0],
             closest_collider.1[1],
             closest_collider.1[2],
+            0,
         )
-        .block_type = 0;
     }
 }
