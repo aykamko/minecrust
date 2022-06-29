@@ -131,9 +131,9 @@ fn start(
 
     let mut camera_controller = camera::CameraController::new(0.15, 0.01);
     let mut camera = camera::Camera {
-        eye: (3.0, 2.0, 3.0).into(),
+        eye: (0.0, -3.0, -3.0).into(),
         // have it look at the origin
-        target: (0.0, 0.0, 0.0).into(),
+        target: (0.0, 0.5, 0.5).into(),
         // which way is "up"
         up: cgmath::Vector3::unit_y(),
         aspect: config.width as f32 / config.height as f32,

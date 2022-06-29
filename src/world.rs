@@ -1,10 +1,10 @@
-use crate::cube::Cube;
+use crate::face::Face;
 use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};
 use cgmath::prelude::*;
 use cgmath_17::MetricSpace;
-use collision::{Continuous};
+use collision::Continuous;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
@@ -12,7 +12,7 @@ use std::time::Instant;
 struct Block {
     // TODO: should be an enum
     block_type: u8,
-    neighbors: Bitmap<8>, // top, bottom, left, right, front, back
+    neighbors: Bitmap<8>, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
 }
 
 const WORLD_XZ_SIZE: usize = 128;
@@ -87,8 +87,8 @@ impl WorldState {
     }
 
     pub fn initial_setup(&mut self) {
-        for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
-            self.set_block(x, 0, z, 2); // dirt
+        for (x, z) in iproduct!(0..4, 0..4) {
+            self.set_block(x, 0, z, 1); // dirt
             self.set_block(x, 1, z, 1); // grass
         }
     }
@@ -96,30 +96,86 @@ impl WorldState {
     pub fn generate_vertex_data(&self) -> (Vec<Instance>, Vec<InstanceRaw>) {
         let func_start = Instant::now();
 
-        let null_rotation =
-            cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(0.0));
+        use cgmath::{Deg, Quaternion, Vector3};
+
+        let no_rotation = Quaternion::from_axis_angle(Vector3::unit_y(), Deg(0.0));
+        let flip_to_top = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(180.0));
+        let flip_to_front = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(90.0));
+        let flip_to_back = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(-90.0))
+            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(180.0));
+        let flip_to_left = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(90.0))
+            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(-90.0));
+        let flip_to_right = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
+            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
+
         let mut instances: Vec<Instance> = vec![];
 
         for (x, y, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_Y_SIZE, 0..WORLD_XZ_SIZE) {
-            let position = cgmath::Vector3 {
-                x: x as f32,
-                y: y as f32,
-                z: z as f32,
-            };
-            match self.block_at(x, y, z).block_type {
+            let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
+            let block = self.block_at(x, y, z);
+            match block.block_type {
                 1 => {
-                    instances.push(Instance {
-                        position,
-                        rotation: null_rotation,
-                        atlas_offsets: Cube::grass_atlas_offsets(),
-                    });
+                    // bottom
+                    if !block.neighbors.get(1) {
+                        instances.push(Instance {
+                            position,
+                            rotation: no_rotation,
+                            atlas_offset: [3.0, 0.0],
+                        });
+                    }
+                    // top
+                    if !block.neighbors.get(0) {
+                        instances.push(Instance {
+                            position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                            rotation: flip_to_top,
+                            atlas_offset: [3.0, 0.0],
+                        });
+                    }
+                    // left
+                    if !block.neighbors.get(2) {
+                        instances.push(Instance {
+                            position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
+                            rotation: flip_to_left,
+                            atlas_offset: [3.0, 0.0],
+                        });
+                    }
+                    // right
+                    if !block.neighbors.get(3) {
+                        instances.push(Instance {
+                            position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                            rotation: flip_to_right,
+                            atlas_offset: [3.0, 0.0],
+                        });
+                    }
+                    // front
+                    if !block.neighbors.get(5) {
+                        instances.push(Instance {
+                            position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                            rotation: flip_to_front,
+                            atlas_offset: [3.0, 0.0],
+                        });
+                    }
+                    // back
+                    if !block.neighbors.get(4) {
+                        instances.push(Instance {
+                            position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
+                            rotation: flip_to_back,
+                            atlas_offset: [3.0, 0.0],
+                        });
+                    }
                 }
                 2 => {
-                    instances.push(Instance {
-                        position,
-                        rotation: null_rotation,
-                        atlas_offsets: Cube::dirt_atlas_offsets(),
-                    });
+                    // instances.push(Instance {
+                    //     position,
+                    //     rotation: null_rotation,
+                    //     atlas_offset: [1.0, 0.0],
+                    // });
+                    // // bottom
+                    // instances.push(Instance {
+                    //     position: position + cgmath::Vector3::new(x as f32, y as f32 - 1.0, z as f32),
+                    //     rotation: y_flip,
+                    //     atlas_offset: [1.0, 0.0],
+                    // });
                 }
                 _ => (),
             }

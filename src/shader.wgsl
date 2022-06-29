@@ -18,9 +18,7 @@ struct InstanceInput {
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
     @location(8) model_matrix_3: vec4<f32>,
-    @location(9) texture_atlas_offset_top: vec2<f32>,
-    @location(10) texture_atlas_offset_bottom: vec2<f32>,
-    @location(11) texture_atlas_offset_side: vec2<f32>,
+    @location(9) texture_atlas_offset: vec2<f32>,
 }
 
 @group(1)
@@ -43,13 +41,7 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coord = model.tex_coord;
 
-    if (vertex_idx < 16u) {
-      out.texture_atlas_offset = instance.texture_atlas_offset_side;
-    } else if (vertex_idx < 20u) {
-      out.texture_atlas_offset = instance.texture_atlas_offset_top;
-    } else {
-      out.texture_atlas_offset = instance.texture_atlas_offset_bottom;
-    }
+    out.texture_atlas_offset = instance.texture_atlas_offset;
 
     out.position = camera_position.view_proj * model_matrix * model.position;
     return out;
