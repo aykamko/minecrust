@@ -3,6 +3,7 @@ extern crate itertools;
 
 mod camera;
 mod cube;
+mod face;
 mod instance;
 mod spawner;
 mod texture;
@@ -296,12 +297,12 @@ fn setup_scene(
 ) -> Scene {
     let vertex_size = mem::size_of::<vertex::Vertex>();
 
-    let block = cube::Cube::new();
+    let face = face::Face::new();
 
     let vertex_buffers = [
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Block Vertex Buffer"),
-            contents: bytemuck::cast_slice(&block.vertex_data),
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&face.vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         }),
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -316,8 +317,8 @@ fn setup_scene(
     ];
 
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Block Index Buffer"),
-        contents: bytemuck::cast_slice(&block.index_data),
+        label: Some("Index Buffer"),
+        contents: bytemuck::cast_slice(&face.index_data),
         usage: wgpu::BufferUsages::INDEX,
     });
 
@@ -577,7 +578,7 @@ fn setup_scene(
         vertex_buffers,
         index_buf,
         line_index_buf,
-        index_count: block.index_data.len(),
+        index_count: face.index_data.len(),
         texture_bind_group,
         camera_bind_group,
         camera_buf,

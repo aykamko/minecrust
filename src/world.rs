@@ -4,7 +4,7 @@ use bitmaps::Bitmap;
 use super::instance::{Instance, InstanceRaw};
 use cgmath::prelude::*;
 use cgmath_17::MetricSpace;
-use collision::{Continuous, Discrete};
+use collision::{Continuous};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
