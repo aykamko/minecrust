@@ -254,7 +254,7 @@ fn start(
                     let forward = (camera.target - camera.eye).normalize();
                     let horizon_target = camera.target + (forward * 100.0);
                     queue.write_buffer(
-                        &scene.vertex_buffers[2],
+                        &scene.vertex_buffers[1],
                         0,
                         bytemuck::cast_slice(&[
                             vertex::Vertex::new_from_pos(camera.eye.into()),
