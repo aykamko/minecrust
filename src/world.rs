@@ -8,10 +8,32 @@ use collision::Continuous;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
+#[derive(Copy, Clone, PartialEq)]
+#[repr(u8)]
+enum BlockType {
+    Empty,
+    Debug,
+    Dirt,
+    Grass,
+    Stone,
+}
+
+impl BlockType {
+    // top, bottom, sides
+    fn atlas_offsets(&self) -> [[f32; 2]; 3] {
+        match self {
+            BlockType::Grass => [[1.0, 0.0], [2.0, 0.0], [0.0, 0.0]],
+            BlockType::Dirt => [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]],
+            BlockType::Debug => [[3.0, 0.0], [3.0, 0.0], [3.0, 0.0]],
+            _ => [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 struct Block {
     // TODO: should be an enum
-    block_type: u8,
+    block_type: BlockType,
     neighbors: Bitmap<8>, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
 }
 
@@ -24,7 +46,7 @@ const WORLD_CHUNK_WIDTH: usize = 16;
 impl Default for Block {
     fn default() -> Block {
         Block {
-            block_type: 0,
+            block_type: BlockType::Empty,
             neighbors: Bitmap::new(),
         }
     }
@@ -49,38 +71,50 @@ impl WorldState {
         }
     }
 
-    fn set_block(&mut self, x: usize, y: usize, z: usize, block_type: u8) {
+    fn set_block(&mut self, x: usize, y: usize, z: usize, block_type: BlockType) {
         let block = &mut self.blocks[[x, y, z]];
         block.block_type = block_type;
 
         if y != CHUNK_Y_SIZE - 1 {
             let top_neighbor = &mut self.blocks[[x, y + 1, z]];
-            top_neighbor.neighbors.set(1, block_type != 0);
+            top_neighbor
+                .neighbors
+                .set(1, block_type != BlockType::Empty);
         }
 
         if y != 0 {
             let bottom_neighbor = &mut self.blocks[[x, y - 1, z]];
-            bottom_neighbor.neighbors.set(0, block_type != 0);
+            bottom_neighbor
+                .neighbors
+                .set(0, block_type != BlockType::Empty);
         }
 
         if x != CHUNK_XZ_SIZE - 1 {
             let left_neighbor = &mut self.blocks[[x + 1, y, z]];
-            left_neighbor.neighbors.set(3, block_type != 0);
+            left_neighbor
+                .neighbors
+                .set(3, block_type != BlockType::Empty);
         }
 
         if x != 0 {
             let right_neighbor = &mut self.blocks[[x - 1, y, z]];
-            right_neighbor.neighbors.set(2, block_type != 0);
+            right_neighbor
+                .neighbors
+                .set(2, block_type != BlockType::Empty);
         }
 
         if z != CHUNK_XZ_SIZE - 1 {
             let front_neighbor = &mut self.blocks[[x, y, z + 1]];
-            front_neighbor.neighbors.set(5, block_type != 0);
+            front_neighbor
+                .neighbors
+                .set(5, block_type != BlockType::Empty);
         }
 
         if z != 0 {
             let back_neighbor = &mut self.blocks[[x, y, z - 1]];
-            back_neighbor.neighbors.set(4, block_type != 0);
+            back_neighbor
+                .neighbors
+                .set(4, block_type != BlockType::Empty);
         }
     }
 
@@ -90,8 +124,8 @@ impl WorldState {
 
     pub fn initial_setup(&mut self) {
         for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
-            self.set_block(x, 0, z, 1); // dirt
-            self.set_block(x, 1, z, 1); // grass
+            self.set_block(x, 0, z, BlockType::Dirt); // dirt
+            self.set_block(x, 1, z, BlockType::Grass); // grass
         }
     }
 
@@ -115,71 +149,59 @@ impl WorldState {
         for (x, y, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE) {
             let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
             let block = self.block_at(x, y, z);
-            match block.block_type {
-                1 => {
-                    // bottom
-                    if !block.neighbors.get(1) {
-                        instances.push(Instance {
-                            position,
-                            rotation: no_rotation,
-                            atlas_offset: [3.0, 0.0],
-                        });
-                    }
-                    // top
-                    if !block.neighbors.get(0) {
-                        instances.push(Instance {
-                            position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
-                            rotation: flip_to_top,
-                            atlas_offset: [3.0, 0.0],
-                        });
-                    }
-                    // left
-                    if !block.neighbors.get(2) {
-                        instances.push(Instance {
-                            position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
-                            rotation: flip_to_left,
-                            atlas_offset: [3.0, 0.0],
-                        });
-                    }
-                    // right
-                    if !block.neighbors.get(3) {
-                        instances.push(Instance {
-                            position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
-                            rotation: flip_to_right,
-                            atlas_offset: [3.0, 0.0],
-                        });
-                    }
-                    // front
-                    if !block.neighbors.get(5) {
-                        instances.push(Instance {
-                            position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                            rotation: flip_to_front,
-                            atlas_offset: [3.0, 0.0],
-                        });
-                    }
-                    // back
-                    if !block.neighbors.get(4) {
-                        instances.push(Instance {
-                            position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
-                            rotation: flip_to_back,
-                            atlas_offset: [3.0, 0.0],
-                        });
-                    }
-                }
-                2 => {
-                    // instances.push(Instance {
-                    //     position,
-                    //     rotation: null_rotation,
-                    //     atlas_offset: [1.0, 0.0],
-                    // });
-                    // // bottom
-                    // instances.push(Instance {
-                    //     position: position + cgmath::Vector3::new(x as f32, y as f32 - 1.0, z as f32),
-                    //     rotation: y_flip,
-                    //     atlas_offset: [1.0, 0.0],
-                    // });
-                }
-                _ => (),
+            if block.block_type == BlockType::Empty {
+                continue;
+            }
+
+            let [top_offset, bottom_offset, side_offset] = block.block_type.atlas_offsets();
+
+            // bottom
+            if !block.neighbors.get(1) {
+                instances.push(Instance {
+                    position,
+                    rotation: no_rotation,
+                    atlas_offset: bottom_offset,
+                });
+            }
+            // top
+            if !block.neighbors.get(0) {
+                instances.push(Instance {
+                    position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                    rotation: flip_to_top,
+                    atlas_offset: top_offset,
+                });
+            }
+            // left
+            if !block.neighbors.get(2) {
+                instances.push(Instance {
+                    position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
+                    rotation: flip_to_left,
+                    atlas_offset: side_offset,
+                });
+            }
+            // right
+            if !block.neighbors.get(3) {
+                instances.push(Instance {
+                    position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                    rotation: flip_to_right,
+                    atlas_offset: side_offset,
+                });
+            }
+            // front
+            if !block.neighbors.get(5) {
+                instances.push(Instance {
+                    position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                    rotation: flip_to_front,
+                    atlas_offset: side_offset,
+                });
+            }
+            // back
+            if !block.neighbors.get(4) {
+                instances.push(Instance {
+                    position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
+                    rotation: flip_to_back,
+                    atlas_offset: side_offset,
+                });
             }
         }
 
@@ -262,7 +284,7 @@ impl WorldState {
             if self
                 .block_at(cube.x as usize, cube.y as usize, cube.z as usize)
                 .block_type
-                != 0
+                != BlockType::Empty
             {
                 let maybe_collision = collision_ray.intersection(&collision_cube);
 
@@ -290,7 +312,7 @@ impl WorldState {
             closest_collider.1[0],
             closest_collider.1[1],
             closest_collider.1[2],
-            0,
+            BlockType::Empty,
         )
     }
 }
