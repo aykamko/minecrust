@@ -1,7 +1,7 @@
 pub struct Instance {
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
-    pub atlas_offset: [f32; 2],
+    pub atlas_offsets: [[f32; 2]; 3],
 }
 
 // WARNING this might be inefficient. A note from the guide: Using these values directly in the
@@ -12,7 +12,14 @@ pub struct Instance {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceRaw {
     model: [[f32; 4]; 4],
-    atlas_offset: [f32; 2],
+    // I need to use vertex_position in the shader to index this properly
+    // e.g.
+    // if (vtx_pos < 24) { use atlas_offset_side }
+    // if (24 < vtx_pos < 32) { use atlas_offset_top }
+    // if (32 < vtx_pos < 36) { use atlas_offset_bottom }
+    atlas_offset_top: [f32; 2],
+    atlas_offset_bottom: [f32; 2],
+    atlas_offset_side: [f32; 2],
 }
 
 impl Instance {
@@ -21,7 +28,9 @@ impl Instance {
             model: (cgmath::Matrix4::from_translation(self.position)
                 * cgmath::Matrix4::from(self.rotation))
             .into(),
-            atlas_offset: self.atlas_offset,
+            atlas_offset_top: self.atlas_offsets[0],
+            atlas_offset_bottom: self.atlas_offsets[1],
+            atlas_offset_side: self.atlas_offsets[2],
         }
     }
 }
@@ -64,6 +73,16 @@ impl InstanceRaw {
                 wgpu::VertexAttribute {
                     offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
                     shader_location: 9,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 18]>() as wgpu::BufferAddress,
+                    shader_location: 10,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 20]>() as wgpu::BufferAddress,
+                    shader_location: 11,
                     format: wgpu::VertexFormat::Float32x2,
                 }
             ],

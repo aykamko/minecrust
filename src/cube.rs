@@ -6,15 +6,14 @@ pub struct Cube {
 }
 
 impl Cube {
-    fn new(top_atlas_offset: [i8; 2], bottom_atlas_offset: [i8; 2]) -> Self {
-        let (tao, bao) = (top_atlas_offset, bottom_atlas_offset);
+    pub fn new() -> Self {
         let vertex_data = [
             // front (0, 0, 1)
             Vertex::new([1, 0, 1], [0, 1]),
             Vertex::new([1, 1, 1], [0, 0]),
             Vertex::new([0, 1, 1], [1, 0]),
-            // back (0, 0, 0)
             Vertex::new([0, 1, 0], [1, 0]),
+            // back (0, 0, 0)
             Vertex::new([1, 1, 0], [0, 0]),
             Vertex::new([1, 0, 0], [0, 1]),
             Vertex::new([0, 0, 1], [1, 1]),

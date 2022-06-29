@@ -39,7 +39,7 @@ struct Setup {
 }
 
 struct Scene {
-    vertex_buffers: [wgpu::Buffer; 3],
+    vertex_buffers: [wgpu::Buffer; 2],
     index_buf: wgpu::Buffer,
     line_index_buf: wgpu::Buffer,
     index_count: usize,
@@ -47,8 +47,8 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    instance_data: [Vec<instance::Instance>; 2],
-    instance_buffers: [wgpu::Buffer; 2],
+    instance_data: [Vec<instance::Instance>; 1],
+    instance_buffers: [wgpu::Buffer; 1],
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
@@ -155,7 +155,7 @@ fn start(
         &world_state,
     );
 
-    let mut instance_lens = [scene.instance_data[0].len(), scene.instance_data[1].len()];
+    let mut instance_lens = [scene.instance_data[0].len()];
 
     let mut curr_modifier_state: winit::event::ModifiersState =
         winit::event::ModifiersState::empty();
@@ -244,17 +244,11 @@ fn start(
                     mouse_clicked = false;
                     world_state.break_block(&camera);
 
-                    let (instances, instance_data) =
-                        world_state.generate_vertex_data();
+                    let (instances, instance_data) = world_state.generate_vertex_data();
                     queue.write_buffer(
                         &scene.instance_buffers[0],
                         0,
-                        bytemuck::cast_slice(&grass_instance_data),
-                    );
-                    queue.write_buffer(
-                        &scene.instance_buffers[1],
-                        0,
-                        bytemuck::cast_slice(&dirt_instance_data),
+                        bytemuck::cast_slice(&instance_data),
                     );
 
                     let forward = (camera.target - camera.eye).normalize();
@@ -269,7 +263,7 @@ fn start(
                         ]),
                     );
 
-                    instance_lens = [grass_instances.len(), dirt_instances.len()];
+                    instance_lens = [instances.len()];
                 }
 
                 render_scene(&view, &device, &queue, &scene, &spawner, instance_lens);
@@ -302,18 +296,12 @@ fn setup_scene(
 ) -> Scene {
     let vertex_size = mem::size_of::<vertex::Vertex>();
 
-    let grass_block = cube::Cube::new_grass_block();
-    let dirt_block = cube::Cube::new_dirt_block();
+    let block = cube::Cube::new();
 
     let vertex_buffers = [
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Grass Vertex Buffer"),
-            contents: bytemuck::cast_slice(&grass_block.vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        }),
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Dirt Vertex Buffer"),
-            contents: bytemuck::cast_slice(&dirt_block.vertex_data),
+            label: Some("Block Vertex Buffer"),
+            contents: bytemuck::cast_slice(&block.vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         }),
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -329,7 +317,7 @@ fn setup_scene(
 
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Block Index Buffer"),
-        contents: bytemuck::cast_slice(&grass_block.index_data),
+        contents: bytemuck::cast_slice(&block.index_data),
         usage: wgpu::BufferUsages::INDEX,
     });
 
@@ -500,18 +488,12 @@ fn setup_scene(
         ],
     };
 
-    let (grass_instances, dirt_instances, grass_instance_data, dirt_instance_data) =
-        world_state.generate_vertex_data();
+    let (instances, instance_data) = world_state.generate_vertex_data();
 
     let instance_buffers = [
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Grass Instance Buffer"),
-            contents: bytemuck::cast_slice(&grass_instance_data),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        }),
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Dirt Instance Buffer"),
-            contents: bytemuck::cast_slice(&dirt_instance_data),
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         }),
     ];
@@ -601,12 +583,12 @@ fn setup_scene(
         vertex_buffers,
         index_buf,
         line_index_buf,
-        index_count: grass_block.index_data.len(),
+        index_count: block.index_data.len(),
         texture_bind_group,
         camera_bind_group,
         camera_buf,
         camera_staging_buf,
-        instance_data: [grass_instances, dirt_instances],
+        instance_data: [instances],
         instance_buffers,
         depth_texture,
         pipeline,
@@ -620,7 +602,7 @@ fn render_scene(
     queue: &wgpu::Queue,
     scene: &Scene,
     spawner: &Spawner,
-    instance_lens: [usize; 2],
+    instance_lens: [usize; 1],
 ) {
     static RENDER_WIREFRAME: bool = true;
     static RENDER_CAMERA_RAY: bool = true;
@@ -663,33 +645,25 @@ fn render_scene(
         rpass.set_vertex_buffer(1, scene.instance_buffers[0].slice(..));
         rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
 
-        if let Some(ref pipe) = &scene.pipeline_wire {
-            if RENDER_WIREFRAME {
+        if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
+            if let Some(ref pipe) = &scene.pipeline_wire {
                 rpass.set_pipeline(pipe);
-                rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
+                if RENDER_WIREFRAME {
+                    rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
+                }
+
+                // Draw camera line
+                if RENDER_CAMERA_RAY {
+                    rpass.set_index_buffer(
+                        scene.line_index_buf.slice(..),
+                        wgpu::IndexFormat::Uint16,
+                    );
+                    rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+                    rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
+                }
+
                 rpass.set_pipeline(&scene.pipeline);
             }
-        }
-
-        // Draw dirt blocks
-        rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
-        rpass.set_vertex_buffer(1, scene.instance_buffers[1].slice(..));
-        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
-
-        if let Some(ref pipe) = &scene.pipeline_wire {
-            rpass.set_pipeline(pipe);
-            if RENDER_WIREFRAME {
-                rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[1] as _);
-            }
-
-            // Draw camera line
-            if RENDER_CAMERA_RAY {
-                rpass.set_index_buffer(scene.line_index_buf.slice(..), wgpu::IndexFormat::Uint16);
-                rpass.set_vertex_buffer(0, scene.vertex_buffers[2].slice(..));
-                rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
-            }
-
-            rpass.set_pipeline(&scene.pipeline);
         }
     }
     encoder.copy_buffer_to_buffer(

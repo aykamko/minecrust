@@ -1,3 +1,5 @@
+use crate::cube::Cube;
+
 use super::instance::{Instance, InstanceRaw};
 use cgmath::prelude::*;
 use cgmath_17::MetricSpace;
@@ -64,36 +66,29 @@ impl WorldState {
                     instances.push(Instance {
                         position,
                         rotation: null_rotation,
+                        atlas_offsets: Cube::grass_atlas_offsets(),
                     });
                 }
                 2 => {
-                    dirt_instances.push(Instance {
+                    instances.push(Instance {
                         position,
                         rotation: null_rotation,
+                        atlas_offsets: Cube::dirt_atlas_offsets(),
                     });
                 }
                 _ => (),
             }
         }
 
-        let grass_instance_data = grass_instances
+        let instance_data = instances
             .iter()
-            .map(super::lib::Instance::to_raw)
-            .collect::<Vec<_>>();
-        let dirt_instance_data = dirt_instances
-            .iter()
-            .map(super::lib::Instance::to_raw)
+            .map(Instance::to_raw)
             .collect::<Vec<_>>();
 
         let elapsed_time = func_start.elapsed().as_millis();
         println!("Took {}ms to generate vertex data", elapsed_time);
 
-        (
-            grass_instances,
-            dirt_instances,
-            grass_instance_data,
-            dirt_instance_data,
-        )
+        (instances, instance_data)
     }
 
     // Ray intersection algo pseudocode:
