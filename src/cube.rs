@@ -9,14 +9,14 @@ impl Cube {
     pub fn new() -> Self {
         let vertex_data = [
             // front (0, 0, 1)
+            Vertex::new([0, 0, 1], [1, 1]),
             Vertex::new([1, 0, 1], [0, 1]),
             Vertex::new([1, 1, 1], [0, 0]),
             Vertex::new([0, 1, 1], [1, 0]),
-            Vertex::new([0, 1, 0], [1, 0]),
             // back (0, 0, 0)
+            Vertex::new([0, 1, 0], [1, 0]),
             Vertex::new([1, 1, 0], [0, 0]),
             Vertex::new([1, 0, 0], [0, 1]),
-            Vertex::new([0, 0, 1], [1, 1]),
             Vertex::new([0, 0, 0], [1, 1]),
             // right (1, 0, 0)
             Vertex::new([1, 0, 0], [1, 1]),
@@ -60,6 +60,6 @@ impl Cube {
     }
 
     pub fn dirt_atlas_offsets() -> [[f32; 2]; 3] {
-        [[2.0, 0.0], [2.0, 0.0], [0.0, 0.0]]
+        [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]]
     }
 }

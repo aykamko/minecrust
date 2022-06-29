@@ -43,9 +43,9 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coord = model.tex_coord;
 
-    if (vertex_idx < 24u) {
+    if (vertex_idx < 16u) {
       out.texture_atlas_offset = instance.texture_atlas_offset_side;
-    } else if (vertex_idx < 32u) {
+    } else if (vertex_idx < 20u) {
       out.texture_atlas_offset = instance.texture_atlas_offset_top;
     } else {
       out.texture_atlas_offset = instance.texture_atlas_offset_bottom;

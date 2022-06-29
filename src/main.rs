@@ -479,12 +479,6 @@ fn setup_scene(
                 offset: 4 * 4, // TODO(aleks): use mem to get compute size at compile time
                 shader_location: 1,
             },
-            // atlas_offset (sprite offset)
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x2,
-                offset: (4 * 4) + (2 * 4), // TODO(aleks): use mem to get compute size at compile time
-                shader_location: 2,
-            },
         ],
     };
 
