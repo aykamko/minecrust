@@ -1,3 +1,4 @@
+use super::instance::{Instance, InstanceRaw};
 use cgmath::prelude::*;
 use cgmath_17::MetricSpace;
 use collision::{Continuous, Discrete};
@@ -45,20 +46,12 @@ impl WorldState {
         }
     }
 
-    pub fn generate_vertex_data(
-        &self,
-    ) -> (
-        Vec<super::lib::Instance>,
-        Vec<super::lib::Instance>,
-        Vec<super::lib::InstanceRaw>,
-        Vec<super::lib::InstanceRaw>,
-    ) {
+    pub fn generate_vertex_data(&self) -> (Vec<Instance>, Vec<InstanceRaw>) {
         let func_start = Instant::now();
 
         let null_rotation =
             cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(0.0));
-        let mut grass_instances: Vec<super::lib::Instance> = vec![];
-        let mut dirt_instances: Vec<super::lib::Instance> = vec![];
+        let mut instances: Vec<Instance> = vec![];
 
         for (x, y, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_Y_SIZE, 0..WORLD_XZ_SIZE) {
             let position = cgmath::Vector3 {
@@ -68,18 +61,18 @@ impl WorldState {
             };
             match self.readonly_block_at(x, y, z).block_type {
                 1 => {
-                    grass_instances.push(super::lib::Instance {
+                    instances.push(Instance {
                         position,
                         rotation: null_rotation,
                     });
                 }
                 2 => {
-                    dirt_instances.push(super::lib::Instance {
+                    dirt_instances.push(Instance {
                         position,
                         rotation: null_rotation,
                     });
                 }
-                _ => ()
+                _ => (),
             }
         }
 
@@ -171,7 +164,11 @@ impl WorldState {
                 cgmath_17::Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0),
             );
 
-            if self.block_at(cube.x as usize, cube.y as usize, cube.z as usize).block_type != 0 {
+            if self
+                .block_at(cube.x as usize, cube.y as usize, cube.z as usize)
+                .block_type
+                != 0
+            {
                 let maybe_collision = collision_ray.intersection(&collision_cube);
 
                 if let Some(ref collision_point) = maybe_collision {
@@ -194,7 +191,11 @@ impl WorldState {
             }
         }
 
-        self.block_at(closest_collider.1[0], closest_collider.1[1], closest_collider.1[2])
-            .block_type = 0;
+        self.block_at(
+            closest_collider.1[0],
+            closest_collider.1[1],
+            closest_collider.1[2],
+        )
+        .block_type = 0;
     }
 }

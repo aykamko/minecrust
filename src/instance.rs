@@ -1,6 +1,7 @@
 pub struct Instance {
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
+    pub atlas_offset: [f32; 2],
 }
 
 // WARNING this might be inefficient. A note from the guide: Using these values directly in the
@@ -11,6 +12,7 @@ pub struct Instance {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceRaw {
     model: [[f32; 4]; 4],
+    atlas_offset: [f32; 2],
 }
 
 impl Instance {
@@ -19,6 +21,7 @@ impl Instance {
             model: (cgmath::Matrix4::from_translation(self.position)
                 * cgmath::Matrix4::from(self.rotation))
             .into(),
+            atlas_offset: self.atlas_offset,
         }
     }
 }
@@ -58,6 +61,11 @@ impl InstanceRaw {
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    shader_location: 9,
+                    format: wgpu::VertexFormat::Float32x2,
+                }
             ],
         }
     }

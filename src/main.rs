@@ -3,7 +3,7 @@ extern crate itertools;
 
 mod camera;
 mod cube;
-mod lib;
+mod instance;
 mod spawner;
 mod texture;
 mod vertex;
@@ -47,7 +47,7 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    instance_data: [Vec<lib::Instance>; 2],
+    instance_data: [Vec<instance::Instance>; 2],
     instance_buffers: [wgpu::Buffer; 2],
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
@@ -244,7 +244,7 @@ fn start(
                     mouse_clicked = false;
                     world_state.break_block(&camera);
 
-                    let (grass_instances, dirt_instances, grass_instance_data, dirt_instance_data) =
+                    let (instances, instance_data) =
                         world_state.generate_vertex_data();
                     queue.write_buffer(
                         &scene.instance_buffers[0],
@@ -518,7 +518,7 @@ fn setup_scene(
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
-    let buffers = &[vertex_buffer_layout, lib::InstanceRaw::desc()];
+    let buffers = &[vertex_buffer_layout, instance::InstanceRaw::desc()];
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,

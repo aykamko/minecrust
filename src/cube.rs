@@ -1,7 +1,4 @@
-#[path = "vertex.rs"]
-mod vertex;
-
-use vertex::Vertex;
+use super::vertex::Vertex;
 
 pub struct Cube {
     pub vertex_data: Vec<Vertex>,
@@ -9,39 +6,39 @@ pub struct Cube {
 }
 
 impl Cube {
-    fn new(top_atlas_offset: [i8;2], bottom_atlas_offset: [i8;2], side_atlas_offset: [i8;2]) -> Self {
-        let (tao, bao, sao) = (top_atlas_offset, bottom_atlas_offset, side_atlas_offset);
+    fn new(top_atlas_offset: [i8; 2], bottom_atlas_offset: [i8; 2]) -> Self {
+        let (tao, bao) = (top_atlas_offset, bottom_atlas_offset);
         let vertex_data = [
             // front (0, 0, 1)
-            Vertex::new([0, 0, 1], [1, 1], sao),
-            Vertex::new([1, 0, 1], [0, 1], sao),
-            Vertex::new([1, 1, 1], [0, 0], sao),
-            Vertex::new([0, 1, 1], [1, 0], sao),
+            Vertex::new([1, 0, 1], [0, 1]),
+            Vertex::new([1, 1, 1], [0, 0]),
+            Vertex::new([0, 1, 1], [1, 0]),
             // back (0, 0, 0)
-            Vertex::new([0, 1, 0], [1, 0], sao),
-            Vertex::new([1, 1, 0], [0, 0], sao),
-            Vertex::new([1, 0, 0], [0, 1], sao),
-            Vertex::new([0, 0, 0], [1, 1], sao),
+            Vertex::new([0, 1, 0], [1, 0]),
+            Vertex::new([1, 1, 0], [0, 0]),
+            Vertex::new([1, 0, 0], [0, 1]),
+            Vertex::new([0, 0, 1], [1, 1]),
+            Vertex::new([0, 0, 0], [1, 1]),
             // right (1, 0, 0)
-            Vertex::new([1, 0, 0], [1, 1], sao),
-            Vertex::new([1, 1, 0], [1, 0], sao),
-            Vertex::new([1, 1, 1], [0, 0], sao),
-            Vertex::new([1, 0, 1], [0, 1], sao),
+            Vertex::new([1, 0, 0], [1, 1]),
+            Vertex::new([1, 1, 0], [1, 0]),
+            Vertex::new([1, 1, 1], [0, 0]),
+            Vertex::new([1, 0, 1], [0, 1]),
             // left (0, 0, 0)
-            Vertex::new([0, 0, 1], [0, 1], sao),
-            Vertex::new([0, 1, 1], [0, 0], sao),
-            Vertex::new([0, 1, 0], [1, 0], sao),
-            Vertex::new([0, 0, 0], [1, 1], sao),
+            Vertex::new([0, 0, 1], [0, 1]),
+            Vertex::new([0, 1, 1], [0, 0]),
+            Vertex::new([0, 1, 0], [1, 0]),
+            Vertex::new([0, 0, 0], [1, 1]),
             // top (0, 1, 0)
-            Vertex::new([1, 1, 0], [1, 0], tao),
-            Vertex::new([0, 1, 0], [0, 0], tao),
-            Vertex::new([0, 1, 1], [0, 1], tao),
-            Vertex::new([1, 1, 1], [1, 1], tao),
+            Vertex::new([1, 1, 0], [1, 0]),
+            Vertex::new([0, 1, 0], [0, 0]),
+            Vertex::new([0, 1, 1], [0, 1]),
+            Vertex::new([1, 1, 1], [1, 1]),
             // bottom (0, 0, 0)
-            Vertex::new([1, 0, 1], [0, 0], bao),
-            Vertex::new([0, 0, 1], [1, 0], bao),
-            Vertex::new([0, 0, 0], [1, 1], bao),
-            Vertex::new([1, 0, 0], [0, 1], bao),
+            Vertex::new([1, 0, 1], [0, 0]),
+            Vertex::new([0, 0, 1], [1, 0]),
+            Vertex::new([0, 0, 0], [1, 1]),
+            Vertex::new([1, 0, 0], [0, 1]),
         ];
 
         let index_data: &[u16] = &[
@@ -59,11 +56,11 @@ impl Cube {
         }
     }
 
-    pub fn new_grass_block() -> Self {
-        Cube::new([1, 0], [2, 0], [0, 0])
+    pub fn grass_atlas_offsets() -> [[f32; 2]; 3] {
+        [[1.0, 0.0], [2.0, 0.0], [0.0, 0.0]]
     }
 
-    pub fn new_dirt_block() -> Self {
-        Cube::new([2, 0], [2, 0], [2, 0])
+    pub fn dirt_atlas_offsets() -> [[f32; 2]; 3] {
+        [[2.0, 0.0], [2.0, 0.0], [0.0, 0.0]]
     }
 }
