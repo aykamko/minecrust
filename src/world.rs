@@ -1,4 +1,4 @@
-use crate::vec_extra::{Vec3d, Vec2d};
+use crate::vec_extra::{Vec2d, Vec3d};
 use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};
@@ -32,16 +32,17 @@ impl BlockType {
 
 #[derive(Copy, Clone)]
 struct Block {
-    // TODO: should be an enum
     block_type: BlockType,
     neighbors: Bitmap<8>, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
 }
 
 const CHUNK_XZ_SIZE: usize = 16;
 const CHUNK_Y_SIZE: usize = 256;
-pub const CHUNK_SIZE_IN_BLOCKS: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
+pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
-const WORLD_CHUNK_WIDTH: usize = 16;
+const WORLD_WIDTH_IN_CHUNKS: usize = 16;
+const WORLD_XZ_SIZE: usize = CHUNK_XZ_SIZE * WORLD_WIDTH_IN_CHUNKS;
+const WORLD_Y_SIZE: usize = CHUNK_Y_SIZE;
 
 impl Default for Block {
     fn default() -> Block {
@@ -64,9 +65,9 @@ impl WorldState {
                     Block {
                         ..Default::default()
                     };
-                    CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
+                    WORLD_XZ_SIZE * WORLD_Y_SIZE * WORLD_XZ_SIZE
                 ],
-                [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
+                [WORLD_XZ_SIZE, WORLD_Y_SIZE, WORLD_XZ_SIZE],
             ),
         }
     }
@@ -75,7 +76,7 @@ impl WorldState {
         let block = &mut self.blocks[[x, y, z]];
         block.block_type = block_type;
 
-        if y != CHUNK_Y_SIZE - 1 {
+        if y != WORLD_Y_SIZE - 1 {
             let top_neighbor = &mut self.blocks[[x, y + 1, z]];
             top_neighbor
                 .neighbors
@@ -89,7 +90,7 @@ impl WorldState {
                 .set(0, block_type != BlockType::Empty);
         }
 
-        if x != CHUNK_XZ_SIZE - 1 {
+        if x != WORLD_XZ_SIZE - 1 {
             let left_neighbor = &mut self.blocks[[x + 1, y, z]];
             left_neighbor
                 .neighbors
@@ -103,7 +104,7 @@ impl WorldState {
                 .set(2, block_type != BlockType::Empty);
         }
 
-        if z != CHUNK_XZ_SIZE - 1 {
+        if z != WORLD_XZ_SIZE - 1 {
             let front_neighbor = &mut self.blocks[[x, y, z + 1]];
             front_neighbor
                 .neighbors
@@ -123,11 +124,115 @@ impl WorldState {
     }
 
     pub fn initial_setup(&mut self) {
-        for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+        for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
             self.set_block(x, 0, z, BlockType::Debug);
             self.set_block(x, 1, z, BlockType::Dirt);
             self.set_block(x, 2, z, BlockType::Grass);
         }
+    }
+
+    pub fn generate_world_data(&self) -> Vec<Vec<InstanceRaw>> {
+        let func_start = Instant::now();
+
+        use cgmath::{Deg, Quaternion, Vector3};
+
+        let no_rotation = Quaternion::from_axis_angle(Vector3::unit_y(), Deg(0.0));
+        let flip_to_top = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(180.0));
+        let flip_to_front = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(90.0));
+        let flip_to_back = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(-90.0))
+            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(180.0));
+        let flip_to_left = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(90.0))
+            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(-90.0));
+        let flip_to_right = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
+            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
+
+        let mut all_raw_instances: Vec<Vec<InstanceRaw>> = vec![];
+
+        for (chunk_idx_x, chunk_idx_z) in
+            iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS)
+        {
+            let mut chunk_instances: Vec<Instance> = vec![];
+
+            for (chunk_rel_x, y, chunk_rel_z) in
+                iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
+            {
+                let x = (chunk_idx_x * CHUNK_XZ_SIZE) + chunk_rel_x;
+                let z = (chunk_idx_z * CHUNK_XZ_SIZE) + chunk_rel_z;
+
+                let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
+                let block = self.block_at(x, y, z);
+                if block.block_type == BlockType::Empty {
+                    continue;
+                }
+
+                let [top_offset, bottom_offset, side_offset] =
+                    block.block_type.texture_atlas_offsets();
+
+                // bottom
+                if !block.neighbors.get(1) {
+                    chunk_instances.push(Instance {
+                        position,
+                        rotation: no_rotation,
+                        texture_atlas_offset: bottom_offset,
+                    });
+                }
+                // top
+                if !block.neighbors.get(0) {
+                    chunk_instances.push(Instance {
+                        position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                        rotation: flip_to_top,
+                        texture_atlas_offset: top_offset,
+                    });
+                }
+                // left
+                if !block.neighbors.get(2) {
+                    chunk_instances.push(Instance {
+                        position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
+                        rotation: flip_to_left,
+                        texture_atlas_offset: side_offset,
+                    });
+                }
+                // right
+                if !block.neighbors.get(3) {
+                    chunk_instances.push(Instance {
+                        position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                        rotation: flip_to_right,
+                        texture_atlas_offset: side_offset,
+                    });
+                }
+                // front
+                if !block.neighbors.get(5) {
+                    chunk_instances.push(Instance {
+                        position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                        rotation: flip_to_front,
+                        texture_atlas_offset: side_offset,
+                    });
+                }
+                // back
+                if !block.neighbors.get(4) {
+                    chunk_instances.push(Instance {
+                        position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
+                        rotation: flip_to_back,
+                        texture_atlas_offset: side_offset,
+                    });
+                }
+            }
+
+            let raw_chunk_instances = chunk_instances
+                .iter()
+                .map(Instance::to_raw)
+                .collect::<Vec<_>>();
+
+            all_raw_instances.push(raw_chunk_instances);
+        }
+
+        let elapsed_time = func_start.elapsed().as_millis();
+        println!(
+            "Took {}ms to generate whole world vertex data",
+            elapsed_time
+        );
+
+        all_raw_instances
     }
 
     pub fn generate_vertex_data(&self) -> (Vec<Instance>, Vec<InstanceRaw>) {
@@ -209,7 +314,7 @@ impl WorldState {
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
 
         let elapsed_time = func_start.elapsed().as_millis();
-        println!("Took {}ms to generate vertex data", elapsed_time);
+        println!("Took {}ms to generate chunk vertex data", elapsed_time);
 
         (instances, instance_data)
     }

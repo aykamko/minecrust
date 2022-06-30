@@ -6,11 +6,12 @@ mod face;
 mod instance;
 mod spawner;
 mod texture;
+mod vec_extra;
 mod vertex;
 mod world;
-mod vec_extra;
 
 use cgmath::prelude::*;
+use core::num;
 use futures::executor::block_on;
 use spawner::Spawner;
 use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
@@ -39,6 +40,11 @@ struct Setup {
     // offscreen_canvas_setup: Option<OffscreenCanvasSetup>,
 }
 
+struct InstanceBufferWithLen {
+    buffer: wgpu::Buffer,
+    len: usize,
+}
+
 struct Scene {
     vertex_buffers: [wgpu::Buffer; 2],
     index_buf: wgpu::Buffer,
@@ -48,8 +54,7 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    instance_data: [Vec<instance::Instance>; 1],
-    instance_buffers: [wgpu::Buffer; 1],
+    instance_buffers: Vec<InstanceBufferWithLen>,
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
@@ -156,8 +161,6 @@ fn start(
         &world_state,
     );
 
-    let mut instance_lens = [scene.instance_data[0].len()];
-
     let mut curr_modifier_state: winit::event::ModifiersState =
         winit::event::ModifiersState::empty();
     let mut cursor_grabbed = false;
@@ -241,33 +244,33 @@ fn start(
                 );
 
                 // Break a block with the camera!
-                if mouse_clicked {
-                    mouse_clicked = false;
-                    world_state.break_block(&camera);
+                // if mouse_clicked {
+                //     mouse_clicked = false;
+                //     world_state.break_block(&camera);
 
-                    let (instances, instance_data) = world_state.generate_vertex_data();
-                    queue.write_buffer(
-                        &scene.instance_buffers[0],
-                        0,
-                        bytemuck::cast_slice(&instance_data),
-                    );
+                //     let (instances, instance_data) = world_state.generate_vertex_data();
+                //     queue.write_buffer(
+                //         &scene.instance_buffers[0],
+                //         0,
+                //         bytemuck::cast_slice(&instance_data),
+                //     );
 
-                    let forward = (camera.target - camera.eye).normalize();
-                    let horizon_target = camera.target + (forward * 100.0);
-                    queue.write_buffer(
-                        &scene.vertex_buffers[1],
-                        0,
-                        bytemuck::cast_slice(&[
-                            vertex::Vertex::new_from_pos(camera.eye.into()),
-                            vertex::Vertex::new_from_pos(horizon_target.into()),
-                            vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
-                        ]),
-                    );
+                //     let forward = (camera.target - camera.eye).normalize();
+                //     let horizon_target = camera.target + (forward * 100.0);
+                //     queue.write_buffer(
+                //         &scene.vertex_buffers[1],
+                //         0,
+                //         bytemuck::cast_slice(&[
+                //             vertex::Vertex::new_from_pos(camera.eye.into()),
+                //             vertex::Vertex::new_from_pos(horizon_target.into()),
+                //             vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
+                //         ]),
+                //     );
 
-                    instance_lens = [instances.len()];
-                }
+                //     instance_lens = [instances.len()];
+                // }
 
-                render_scene(&view, &device, &queue, &scene, &spawner, instance_lens);
+                render_scene(&view, &device, &queue, &scene, &spawner);
 
                 frame.present();
                 camera_controller.reset_mouse_delta();
@@ -483,33 +486,46 @@ fn setup_scene(
         ],
     };
 
-    let (instances, instance_data) = world_state.generate_vertex_data();
-    let instance_byte_contents: &[u8] = bytemuck::cast_slice(&instance_data);
+    let all_raw_instances = world_state.generate_world_data();
+    let num_chunks = all_raw_instances.len();
 
-    const NUM_FACES: usize = 6;
-    // Divide by 2 since worst case is a "3D checkerboard" where every other space is filled
-    let max_number_faces_possible = world::CHUNK_SIZE_IN_BLOCKS * instance::InstanceRaw::size() * NUM_FACES / 2;
-    let unpadded_size: u64 = max_number_faces_possible.try_into().unwrap();
+    let mut instance_buffers: Vec<InstanceBufferWithLen> = vec![];
+    for i in 0..num_chunks {
+        let chunk_raw_instances = &all_raw_instances[i];
 
-    // Valid vulkan usage is
-    // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
-    // 2. buffer size must be greater than 0.
-    // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
-    let align_mask = wgpu::COPY_BUFFER_ALIGNMENT - 1;
-    let padded_size = ((unpadded_size + align_mask) & !align_mask).max(wgpu::COPY_BUFFER_ALIGNMENT);
+        let instance_byte_contents: &[u8] = bytemuck::cast_slice(&chunk_raw_instances);
 
-    let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("Instance Buffer"),
-        size: padded_size,
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: true,
-    });
+        const NUM_FACES: usize = 6;
 
-    instance_buffer.slice(..).get_mapped_range_mut()[..instance_byte_contents.len() as usize]
-        .copy_from_slice(instance_byte_contents);
-    instance_buffer.unmap();
+        // Divide by 2 since worst case is a "3D checkerboard" where every other space is filled
+        let max_number_faces_possible =
+            world::NUM_BLOCKS_IN_CHUNK * instance::InstanceRaw::size() * NUM_FACES / 2;
+        let unpadded_size: u64 = max_number_faces_possible.try_into().unwrap();
 
-    let instance_buffers = [instance_buffer];
+        // Valid vulkan usage is
+        // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
+        // 2. buffer size must be greater than 0.
+        // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
+        let align_mask = wgpu::COPY_BUFFER_ALIGNMENT - 1;
+        let padded_size =
+            ((unpadded_size + align_mask) & !align_mask).max(wgpu::COPY_BUFFER_ALIGNMENT);
+
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: padded_size,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: true,
+        });
+
+        instance_buffer.slice(..).get_mapped_range_mut()[..instance_byte_contents.len() as usize]
+            .copy_from_slice(instance_byte_contents);
+        instance_buffer.unmap();
+
+        instance_buffers.push(InstanceBufferWithLen {
+            buffer: instance_buffer,
+            len: chunk_raw_instances.len(),
+        });
+    }
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
@@ -601,7 +617,6 @@ fn setup_scene(
         camera_bind_group,
         camera_buf,
         camera_staging_buf,
-        instance_data: [instances],
         instance_buffers,
         depth_texture,
         pipeline,
@@ -615,7 +630,6 @@ fn render_scene(
     queue: &wgpu::Queue,
     scene: &Scene,
     spawner: &Spawner,
-    instance_lens: [usize; 1],
 ) {
     static RENDER_WIREFRAME: bool = false;
     static RENDER_CAMERA_RAY: bool = false;
@@ -651,31 +665,38 @@ fn render_scene(
         rpass.set_pipeline(&scene.pipeline);
         rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
+        rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-        // Draw grass blocks
-        rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
-        rpass.set_vertex_buffer(1, scene.instance_buffers[0].slice(..));
-        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
+        for i in 0..scene.instance_buffers.len() {
+            let instance_buffer = &scene.instance_buffers[i];
 
-        if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
-            if let Some(ref pipe) = &scene.pipeline_wire {
-                rpass.set_pipeline(pipe);
-                if RENDER_WIREFRAME {
-                    rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_lens[0] as _);
+            rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+
+            if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
+                if let Some(ref pipe) = &scene.pipeline_wire {
+                    rpass.set_pipeline(pipe);
+                    if RENDER_WIREFRAME {
+                        rpass.draw_indexed(
+                            0..scene.index_count as u32,
+                            0,
+                            0..instance_buffer.len as _,
+                        );
+                    }
+
+                    // Draw camera line
+                    if RENDER_CAMERA_RAY {
+                        rpass.set_index_buffer(
+                            scene.line_index_buf.slice(..),
+                            wgpu::IndexFormat::Uint16,
+                        );
+                        rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+                        rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
+                    }
+
+                    rpass.set_pipeline(&scene.pipeline);
                 }
-
-                // Draw camera line
-                if RENDER_CAMERA_RAY {
-                    rpass.set_index_buffer(
-                        scene.line_index_buf.slice(..),
-                        wgpu::IndexFormat::Uint16,
-                    );
-                    rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
-                    rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
-                }
-
-                rpass.set_pipeline(&scene.pipeline);
             }
         }
     }
