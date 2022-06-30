@@ -252,12 +252,12 @@ fn start(
                     for chunk_idx in chunks_modified {
                         let chunk_data = world_state.generate_chunk_data(chunk_idx);
                         let mut target_instance_buf = &mut scene.instance_buffers[chunk_idx];
-                        target_instance_buf.len = chunk_data.len();
                         queue.write_buffer(
                             &target_instance_buf.buffer,
                             0,
                             bytemuck::cast_slice(&chunk_data),
                         );
+                        target_instance_buf.len = chunk_data.len();
                     }
 
                     let forward = (camera.target - camera.eye).normalize();
@@ -493,7 +493,9 @@ fn setup_scene(
     let chunk_dims = all_raw_instances.dims();
 
     let mut instance_buffers_flat: Vec<InstanceBufferWithLen> = vec![];
-    for (chunk_x, chunk_z) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
+
+    // HACK(aleks): the order needs to be reversed here for collisions to work later -- that's confusing
+    for (chunk_z, chunk_x) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
         let chunk_raw_instances = &all_raw_instances[[chunk_x, chunk_z]];
         let instance_byte_contents: &[u8] = bytemuck::cast_slice(&chunk_raw_instances);
 
@@ -513,7 +515,7 @@ fn setup_scene(
             ((unpadded_size + align_mask) & !align_mask).max(wgpu::COPY_BUFFER_ALIGNMENT);
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Instance Buffer"),
+            label: Some(&*format!("Instance Buffer {},{}", chunk_x, chunk_z)),
             size: padded_size,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: true,
