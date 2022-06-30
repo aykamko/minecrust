@@ -40,7 +40,7 @@ const CHUNK_XZ_SIZE: usize = 16;
 const CHUNK_Y_SIZE: usize = 256;
 pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
-const WORLD_WIDTH_IN_CHUNKS: usize = 16;
+pub const WORLD_WIDTH_IN_CHUNKS: usize = 16;
 const WORLD_XZ_SIZE: usize = CHUNK_XZ_SIZE * WORLD_WIDTH_IN_CHUNKS;
 const WORLD_Y_SIZE: usize = CHUNK_Y_SIZE;
 
@@ -131,99 +131,16 @@ impl WorldState {
         }
     }
 
-    pub fn generate_world_data(&self) -> Vec<Vec<InstanceRaw>> {
+    pub fn generate_world_data(&self) -> Vec2d<Vec<InstanceRaw>> {
         let func_start = Instant::now();
 
-        use cgmath::{Deg, Quaternion, Vector3};
+        let mut all_raw_instances: Vec2d<Vec<InstanceRaw>> = Vec2d::new(
+            vec![vec![]; WORLD_WIDTH_IN_CHUNKS * WORLD_WIDTH_IN_CHUNKS],
+            [WORLD_WIDTH_IN_CHUNKS, WORLD_WIDTH_IN_CHUNKS],
+        );
 
-        let no_rotation = Quaternion::from_axis_angle(Vector3::unit_y(), Deg(0.0));
-        let flip_to_top = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(180.0));
-        let flip_to_front = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(90.0));
-        let flip_to_back = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(-90.0))
-            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(180.0));
-        let flip_to_left = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(90.0))
-            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(-90.0));
-        let flip_to_right = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
-            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
-
-        let mut all_raw_instances: Vec<Vec<InstanceRaw>> = vec![];
-
-        for (chunk_idx_x, chunk_idx_z) in
-            iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS)
-        {
-            let mut chunk_instances: Vec<Instance> = vec![];
-
-            for (chunk_rel_x, y, chunk_rel_z) in
-                iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
-            {
-                let x = (chunk_idx_x * CHUNK_XZ_SIZE) + chunk_rel_x;
-                let z = (chunk_idx_z * CHUNK_XZ_SIZE) + chunk_rel_z;
-
-                let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
-                let block = self.block_at(x, y, z);
-                if block.block_type == BlockType::Empty {
-                    continue;
-                }
-
-                let [top_offset, bottom_offset, side_offset] =
-                    block.block_type.texture_atlas_offsets();
-
-                // bottom
-                if !block.neighbors.get(1) {
-                    chunk_instances.push(Instance {
-                        position,
-                        rotation: no_rotation,
-                        texture_atlas_offset: bottom_offset,
-                    });
-                }
-                // top
-                if !block.neighbors.get(0) {
-                    chunk_instances.push(Instance {
-                        position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
-                        rotation: flip_to_top,
-                        texture_atlas_offset: top_offset,
-                    });
-                }
-                // left
-                if !block.neighbors.get(2) {
-                    chunk_instances.push(Instance {
-                        position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
-                        rotation: flip_to_left,
-                        texture_atlas_offset: side_offset,
-                    });
-                }
-                // right
-                if !block.neighbors.get(3) {
-                    chunk_instances.push(Instance {
-                        position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
-                        rotation: flip_to_right,
-                        texture_atlas_offset: side_offset,
-                    });
-                }
-                // front
-                if !block.neighbors.get(5) {
-                    chunk_instances.push(Instance {
-                        position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                        rotation: flip_to_front,
-                        texture_atlas_offset: side_offset,
-                    });
-                }
-                // back
-                if !block.neighbors.get(4) {
-                    chunk_instances.push(Instance {
-                        position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
-                        rotation: flip_to_back,
-                        texture_atlas_offset: side_offset,
-                    });
-                }
-            }
-
-            let raw_chunk_instances = chunk_instances
-                .iter()
-                .map(Instance::to_raw)
-                .collect::<Vec<_>>();
-
-            all_raw_instances.push(raw_chunk_instances);
+        for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
+            all_raw_instances[[chunk_x, chunk_z]] = self.generate_chunk_data([chunk_x, chunk_z]);
         }
 
         let elapsed_time = func_start.elapsed().as_millis();
@@ -235,24 +152,33 @@ impl WorldState {
         all_raw_instances
     }
 
-    pub fn generate_vertex_data(&self) -> (Vec<Instance>, Vec<InstanceRaw>) {
+    pub fn generate_chunk_data(&self, chunk_idx: [usize; 2]) -> Vec<InstanceRaw> {
         let func_start = Instant::now();
 
+        let mut chunk_instances: Vec<Instance> = vec![];
         use cgmath::{Deg, Quaternion, Vector3};
 
-        let no_rotation = Quaternion::from_axis_angle(Vector3::unit_y(), Deg(0.0));
-        let flip_to_top = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(180.0));
-        let flip_to_front = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(90.0));
-        let flip_to_back = Quaternion::from_axis_angle(Vector3::unit_x(), Deg(-90.0))
-            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(180.0));
-        let flip_to_left = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(90.0))
-            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(-90.0));
-        let flip_to_right = Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
-            * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
+        let no_rotation: Quaternion<f32> = Quaternion::from_axis_angle(Vector3::unit_y(), Deg(0.0));
+        let flip_to_top: Quaternion<f32> =
+            Quaternion::from_axis_angle(Vector3::unit_x(), Deg(180.0));
+        let flip_to_front: Quaternion<f32> =
+            Quaternion::from_axis_angle(Vector3::unit_x(), Deg(90.0));
+        let flip_to_back: Quaternion<f32> =
+            Quaternion::from_axis_angle(Vector3::unit_x(), Deg(-90.0))
+                * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(180.0));
+        let flip_to_left: Quaternion<f32> =
+            Quaternion::from_axis_angle(Vector3::unit_z(), Deg(90.0))
+                * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(-90.0));
+        let flip_to_right: Quaternion<f32> =
+            Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
+                * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
 
-        let mut instances: Vec<Instance> = vec![];
+        for (chunk_rel_x, y, chunk_rel_z) in
+            iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
+        {
+            let x = (chunk_idx[0] * CHUNK_XZ_SIZE) + chunk_rel_x;
+            let z = (chunk_idx[1] * CHUNK_XZ_SIZE) + chunk_rel_z;
 
-        for (x, y, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE) {
             let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
             let block = self.block_at(x, y, z);
             if block.block_type == BlockType::Empty {
@@ -263,7 +189,7 @@ impl WorldState {
 
             // bottom
             if !block.neighbors.get(1) {
-                instances.push(Instance {
+                chunk_instances.push(Instance {
                     position,
                     rotation: no_rotation,
                     texture_atlas_offset: bottom_offset,
@@ -271,7 +197,7 @@ impl WorldState {
             }
             // top
             if !block.neighbors.get(0) {
-                instances.push(Instance {
+                chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_top,
                     texture_atlas_offset: top_offset,
@@ -279,7 +205,7 @@ impl WorldState {
             }
             // left
             if !block.neighbors.get(2) {
-                instances.push(Instance {
+                chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
                     rotation: flip_to_left,
                     texture_atlas_offset: side_offset,
@@ -287,7 +213,7 @@ impl WorldState {
             }
             // right
             if !block.neighbors.get(3) {
-                instances.push(Instance {
+                chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_right,
                     texture_atlas_offset: side_offset,
@@ -295,7 +221,7 @@ impl WorldState {
             }
             // front
             if !block.neighbors.get(5) {
-                instances.push(Instance {
+                chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
                     rotation: flip_to_front,
                     texture_atlas_offset: side_offset,
@@ -303,7 +229,7 @@ impl WorldState {
             }
             // back
             if !block.neighbors.get(4) {
-                instances.push(Instance {
+                chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
                     rotation: flip_to_back,
                     texture_atlas_offset: side_offset,
@@ -311,12 +237,15 @@ impl WorldState {
             }
         }
 
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let raw_chunk_instances = chunk_instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
 
         let elapsed_time = func_start.elapsed().as_millis();
         println!("Took {}ms to generate chunk vertex data", elapsed_time);
 
-        (instances, instance_data)
+        raw_chunk_instances
     }
 
     // Ray intersection algo pseudocode:
@@ -336,7 +265,9 @@ impl WorldState {
     //         only iterate 6 more times  # optimization
     //   pick closest colliding cube to camera eye
     //   break cube
-    pub fn break_block(&mut self, camera: &super::camera::Camera) {
+    //
+    // Returns which chunks were modified
+    pub fn break_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {
         use cgmath_17::{InnerSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
@@ -414,11 +345,19 @@ impl WorldState {
             }
         }
 
-        self.set_block(
+        let (collider_x, collider_y, collider_z) = (
             closest_collider.1[0],
             closest_collider.1[1],
             closest_collider.1[2],
-            BlockType::Empty,
-        )
+        );
+        self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
+
+        let (colliding_chunk_x, colliding_chunk_z) =
+            (collider_x / CHUNK_XZ_SIZE, collider_z / CHUNK_XZ_SIZE);
+        let modified_chunks: Vec<[usize; 2]> = vec![[colliding_chunk_x, colliding_chunk_z]];
+
+        // TODO: handle chunks on borders!
+
+        modified_chunks
     }
 }

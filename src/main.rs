@@ -10,6 +10,7 @@ mod vec_extra;
 mod vertex;
 mod world;
 
+use vec_extra::Vec2d;
 use cgmath::prelude::*;
 use core::num;
 use futures::executor::block_on;
@@ -54,7 +55,7 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    instance_buffers: Vec<InstanceBufferWithLen>,
+    instance_buffers: Vec2d<InstanceBufferWithLen>,
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
@@ -152,7 +153,7 @@ fn start(
     let mut world_state = world::WorldState::new();
     world_state.initial_setup();
 
-    let scene = setup_scene(
+    let mut scene = setup_scene(
         &config,
         &adapter,
         &device,
@@ -244,31 +245,33 @@ fn start(
                 );
 
                 // Break a block with the camera!
-                // if mouse_clicked {
-                //     mouse_clicked = false;
-                //     world_state.break_block(&camera);
+                if mouse_clicked {
+                    mouse_clicked = false;
+                    let chunks_modified = world_state.break_block(&camera);
 
-                //     let (instances, instance_data) = world_state.generate_vertex_data();
-                //     queue.write_buffer(
-                //         &scene.instance_buffers[0],
-                //         0,
-                //         bytemuck::cast_slice(&instance_data),
-                //     );
+                    for chunk_idx in chunks_modified {
+                        let chunk_data = world_state.generate_chunk_data(chunk_idx);
+                        let mut target_instance_buf = &mut scene.instance_buffers[chunk_idx];
+                        target_instance_buf.len = chunk_data.len();
+                        queue.write_buffer(
+                            &target_instance_buf.buffer,
+                            0,
+                            bytemuck::cast_slice(&chunk_data),
+                        );
+                    }
 
-                //     let forward = (camera.target - camera.eye).normalize();
-                //     let horizon_target = camera.target + (forward * 100.0);
-                //     queue.write_buffer(
-                //         &scene.vertex_buffers[1],
-                //         0,
-                //         bytemuck::cast_slice(&[
-                //             vertex::Vertex::new_from_pos(camera.eye.into()),
-                //             vertex::Vertex::new_from_pos(horizon_target.into()),
-                //             vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
-                //         ]),
-                //     );
-
-                //     instance_lens = [instances.len()];
-                // }
+                    let forward = (camera.target - camera.eye).normalize();
+                    let horizon_target = camera.target + (forward * 100.0);
+                    queue.write_buffer(
+                        &scene.vertex_buffers[1],
+                        0,
+                        bytemuck::cast_slice(&[
+                            vertex::Vertex::new_from_pos(camera.eye.into()),
+                            vertex::Vertex::new_from_pos(horizon_target.into()),
+                            vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
+                        ]),
+                    );
+                }
 
                 render_scene(&view, &device, &queue, &scene, &spawner);
 
@@ -487,12 +490,11 @@ fn setup_scene(
     };
 
     let all_raw_instances = world_state.generate_world_data();
-    let num_chunks = all_raw_instances.len();
+    let chunk_dims = all_raw_instances.dims();
 
-    let mut instance_buffers: Vec<InstanceBufferWithLen> = vec![];
-    for i in 0..num_chunks {
-        let chunk_raw_instances = &all_raw_instances[i];
-
+    let mut instance_buffers_flat: Vec<InstanceBufferWithLen> = vec![];
+    for (chunk_x, chunk_z) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
+        let chunk_raw_instances = &all_raw_instances[[chunk_x, chunk_z]];
         let instance_byte_contents: &[u8] = bytemuck::cast_slice(&chunk_raw_instances);
 
         const NUM_FACES: usize = 6;
@@ -521,11 +523,13 @@ fn setup_scene(
             .copy_from_slice(instance_byte_contents);
         instance_buffer.unmap();
 
-        instance_buffers.push(InstanceBufferWithLen {
+        instance_buffers_flat.push(InstanceBufferWithLen {
             buffer: instance_buffer,
             len: chunk_raw_instances.len(),
         });
     }
+    let instance_buffers: Vec2d<InstanceBufferWithLen> =
+        Vec2d::new(instance_buffers_flat, [chunk_dims[0], chunk_dims[1]]);
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
@@ -668,8 +672,8 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-        for i in 0..scene.instance_buffers.len() {
-            let instance_buffer = &scene.instance_buffers[i];
+        for (chunk_x, chunk_y) in iproduct!(0..scene.instance_buffers.dims()[0], 0..scene.instance_buffers.dims()[1]) {
+            let instance_buffer = &scene.instance_buffers[[chunk_x, chunk_y]];
 
             rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
             rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);

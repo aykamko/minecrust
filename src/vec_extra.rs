@@ -11,6 +11,10 @@ impl<T> Vec3d<T> {
         assert!(vec.len() == dims[0] * dims[1] * dims[2]);
         Self { vec, dims }
     }
+
+    pub fn dims(&self) -> [usize; 3] {
+        self.dims
+    }
 }
 
 impl<T> Index<[usize; 3]> for Vec3d<T> {
@@ -39,6 +43,10 @@ impl<T> Vec2d<T> {
     pub fn new(vec: Vec<T>, dims: [usize; 2]) -> Self {
         assert!(vec.len() == dims[0] * dims[1]);
         Self { vec, dims }
+    }
+
+    pub fn dims(&self) -> [usize; 2] {
+        self.dims
     }
 }
 
