@@ -1,4 +1,5 @@
 use crate::vec_extra::{Vec2d, Vec3d};
+use crate::map_generation::{self, save_elevation_to_file};
 use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};
@@ -41,8 +42,8 @@ const CHUNK_Y_SIZE: usize = 256;
 pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
 pub const WORLD_WIDTH_IN_CHUNKS: usize = 16;
-const WORLD_XZ_SIZE: usize = CHUNK_XZ_SIZE * WORLD_WIDTH_IN_CHUNKS;
-const WORLD_Y_SIZE: usize = CHUNK_Y_SIZE;
+pub const WORLD_XZ_SIZE: usize = CHUNK_XZ_SIZE * WORLD_WIDTH_IN_CHUNKS;
+pub const WORLD_Y_SIZE: usize = CHUNK_Y_SIZE;
 
 impl Default for Block {
     fn default() -> Block {
@@ -124,10 +125,15 @@ impl WorldState {
     }
 
     pub fn initial_setup(&mut self) {
+        let map_elevation = map_generation::generate_elevation_map(2, 60);
+        save_elevation_to_file(map_elevation, "map.bmp");
+
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
-            self.set_block(x, 0, z, BlockType::Debug);
-            self.set_block(x, 1, z, BlockType::Dirt);
-            self.set_block(x, 2, z, BlockType::Grass);
+            let max_height = map_elevation[x][z] as usize;
+            self.set_block(x, max_height, z, BlockType::Grass);
+            for y in 0..max_height {
+              self.set_block(x, y, z, BlockType::Dirt);
+            }
         }
     }
 

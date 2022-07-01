@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate itertools;
+#[macro_use]
+extern crate bmp;
 
 mod camera;
 mod face;
@@ -9,6 +11,7 @@ mod texture;
 mod vec_extra;
 mod vertex;
 mod world;
+mod map_generation;
 
 use vec_extra::Vec2d;
 use cgmath::prelude::*;
@@ -145,7 +148,7 @@ fn start(
         aspect: config.width as f32 / config.height as f32,
         fovy: 45.0,
         znear: 1.0,
-        zfar: 100.0,
+        zfar: 300.0,
     };
     let mut camera_uniform = camera::CameraUniform::new();
     camera_uniform.update_view_proj(&camera);
