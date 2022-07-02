@@ -7,6 +7,7 @@ struct VertexOutput {
     @location(0) tex_coord: vec2<f32>,
     @builtin(position) position: vec4<f32>,
     @location(1) texture_atlas_offset: vec2<f32>,
+    @location(2) brightness: f32,
 };
 
 struct CameraUniform {
@@ -19,6 +20,7 @@ struct InstanceInput {
     @location(7) model_matrix_2: vec4<f32>,
     @location(8) model_matrix_3: vec4<f32>,
     @location(9) texture_atlas_offset: vec2<f32>,
+    @location(10) brightness: f32,
 }
 
 @group(1)
@@ -40,10 +42,9 @@ fn vs_main(
 
     var out: VertexOutput;
     out.tex_coord = model.tex_coord;
-
-    out.texture_atlas_offset = instance.texture_atlas_offset;
-
     out.position = camera_position.view_proj * model_matrix * model.position;
+    out.texture_atlas_offset = instance.texture_atlas_offset;
+    out.brightness = instance.brightness;
     return out;
 }
 
@@ -60,7 +61,8 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var atlas_scaled_coords = vertex.tex_coord / 32.0;
     var offset_coords = atlas_scaled_coords + (unit_offset * vertex.texture_atlas_offset);
 
-    return textureSample(t_diffuse, s_diffuse, offset_coords);
+    var brightness_factor = vec4<f32>(vertex.brightness, vertex.brightness, vertex.brightness, 1.0);
+    return textureSample(t_diffuse, s_diffuse, offset_coords) * brightness_factor;
 }
 
 @fragment

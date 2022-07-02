@@ -125,7 +125,7 @@ impl WorldState {
     }
 
     pub fn initial_setup(&mut self) {
-        let map_elevation = map_generation::generate_elevation_map(2, 60);
+        let map_elevation = map_generation::generate_elevation_map(2, 80);
         save_elevation_to_file(map_elevation, "map.bmp");
 
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
@@ -199,6 +199,7 @@ impl WorldState {
                     position,
                     rotation: no_rotation,
                     texture_atlas_offset: bottom_offset,
+                    brightness: 1.0,
                 });
             }
             // top
@@ -207,6 +208,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_top,
                     texture_atlas_offset: top_offset,
+                    brightness: 1.0,
                 });
             }
             // left
@@ -215,6 +217,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
                     rotation: flip_to_left,
                     texture_atlas_offset: side_offset,
+                    brightness: 0.7,
                 });
             }
             // right
@@ -223,6 +226,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_right,
                     texture_atlas_offset: side_offset,
+                    brightness: 0.7,
                 });
             }
             // front
@@ -231,6 +235,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
                     rotation: flip_to_front,
                     texture_atlas_offset: side_offset,
+                    brightness: 0.8,
                 });
             }
             // back
@@ -239,6 +244,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
                     rotation: flip_to_back,
                     texture_atlas_offset: side_offset,
+                    brightness: 0.8,
                 });
             }
         }

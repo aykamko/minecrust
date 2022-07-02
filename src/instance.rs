@@ -2,6 +2,7 @@ pub struct Instance {
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
     pub texture_atlas_offset: [f32; 2],
+    pub brightness: f32,
 }
 
 // WARNING this might be inefficient. A note from the guide: Using these values directly in the
@@ -13,6 +14,7 @@ pub struct Instance {
 pub struct InstanceRaw {
     model: [[f32; 4]; 4],
     texture_atlas_offset: [f32; 2],
+    brightness: f32,
 }
 
 impl Instance {
@@ -22,6 +24,7 @@ impl Instance {
                 * cgmath::Matrix4::from(self.rotation))
             .into(),
             texture_atlas_offset: self.texture_atlas_offset,
+            brightness: self.brightness,
         }
     }
 }
@@ -70,6 +73,11 @@ impl InstanceRaw {
                     offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
                     shader_location: 9,
                     format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 18]>() as wgpu::BufferAddress,
+                    shader_location: 10,
+                    format: wgpu::VertexFormat::Float32,
                 },
             ],
         }
