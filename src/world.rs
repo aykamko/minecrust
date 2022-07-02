@@ -1,5 +1,5 @@
-use crate::vec_extra::{Vec2d, Vec3d};
 use crate::map_generation::{self, save_elevation_to_file};
+use crate::vec_extra::{Vec2d, Vec3d};
 use bitmaps::Bitmap;
 
 use super::instance::{Instance, InstanceRaw};
@@ -132,7 +132,7 @@ impl WorldState {
             let max_height = map_elevation[x][z] as usize;
             self.set_block(x, max_height, z, BlockType::Grass);
             for y in 0..max_height {
-              self.set_block(x, y, z, BlockType::Dirt);
+                self.set_block(x, y, z, BlockType::Dirt);
             }
         }
     }
@@ -364,12 +364,49 @@ impl WorldState {
         );
         self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
 
-        let (colliding_chunk_x, colliding_chunk_z) =
-            (collider_x / CHUNK_XZ_SIZE, collider_z / CHUNK_XZ_SIZE);
-        let modified_chunks: Vec<[usize; 2]> = vec![[colliding_chunk_x, colliding_chunk_z]];
+        let (colliding_chunk_x, colliding_chunk_z) = (
+            (collider_x / CHUNK_XZ_SIZE) as i32,
+            (collider_z / CHUNK_XZ_SIZE) as i32,
+        );
+        let mut modified_chunks: Vec<[i32; 2]> = vec![[colliding_chunk_x, colliding_chunk_z]];
 
-        // TODO: handle chunks on borders!
+        // handle neighbor chunks if this block is on the border
+        let chunk_rel_collide_x = collider_x % NUM_BLOCKS_IN_CHUNK;
+        let chunk_rel_collide_z = collider_z % NUM_BLOCKS_IN_CHUNK;
+        if chunk_rel_collide_x == 0 {
+            modified_chunks.push([colliding_chunk_x - 1, colliding_chunk_z]);
+            if chunk_rel_collide_z == 0 {
+                modified_chunks.push([colliding_chunk_x - 1, colliding_chunk_z - 1]);
+            }
+            if chunk_rel_collide_z == NUM_BLOCKS_IN_CHUNK - 1 {
+                modified_chunks.push([colliding_chunk_x - 1, colliding_chunk_z + 1]);
+            }
+        }
+        if chunk_rel_collide_z == 0 {
+            modified_chunks.push([colliding_chunk_x, colliding_chunk_z - 1]);
+        }
+        if chunk_rel_collide_x == NUM_BLOCKS_IN_CHUNK - 1 {
+            modified_chunks.push([colliding_chunk_x + 1, colliding_chunk_z]);
+            if chunk_rel_collide_z == 0 {
+                modified_chunks.push([colliding_chunk_x + 1, colliding_chunk_z - 1]);
+            }
+            if chunk_rel_collide_z == NUM_BLOCKS_IN_CHUNK - 1 {
+                modified_chunks.push([colliding_chunk_x + 1, colliding_chunk_z + 1]);
+            }
+        }
+        if chunk_rel_collide_z == NUM_BLOCKS_IN_CHUNK - 1 {
+            modified_chunks.push([colliding_chunk_x, colliding_chunk_z + 1]);
+        }
 
         modified_chunks
+            .into_iter()
+            .filter(|[chunk_x, chunk_z]| {
+                *chunk_x >= 0
+                    && *chunk_x < WORLD_WIDTH_IN_CHUNKS.try_into().unwrap()
+                    && *chunk_z >= 0
+                    && *chunk_z < WORLD_WIDTH_IN_CHUNKS.try_into().unwrap()
+            })
+            .map(|[chunk_x, chunk_z]| [chunk_x as usize, chunk_z as usize])
+            .collect()
     }
 }
