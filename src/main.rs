@@ -129,7 +129,6 @@ fn start(
 ) {
     let format = *surface
         .get_supported_formats(&adapter)
-        .unwrap()
         .first()
         .unwrap();
     let config = wgpu::SurfaceConfiguration {
@@ -137,7 +136,7 @@ fn start(
         format: format,
         width: size.width,
         height: size.height,
-        present_mode: wgpu::PresentMode::Mailbox,
+        present_mode: wgpu::PresentMode::Fifo,
     };
     surface.configure(&device, &config);
 
@@ -482,7 +481,7 @@ fn setup_scene(
         label: None,
     });
 
-    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Main Shader"),
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
@@ -565,7 +564,7 @@ fn setup_scene(
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: "fs_main",
-            targets: &[config.format.into()],
+            targets: &[Some(config.format.into())],
         }),
         primitive: wgpu::PrimitiveState {
             cull_mode: Some(wgpu::Face::Back),
@@ -597,7 +596,7 @@ fn setup_scene(
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_wire",
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
@@ -608,7 +607,7 @@ fn setup_scene(
                         alpha: wgpu::BlendComponent::REPLACE,
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,
@@ -663,7 +662,7 @@ fn render_scene(
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
@@ -675,7 +674,7 @@ fn render_scene(
                     }),
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &scene.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {

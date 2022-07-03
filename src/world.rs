@@ -245,6 +245,11 @@ impl WorldState {
             }
 
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
+            let alpha_adjust = if block.block_type == BlockType::Water {
+                0.8
+            } else {
+                1.0
+            };
 
             if !block.neighbors.get(Face::Top) {
                 let y_offset = if block.block_type == BlockType::Water {
@@ -256,7 +261,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(0.0, y_offset, 1.0),
                     rotation: flip_to_top,
                     texture_atlas_offset: top_offset,
-                    brightness: 1.0,
+                    color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
                 });
             }
             if !block.neighbors.get(Face::Bottom) {
@@ -264,7 +269,7 @@ impl WorldState {
                     position,
                     rotation: no_rotation,
                     texture_atlas_offset: bottom_offset,
-                    brightness: 1.0,
+                    color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
                 });
             }
             if !block.neighbors.get(Face::Left) {
@@ -272,7 +277,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
                     rotation: flip_to_left,
                     texture_atlas_offset: side_offset,
-                    brightness: 0.7,
+                    color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
                 });
             }
             if !block.neighbors.get(Face::Right) {
@@ -280,7 +285,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_right,
                     texture_atlas_offset: side_offset,
-                    brightness: 0.7,
+                    color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
                 });
             }
             if !block.neighbors.get(Face::Front) {
@@ -288,7 +293,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
                     rotation: flip_to_back,
                     texture_atlas_offset: side_offset,
-                    brightness: 0.8,
+                    color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
                 });
             }
             if !block.neighbors.get(Face::Back) {
@@ -296,7 +301,7 @@ impl WorldState {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
                     rotation: flip_to_front,
                     texture_atlas_offset: side_offset,
-                    brightness: 0.8,
+                    color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
                 });
             }
         }
