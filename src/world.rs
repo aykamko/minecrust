@@ -1,6 +1,7 @@
 use crate::map_generation::{self, save_elevation_to_file};
 use crate::vec_extra::{Vec2d, Vec3d};
 use bitmaps::Bitmap;
+use bmp::consts::THISTLE;
 
 use super::instance::{Instance, InstanceRaw};
 use cgmath::prelude::*;
@@ -19,6 +20,12 @@ pub enum BlockType {
     Sand,
     Stone,
     Water,
+}
+
+impl BlockType {
+    pub fn is_transluscent(&self) -> bool {
+        *self == BlockType::Empty || *self == BlockType::Water
+    }
 }
 
 #[repr(usize)]
@@ -115,44 +122,45 @@ impl WorldState {
     }
 
     fn set_block(&mut self, x: usize, y: usize, z: usize, block_type: BlockType) {
-        let block = &mut self.blocks[[x, y, z]];
-        block.block_type = block_type;
+        let curr_block = &mut self.blocks[[x, y, z]];
+        curr_block.block_type = block_type;
+
+        let mut set_neighbor_state =
+            |neighbor_pos: [usize; 3], neighbor_shared_face: Face, curr_shared_face: Face| {
+                let neighbor_block = &mut self.blocks[neighbor_pos];
+                if block_type == BlockType::Water && neighbor_block.block_type == BlockType::Water {
+                    neighbor_block.neighbors.set(neighbor_shared_face, true);
+                    self.blocks[[x, y, z]].neighbors.set(curr_shared_face, true);
+                } else {
+                    neighbor_block
+                        .neighbors
+                        .set(neighbor_shared_face, !block_type.is_transluscent());
+                }
+            };
 
         if y != WORLD_Y_SIZE - 1 {
-            let top_neighbor = &mut self.blocks[[x, y + 1, z]];
-            top_neighbor
-                .neighbors
-                .set(Face::Bottom, block_type != BlockType::Empty);
+            let top_neighbor = [x, y + 1, z];
+            set_neighbor_state(top_neighbor, Face::Bottom, Face::Top);
         }
         if y != 0 {
-            let bottom_neighbor = &mut self.blocks[[x, y - 1, z]];
-            bottom_neighbor
-                .neighbors
-                .set(Face::Top, block_type != BlockType::Empty);
+            let bottom_neighbor = [x, y - 1, z];
+            set_neighbor_state(bottom_neighbor, Face::Top, Face::Bottom);
         }
         if x != WORLD_XZ_SIZE - 1 {
-            let left_neighbor = &mut self.blocks[[x + 1, y, z]];
-            left_neighbor
-                .neighbors
-                .set(Face::Right, block_type != BlockType::Empty);
+            let left_neighbor = [x + 1, y, z];
+            set_neighbor_state(left_neighbor, Face::Right, Face::Left);
         }
         if x != 0 {
-            let right_neighbor = &mut self.blocks[[x - 1, y, z]];
-            right_neighbor
-                .neighbors
-                .set(Face::Left, block_type != BlockType::Empty);
+            let right_neighbor = [x - 1, y, z];
+            set_neighbor_state(right_neighbor, Face::Left, Face::Right);
         }
         if z != WORLD_XZ_SIZE - 1 {
-            let front_neighbor = &mut self.blocks[[x, y, z + 1]];
-            front_neighbor
-                .neighbors
-                .set(Face::Back, block_type != BlockType::Empty);
+            let front_neighbor = [x, y, z + 1];
+            set_neighbor_state(front_neighbor, Face::Back, Face::Front);
         }
         if z != 0 {
-            let back_neighbor = &mut self.blocks[[x, y, z - 1]];
-            back_neighbor
-                .neighbors
-                .set(Face::Front, block_type != BlockType::Empty);
+            let back_neighbor = [x, y, z - 1];
+            set_neighbor_state(back_neighbor, Face::Front, Face::Back);
         }
     }
 

@@ -654,7 +654,7 @@ fn render_scene(
     scene: &Scene,
     spawner: &Spawner,
 ) {
-    static RENDER_WIREFRAME: bool = false;
+    static RENDER_WIREFRAME: bool = true;
     static RENDER_CAMERA_RAY: bool = false;
 
     device.push_error_scope(wgpu::ErrorFilter::Validation);
