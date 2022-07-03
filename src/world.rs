@@ -11,7 +11,7 @@ use std::time::Instant;
 
 #[derive(Copy, Clone, PartialEq)]
 #[repr(u8)]
-enum BlockType {
+pub enum BlockType {
     Empty,
     Debug,
     Dirt,
@@ -45,7 +45,7 @@ impl BlockType {
 
 struct BlockCollision {
     distance: f32,
-    cube_pos: cgmath::Point3<usize>,
+    block_pos: cgmath::Point3<usize>,
     collision_point: cgmath::Point3<f32>,
 }
 
@@ -306,7 +306,7 @@ impl WorldState {
     //   pick closest colliding cube to camera eye
     //
     // Returns colliding cube and colliding point
-    fn get_colliding_block(&mut self, camera: &super::camera::Camera) -> BlockCollision {
+    fn get_colliding_block(&self, camera: &super::camera::Camera) -> BlockCollision {
         use cgmath_17::{InnerSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
@@ -348,7 +348,7 @@ impl WorldState {
 
         let mut closest_collider = BlockCollision {
             distance: std::f32::INFINITY,
-            cube_pos: cgmath::Point3::new(0, 0, 0),
+            block_pos: cgmath::Point3::new(0, 0, 0),
             collision_point: cgmath::Point3::new(0.0, 0.0, 0.0),
         };
         let mut hit_first_collision = false;
@@ -372,7 +372,7 @@ impl WorldState {
                     let collision_distance = collision_point.distance(camera_eye_cgmath17);
                     if collision_distance < closest_collider.distance {
                         closest_collider.distance = collision_distance;
-                        closest_collider.cube_pos =
+                        closest_collider.block_pos =
                             cgmath::Point3::new(cube.x as usize, cube.y as usize, cube.z as usize);
                         closest_collider.collision_point = cgmath::Point3::new(
                             collision_point.x,
@@ -393,17 +393,8 @@ impl WorldState {
         closest_collider
     }
 
-    // Returns which chunks were modified
-    pub fn break_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {
-        let collision = self.get_colliding_block(camera);
-        let (collider_x, collider_y, collider_z) = (
-            collision.cube_pos.x,
-            collision.cube_pos.y,
-            collision.cube_pos.z,
-        );
-
-        self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
-
+    fn get_affected_chunks(&self, collision: BlockCollision) -> Vec<[usize; 2]> {
+        let (collider_x, collider_z) = (collision.block_pos.x, collision.block_pos.z);
         let (colliding_chunk_x, colliding_chunk_z) = (
             (collider_x / CHUNK_XZ_SIZE) as i32,
             (collider_z / CHUNK_XZ_SIZE) as i32,
@@ -450,5 +441,60 @@ impl WorldState {
             .collect()
     }
 
-    // pub fn place_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {}
+    // Returns which chunks were modified
+    pub fn break_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {
+        let collision = self.get_colliding_block(camera);
+        let (collider_x, collider_y, collider_z) = (
+            collision.block_pos.x,
+            collision.block_pos.y,
+            collision.block_pos.z,
+        );
+
+        self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
+        println!("collision point is {:?}", collision.collision_point);
+        println!("collision block is {:?}", collision.block_pos);
+
+        self.get_affected_chunks(collision)
+    }
+
+    // Returns which chunks were modified
+    pub fn place_block(
+        &mut self,
+        camera: &super::camera::Camera,
+        block_type: BlockType,
+    ) -> Vec<[usize; 2]> {
+        let collision = self.get_colliding_block(camera);
+
+        let mut new_block_pos: cgmath::Point3<usize> = cgmath::Point3::new(0, 0, 0);
+        if collision.collision_point.x - collision.collision_point.x.floor() == 0.0 {
+            new_block_pos = cgmath::Point3::new(
+                collision.collision_point.x as usize,
+                collision.block_pos.y,
+                collision.block_pos.z,
+            )
+        }
+        if collision.collision_point.y - collision.collision_point.y.floor() == 0.0 {
+            new_block_pos = cgmath::Point3::new(
+                collision.block_pos.x,
+                collision.collision_point.y as usize,
+                collision.block_pos.z,
+            )
+        }
+        if collision.collision_point.z - collision.collision_point.z.floor() == 0.0 {
+            new_block_pos = cgmath::Point3::new(
+                collision.block_pos.x,
+                collision.block_pos.y,
+                collision.collision_point.z as usize,
+            )
+        }
+
+        self.set_block(
+            new_block_pos.x,
+            new_block_pos.y,
+            new_block_pos.z,
+            block_type,
+        );
+
+        self.get_affected_chunks(collision)
+    }
 }

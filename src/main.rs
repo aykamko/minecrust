@@ -6,19 +6,19 @@ extern crate bmp;
 mod camera;
 mod face;
 mod instance;
+mod map_generation;
 mod spawner;
 mod texture;
 mod vec_extra;
 mod vertex;
 mod world;
-mod map_generation;
 
-use vec_extra::Vec2d;
 use cgmath::prelude::*;
 use core::num;
 use futures::executor::block_on;
 use spawner::Spawner;
 use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
+use vec_extra::Vec2d;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
@@ -250,7 +250,12 @@ fn start(
                 // Break a block with the camera!
                 if mouse_clicked {
                     mouse_clicked = false;
-                    let chunks_modified = world_state.break_block(&camera);
+
+                    let chunks_modified = if curr_modifier_state.shift() {
+                        world_state.place_block(&camera, world::BlockType::Sand)
+                    } else {
+                        world_state.break_block(&camera)
+                    };
 
                     for chunk_idx in chunks_modified {
                         let chunk_data = world_state.generate_chunk_data(chunk_idx);
@@ -677,7 +682,10 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-        for (chunk_x, chunk_y) in iproduct!(0..scene.instance_buffers.dims()[0], 0..scene.instance_buffers.dims()[1]) {
+        for (chunk_x, chunk_y) in iproduct!(
+            0..scene.instance_buffers.dims()[0],
+            0..scene.instance_buffers.dims()[1]
+        ) {
             let instance_buffer = &scene.instance_buffers[[chunk_x, chunk_y]];
 
             rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
