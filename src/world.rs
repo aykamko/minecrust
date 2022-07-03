@@ -397,8 +397,8 @@ impl WorldState {
         }
     }
 
-    fn get_affected_chunks(&self, collision: &BlockCollision) -> Vec<[usize; 2]> {
-        let (collider_x, collider_z) = (collision.block_pos.x, collision.block_pos.z);
+    fn get_affected_chunks(&self, block_pos: &cgmath::Point3<usize>) -> Vec<[usize; 2]> {
+        let (collider_x, collider_z) = (block_pos.x, block_pos.z);
         let (colliding_chunk_x, colliding_chunk_z) = (
             (collider_x / CHUNK_XZ_SIZE) as i32,
             (collider_z / CHUNK_XZ_SIZE) as i32,
@@ -406,34 +406,34 @@ impl WorldState {
         let mut modified_chunks: Vec<[i32; 2]> = vec![[colliding_chunk_x, colliding_chunk_z]];
 
         // handle neighbor chunks if this block is on the border
-        let chunk_rel_collide_x = collider_x % NUM_BLOCKS_IN_CHUNK;
-        let chunk_rel_collide_z = collider_z % NUM_BLOCKS_IN_CHUNK;
+        let chunk_rel_collide_x = collider_x % CHUNK_XZ_SIZE;
+        let chunk_rel_collide_z = collider_z % CHUNK_XZ_SIZE;
         if chunk_rel_collide_x == 0 {
             modified_chunks.push([colliding_chunk_x - 1, colliding_chunk_z]);
             if chunk_rel_collide_z == 0 {
                 modified_chunks.push([colliding_chunk_x - 1, colliding_chunk_z - 1]);
             }
-            if chunk_rel_collide_z == NUM_BLOCKS_IN_CHUNK - 1 {
+            if chunk_rel_collide_z == CHUNK_XZ_SIZE - 1 {
                 modified_chunks.push([colliding_chunk_x - 1, colliding_chunk_z + 1]);
             }
         }
         if chunk_rel_collide_z == 0 {
             modified_chunks.push([colliding_chunk_x, colliding_chunk_z - 1]);
         }
-        if chunk_rel_collide_x == NUM_BLOCKS_IN_CHUNK - 1 {
+        if chunk_rel_collide_x == CHUNK_XZ_SIZE - 1 {
             modified_chunks.push([colliding_chunk_x + 1, colliding_chunk_z]);
             if chunk_rel_collide_z == 0 {
                 modified_chunks.push([colliding_chunk_x + 1, colliding_chunk_z - 1]);
             }
-            if chunk_rel_collide_z == NUM_BLOCKS_IN_CHUNK - 1 {
+            if chunk_rel_collide_z == CHUNK_XZ_SIZE - 1 {
                 modified_chunks.push([colliding_chunk_x + 1, colliding_chunk_z + 1]);
             }
         }
-        if chunk_rel_collide_z == NUM_BLOCKS_IN_CHUNK - 1 {
+        if chunk_rel_collide_z == CHUNK_XZ_SIZE - 1 {
             modified_chunks.push([colliding_chunk_x, colliding_chunk_z + 1]);
         }
 
-        modified_chunks
+        let affected_chunks = modified_chunks
             .into_iter()
             .filter(|[chunk_x, chunk_z]| {
                 *chunk_x >= 0
@@ -442,7 +442,10 @@ impl WorldState {
                     && *chunk_z < WORLD_WIDTH_IN_CHUNKS.try_into().unwrap()
             })
             .map(|[chunk_x, chunk_z]| [chunk_x as usize, chunk_z as usize])
-            .collect()
+            .collect();
+
+        println!("Affected chunks: {:?}", affected_chunks);
+        affected_chunks
     }
 
     // Returns which chunks were modified
@@ -459,7 +462,7 @@ impl WorldState {
             println!("collision point is {:?}", collision.collision_point);
             println!("collision block is {:?}", collision.block_pos);
 
-            self.get_affected_chunks(collision)
+            self.get_affected_chunks(&collision.block_pos)
         } else {
             vec![]
         }
@@ -510,6 +513,7 @@ impl WorldState {
                     },
                 )
             }
+            println!("new block pos is {:?}", collision.block_pos);
 
             self.set_block(
                 new_block_pos.x,
@@ -518,7 +522,7 @@ impl WorldState {
                 block_type,
             );
 
-            self.get_affected_chunks(collision)
+            self.get_affected_chunks(&new_block_pos)
         } else {
             vec![]
         }
