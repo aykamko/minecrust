@@ -194,22 +194,26 @@ fn start(
                             }
                             camera_controller.process_window_event(&event);
                         }
+                        (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                            window.set_cursor_visible(true);
+                            window.set_cursor_grab(false).expect("Failed to release curosr");
+                            cursor_grabbed = false;
+                        }
                         _ => {
                             camera_controller.process_window_event(&event);
                         }
                     }
                 }
-                WindowEvent::CursorMoved { .. } => {
-                    if !cursor_grabbed {
-                        window.set_cursor_grab(true).expect("Failed to grab curosr");
-                        window.set_cursor_visible(false);
-                        cursor_grabbed = true;
-                    }
-                }
                 WindowEvent::MouseInput { state, button, .. } => match (state, button) {
                     (ElementState::Pressed, MouseButton::Left) => {
-                        println!("Left mouse clicked");
-                        mouse_clicked = true;
+                        if !cursor_grabbed {
+                            window.set_cursor_grab(true).expect("Failed to grab curosr");
+                            window.set_cursor_visible(false);
+                            cursor_grabbed = true;
+                        } else {
+                            println!("Left mouse clicked");
+                            mouse_clicked = true;
+                        }
                     }
                     _ => (),
                 },

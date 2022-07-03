@@ -444,7 +444,7 @@ impl WorldState {
             .map(|[chunk_x, chunk_z]| [chunk_x as usize, chunk_z as usize])
             .collect();
 
-        println!("Affected chunks: {:?}", affected_chunks);
+        // println!("Affected chunks: {:?}", affected_chunks);
         affected_chunks
     }
 
