@@ -127,13 +127,13 @@ fn start(
         queue,
     }: Setup,
 ) {
-    let format = *surface
-        .get_supported_formats(&adapter)
-        .first()
-        .unwrap();
+    let supported_formats = surface.get_supported_formats(&adapter);
+    println!("formats: {:?}", supported_formats);
+    assert!(supported_formats.contains(&wgpu::TextureFormat::Bgra8Unorm));
+
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: format,
+        format: wgpu::TextureFormat::Bgra8Unorm,
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
@@ -667,9 +667,9 @@ fn render_scene(
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
+                        r: 120.0 / 255.0,
+                        g: 167.0 / 255.0,
+                        b: 255.0 / 255.0,
                         a: 1.0,
                     }),
                     store: true,
