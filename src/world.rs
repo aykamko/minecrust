@@ -16,7 +16,18 @@ enum BlockType {
     Debug,
     Dirt,
     Grass,
+    Sand,
     Stone,
+}
+
+#[repr(usize)]
+enum Face {
+    Top = 0,
+    Bottom = 1,
+    Left = 2,
+    Right = 3,
+    Front = 4,
+    Back = 5,
 }
 
 impl BlockType {
@@ -26,15 +37,43 @@ impl BlockType {
             BlockType::Grass => [[1.0, 0.0], [2.0, 0.0], [0.0, 0.0]],
             BlockType::Dirt => [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]],
             BlockType::Debug => [[3.0, 0.0], [3.0, 0.0], [3.0, 0.0]],
+            BlockType::Sand => [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
             _ => [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         }
+    }
+}
+
+struct BlockCollision {
+    distance: f32,
+    cube_pos: cgmath::Point3<usize>,
+    collision_point: cgmath::Point3<f32>,
+}
+
+#[derive(Copy, Clone)]
+struct NeighborBitmap {
+    bitmap: Bitmap<8>,
+}
+
+impl NeighborBitmap {
+    fn new() -> Self {
+        Self {
+            bitmap: Bitmap::new(),
+        }
+    }
+
+    pub fn get(&self, face: Face) -> bool {
+        self.bitmap.get(face as usize)
+    }
+
+    pub fn set(&mut self, face: Face, value: bool) -> bool {
+        self.bitmap.set(face as usize, value)
     }
 }
 
 #[derive(Copy, Clone)]
 struct Block {
     block_type: BlockType,
-    neighbors: Bitmap<8>, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
+    neighbors: NeighborBitmap, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
 }
 
 const CHUNK_XZ_SIZE: usize = 16;
@@ -49,7 +88,7 @@ impl Default for Block {
     fn default() -> Block {
         Block {
             block_type: BlockType::Empty,
-            neighbors: Bitmap::new(),
+            neighbors: NeighborBitmap::new(),
         }
     }
 }
@@ -81,42 +120,37 @@ impl WorldState {
             let top_neighbor = &mut self.blocks[[x, y + 1, z]];
             top_neighbor
                 .neighbors
-                .set(1, block_type != BlockType::Empty);
+                .set(Face::Bottom, block_type != BlockType::Empty);
         }
-
         if y != 0 {
             let bottom_neighbor = &mut self.blocks[[x, y - 1, z]];
             bottom_neighbor
                 .neighbors
-                .set(0, block_type != BlockType::Empty);
+                .set(Face::Top, block_type != BlockType::Empty);
         }
-
         if x != WORLD_XZ_SIZE - 1 {
             let left_neighbor = &mut self.blocks[[x + 1, y, z]];
             left_neighbor
                 .neighbors
-                .set(3, block_type != BlockType::Empty);
+                .set(Face::Right, block_type != BlockType::Empty);
         }
-
         if x != 0 {
             let right_neighbor = &mut self.blocks[[x - 1, y, z]];
             right_neighbor
                 .neighbors
-                .set(2, block_type != BlockType::Empty);
+                .set(Face::Left, block_type != BlockType::Empty);
         }
-
         if z != WORLD_XZ_SIZE - 1 {
             let front_neighbor = &mut self.blocks[[x, y, z + 1]];
             front_neighbor
                 .neighbors
-                .set(5, block_type != BlockType::Empty);
+                .set(Face::Back, block_type != BlockType::Empty);
         }
-
         if z != 0 {
             let back_neighbor = &mut self.blocks[[x, y, z - 1]];
             back_neighbor
                 .neighbors
-                .set(4, block_type != BlockType::Empty);
+                .set(Face::Front, block_type != BlockType::Empty);
         }
     }
 
@@ -193,17 +227,7 @@ impl WorldState {
 
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
 
-            // bottom
-            if !block.neighbors.get(1) {
-                chunk_instances.push(Instance {
-                    position,
-                    rotation: no_rotation,
-                    texture_atlas_offset: bottom_offset,
-                    brightness: 1.0,
-                });
-            }
-            // top
-            if !block.neighbors.get(0) {
+            if !block.neighbors.get(Face::Top) {
                 chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_top,
@@ -211,8 +235,15 @@ impl WorldState {
                     brightness: 1.0,
                 });
             }
-            // left
-            if !block.neighbors.get(2) {
+            if !block.neighbors.get(Face::Bottom) {
+                chunk_instances.push(Instance {
+                    position,
+                    rotation: no_rotation,
+                    texture_atlas_offset: bottom_offset,
+                    brightness: 1.0,
+                });
+            }
+            if !block.neighbors.get(Face::Left) {
                 chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
                     rotation: flip_to_left,
@@ -220,8 +251,7 @@ impl WorldState {
                     brightness: 0.7,
                 });
             }
-            // right
-            if !block.neighbors.get(3) {
+            if !block.neighbors.get(Face::Right) {
                 chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_right,
@@ -229,20 +259,18 @@ impl WorldState {
                     brightness: 0.7,
                 });
             }
-            // front
-            if !block.neighbors.get(5) {
+            if !block.neighbors.get(Face::Front) {
                 chunk_instances.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                    rotation: flip_to_front,
+                    position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
+                    rotation: flip_to_back,
                     texture_atlas_offset: side_offset,
                     brightness: 0.8,
                 });
             }
-            // back
-            if !block.neighbors.get(4) {
+            if !block.neighbors.get(Face::Back) {
                 chunk_instances.push(Instance {
-                    position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
-                    rotation: flip_to_back,
+                    position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                    rotation: flip_to_front,
                     texture_atlas_offset: side_offset,
                     brightness: 0.8,
                 });
@@ -276,10 +304,9 @@ impl WorldState {
     //         add to colliding cubes
     //         only iterate 6 more times  # optimization
     //   pick closest colliding cube to camera eye
-    //   break cube
     //
-    // Returns which chunks were modified
-    pub fn break_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {
+    // Returns colliding cube and colliding point
+    fn get_colliding_block(&mut self, camera: &super::camera::Camera) -> BlockCollision {
         use cgmath_17::{InnerSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
@@ -319,8 +346,11 @@ impl WorldState {
 
         let collision_ray = collision::Ray::new(camera_eye_cgmath17, forward_unit);
 
-        let mut closest_collider: (f32 /* closest distance */, [usize; 3]) =
-            (std::f32::INFINITY, [0, 0, 0]);
+        let mut closest_collider = BlockCollision {
+            distance: std::f32::INFINITY,
+            cube_pos: cgmath::Point3::new(0, 0, 0),
+            collision_point: cgmath::Point3::new(0.0, 0.0, 0.0),
+        };
         let mut hit_first_collision = false;
         let mut additional_checks = 0;
 
@@ -340,28 +370,38 @@ impl WorldState {
                 if let Some(ref collision_point) = maybe_collision {
                     hit_first_collision = true;
                     let collision_distance = collision_point.distance(camera_eye_cgmath17);
-                    if collision_distance < closest_collider.0 {
-                        closest_collider = (
-                            collision_distance,
-                            [cube.x as usize, cube.y as usize, cube.z as usize],
-                        )
+                    if collision_distance < closest_collider.distance {
+                        closest_collider.distance = collision_distance;
+                        closest_collider.cube_pos =
+                            cgmath::Point3::new(cube.x as usize, cube.y as usize, cube.z as usize);
+                        closest_collider.collision_point = cgmath::Point3::new(
+                            collision_point.x,
+                            collision_point.y,
+                            collision_point.z,
+                        );
                     }
                 }
             }
             if hit_first_collision {
                 additional_checks += 1;
             }
-            // TODO: should this be 7???
-            if additional_checks > 6 {
+            if additional_checks >= 7 {
                 break;
             }
         }
 
+        closest_collider
+    }
+
+    // Returns which chunks were modified
+    pub fn break_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {
+        let collision = self.get_colliding_block(camera);
         let (collider_x, collider_y, collider_z) = (
-            closest_collider.1[0],
-            closest_collider.1[1],
-            closest_collider.1[2],
+            collision.cube_pos.x,
+            collision.cube_pos.y,
+            collision.cube_pos.z,
         );
+
         self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
 
         let (colliding_chunk_x, colliding_chunk_z) = (
@@ -409,4 +449,6 @@ impl WorldState {
             .map(|[chunk_x, chunk_z]| [chunk_x as usize, chunk_z as usize])
             .collect()
     }
+
+    // pub fn place_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {}
 }
