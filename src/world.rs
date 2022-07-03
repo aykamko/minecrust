@@ -18,6 +18,7 @@ pub enum BlockType {
     Grass,
     Sand,
     Stone,
+    Water,
 }
 
 #[repr(usize)]
@@ -38,6 +39,7 @@ impl BlockType {
             BlockType::Dirt => [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]],
             BlockType::Debug => [[3.0, 0.0], [3.0, 0.0], [3.0, 0.0]],
             BlockType::Sand => [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
+            BlockType::Water => [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
             _ => [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         }
     }
@@ -159,14 +161,23 @@ impl WorldState {
     }
 
     pub fn initial_setup(&mut self) {
-        let map_elevation = map_generation::generate_elevation_map(2, 80);
+        const MIN_HEIGHT: u16 = 2;
+        const MAX_HEIGHT: u16 = 80;
+        const WATER_HEIGHT: u16 = 26;
+
+        let map_elevation = map_generation::generate_elevation_map(MIN_HEIGHT, MAX_HEIGHT);
         save_elevation_to_file(map_elevation, "map.bmp");
 
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
-            let max_height = map_elevation[x][z] as usize;
-            self.set_block(x, max_height, z, BlockType::Grass);
-            for y in 0..max_height {
+            let ground_elevation = map_elevation[x][z] as usize;
+            self.set_block(x, ground_elevation, z, BlockType::Grass);
+            for y in 0..ground_elevation {
                 self.set_block(x, y, z, BlockType::Dirt);
+            }
+            for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
+                if self.block_at(x, y, z).block_type == BlockType::Empty {
+                    self.set_block(x, y, z, BlockType::Water);
+                }
             }
         }
     }
@@ -228,6 +239,11 @@ impl WorldState {
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
 
             if !block.neighbors.get(Face::Top) {
+                // let y_offset = if block.block_type == BlockType::Water {
+                //     0.8
+                // } else {
+                //     1.0
+                // };
                 chunk_instances.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_top,
