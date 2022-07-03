@@ -20,6 +20,7 @@ pub enum BlockType {
     Sand,
     Stone,
     Water,
+    Glass,
 }
 
 impl BlockType {
@@ -46,7 +47,9 @@ impl BlockType {
             BlockType::Dirt => [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]],
             BlockType::Debug => [[3.0, 0.0], [3.0, 0.0], [3.0, 0.0]],
             BlockType::Sand => [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
-            BlockType::Water => [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
+            // BlockType::Water => [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
+            BlockType::Glass => [[2.0, 1.0], [2.0, 1.0], [2.0, 1.0]],
+            BlockType::Water => [[2.0, 1.0], [2.0, 1.0], [2.0, 1.0]],
             _ => [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         }
     }
