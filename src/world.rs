@@ -47,9 +47,8 @@ impl BlockType {
             BlockType::Dirt => [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]],
             BlockType::Debug => [[3.0, 0.0], [3.0, 0.0], [3.0, 0.0]],
             BlockType::Sand => [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
-            // BlockType::Water => [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
+            BlockType::Water => [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
             BlockType::Glass => [[2.0, 1.0], [2.0, 1.0], [2.0, 1.0]],
-            BlockType::Water => [[2.0, 1.0], [2.0, 1.0], [2.0, 1.0]],
             _ => [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         }
     }
@@ -249,7 +248,7 @@ impl WorldState {
 
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
             let alpha_adjust = if block.block_type == BlockType::Water {
-                0.8
+                0.90
             } else {
                 1.0
             };

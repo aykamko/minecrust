@@ -24,6 +24,8 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
+use crate::world::WORLD_XZ_SIZE;
+
 fn main() {
     let s = block_on(setup());
     start(s);
@@ -141,10 +143,12 @@ fn start(
     surface.configure(&device, &config);
 
     let mut camera_controller = camera::CameraController::new(0.15, 0.01);
+
+    // Start in the center
     let mut camera = camera::Camera {
-        eye: (3.0, 60.0, 3.0).into(),
+        eye: ((WORLD_XZ_SIZE / 2) as f32, 60.0, (WORLD_XZ_SIZE / 2) as f32).into(),
         // have it look at the origin
-        target: (64.0, 0.0, 64.0).into(),
+        target: (0.0, 0.0, 0.0).into(),
         // which way is "up"
         up: cgmath::Vector3::unit_y(),
         aspect: config.width as f32 / config.height as f32,
@@ -152,6 +156,7 @@ fn start(
         znear: 1.0,
         zfar: 300.0,
     };
+
     let mut camera_uniform = camera::CameraUniform::new();
     camera_uniform.update_view_proj(&camera);
 
