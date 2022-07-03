@@ -14,7 +14,6 @@ mod vertex;
 mod world;
 
 use cgmath::prelude::*;
-use core::num;
 use futures::executor::block_on;
 use spawner::Spawner;
 use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
@@ -68,6 +67,10 @@ async fn setup() -> Setup {
     let event_loop = EventLoop::new();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title("Minecrust");
+    builder = builder.with_inner_size(winit::dpi::LogicalSize {
+        width: 1200,
+        height: 800,
+    });
     let window = builder.build(&event_loop).unwrap();
 
     let backend = wgpu::Backends::PRIMARY;
@@ -196,7 +199,9 @@ fn start(
                         }
                         (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
                             window.set_cursor_visible(true);
-                            window.set_cursor_grab(false).expect("Failed to release curosr");
+                            window
+                                .set_cursor_grab(false)
+                                .expect("Failed to release curosr");
                             cursor_grabbed = false;
                         }
                         _ => {
