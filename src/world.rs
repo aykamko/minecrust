@@ -247,13 +247,13 @@ impl WorldState {
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
 
             if !block.neighbors.get(Face::Top) {
-                // let y_offset = if block.block_type == BlockType::Water {
-                //     0.8
-                // } else {
-                //     1.0
-                // };
+                let y_offset = if block.block_type == BlockType::Water {
+                    0.8
+                } else {
+                    1.0
+                };
                 chunk_instances.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                    position: position + cgmath::Vector3::new(0.0, y_offset, 1.0),
                     rotation: flip_to_top,
                     texture_atlas_offset: top_offset,
                     brightness: 1.0,
