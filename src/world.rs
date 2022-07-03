@@ -306,7 +306,7 @@ impl WorldState {
     //   pick closest colliding cube to camera eye
     //
     // Returns colliding cube and colliding point
-    fn get_colliding_block(&self, camera: &super::camera::Camera) -> BlockCollision {
+    fn get_colliding_block(&self, camera: &super::camera::Camera) -> Option<BlockCollision> {
         use cgmath_17::{InnerSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
@@ -390,10 +390,14 @@ impl WorldState {
             }
         }
 
-        closest_collider
+        if hit_first_collision {
+            Some(closest_collider)
+        } else {
+            None
+        }
     }
 
-    fn get_affected_chunks(&self, collision: BlockCollision) -> Vec<[usize; 2]> {
+    fn get_affected_chunks(&self, collision: &BlockCollision) -> Vec<[usize; 2]> {
         let (collider_x, collider_z) = (collision.block_pos.x, collision.block_pos.z);
         let (colliding_chunk_x, colliding_chunk_z) = (
             (collider_x / CHUNK_XZ_SIZE) as i32,
@@ -443,18 +447,22 @@ impl WorldState {
 
     // Returns which chunks were modified
     pub fn break_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {
-        let collision = self.get_colliding_block(camera);
-        let (collider_x, collider_y, collider_z) = (
-            collision.block_pos.x,
-            collision.block_pos.y,
-            collision.block_pos.z,
-        );
+        let maybe_collision = self.get_colliding_block(camera);
+        if let Some(ref collision) = maybe_collision {
+            let (collider_x, collider_y, collider_z) = (
+                collision.block_pos.x,
+                collision.block_pos.y,
+                collision.block_pos.z,
+            );
 
-        self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
-        println!("collision point is {:?}", collision.collision_point);
-        println!("collision block is {:?}", collision.block_pos);
+            self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
+            println!("collision point is {:?}", collision.collision_point);
+            println!("collision block is {:?}", collision.block_pos);
 
-        self.get_affected_chunks(collision)
+            self.get_affected_chunks(collision)
+        } else {
+            vec![]
+        }
     }
 
     // Returns which chunks were modified
@@ -463,38 +471,56 @@ impl WorldState {
         camera: &super::camera::Camera,
         block_type: BlockType,
     ) -> Vec<[usize; 2]> {
-        let collision = self.get_colliding_block(camera);
+        let maybe_collision = self.get_colliding_block(camera);
+        if let Some(ref collision) = maybe_collision {
+            println!("collision point is {:?}", collision.collision_point);
+            println!("collision block is {:?}", collision.block_pos);
 
-        let mut new_block_pos: cgmath::Point3<usize> = cgmath::Point3::new(0, 0, 0);
-        if collision.collision_point.x - collision.collision_point.x.floor() == 0.0 {
-            new_block_pos = cgmath::Point3::new(
-                collision.collision_point.x as usize,
-                collision.block_pos.y,
-                collision.block_pos.z,
-            )
-        }
-        if collision.collision_point.y - collision.collision_point.y.floor() == 0.0 {
-            new_block_pos = cgmath::Point3::new(
-                collision.block_pos.x,
-                collision.collision_point.y as usize,
-                collision.block_pos.z,
-            )
-        }
-        if collision.collision_point.z - collision.collision_point.z.floor() == 0.0 {
-            new_block_pos = cgmath::Point3::new(
-                collision.block_pos.x,
-                collision.block_pos.y,
-                collision.collision_point.z as usize,
-            )
-        }
+            let mut new_block_pos = cgmath::Point3::<usize>::new(0, 0, 0);
+            if collision.collision_point.x - collision.collision_point.x.floor() == 0.0 {
+                new_block_pos = cgmath::Point3::new(
+                    if collision.collision_point.x as usize == collision.block_pos.x {
+                        collision.block_pos.x - 1
+                    } else {
+                        collision.block_pos.x + 1
+                    },
+                    collision.block_pos.y,
+                    collision.block_pos.z,
+                )
+            }
+            if collision.collision_point.y - collision.collision_point.y.floor() == 0.0 {
+                new_block_pos = cgmath::Point3::new(
+                    collision.block_pos.x,
+                    if collision.collision_point.y as usize == collision.block_pos.y {
+                        collision.block_pos.y - 1
+                    } else {
+                        collision.block_pos.y + 1
+                    },
+                    collision.block_pos.z,
+                )
+            }
+            if collision.collision_point.z - collision.collision_point.z.floor() == 0.0 {
+                new_block_pos = cgmath::Point3::new(
+                    collision.block_pos.x,
+                    collision.block_pos.y,
+                    if collision.collision_point.z as usize == collision.block_pos.z {
+                        collision.block_pos.z - 1
+                    } else {
+                        collision.block_pos.z + 1
+                    },
+                )
+            }
 
-        self.set_block(
-            new_block_pos.x,
-            new_block_pos.y,
-            new_block_pos.z,
-            block_type,
-        );
+            self.set_block(
+                new_block_pos.x,
+                new_block_pos.y,
+                new_block_pos.z,
+                block_type,
+            );
 
-        self.get_affected_chunks(collision)
+            self.get_affected_chunks(collision)
+        } else {
+            vec![]
+        }
     }
 }
