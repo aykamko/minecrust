@@ -1,5 +1,5 @@
+use crate::world::CHUNK_XZ_SIZE;
 #[cfg(not(target_arch = "wasm32"))]
-use std::time::Instant;
 use cgmath::Rotation;
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
@@ -73,6 +73,13 @@ pub struct CameraController {
     last_mouse_delta: (f64, f64),
 }
 
+pub struct CameraUpdateResult {
+    pub did_move_blocks: bool,
+    pub did_move_chunks: bool,
+    pub new_block_location: cgmath::Point3<usize>,
+    pub new_chunk_location: [usize; 2],
+}
+
 impl CameraController {
     pub fn new(speed: f32, mouse_sensitivity: f64) -> Self {
         Self {
@@ -136,7 +143,14 @@ impl CameraController {
         self.last_mouse_delta = (0.0, 0.0);
     }
 
-    pub fn update_camera(&self, camera: &mut Camera) {
+    pub fn update_camera(&self, camera: &mut Camera) -> CameraUpdateResult {
+        let pre_update_block_location = cgmath::Point3::<usize>::new(
+            camera.eye.x as usize,
+            camera.eye.y as usize,
+            camera.eye.z as usize,
+        );
+        let pre_update_chunk_location = pre_update_block_location / CHUNK_XZ_SIZE;
+
         use cgmath::InnerSpace;
         // Vector pointing out of the camera's eye towards the target
         let forward = camera.target - camera.eye;
@@ -186,6 +200,20 @@ impl CameraController {
             let forward_diff = new_forward - forward;
             let new_target = camera.target + forward_diff;
             camera.target = new_target;
+        }
+
+        let post_update_block_location = cgmath::Point3::new(
+            camera.eye.x as usize,
+            camera.eye.y as usize,
+            camera.eye.z as usize,
+        );
+        let post_update_chunk_location = pre_update_block_location / CHUNK_XZ_SIZE;
+
+        CameraUpdateResult {
+            did_move_blocks: pre_update_block_location != post_update_block_location,
+            did_move_chunks: pre_update_chunk_location != post_update_chunk_location,
+            new_block_location: post_update_block_location,
+            new_chunk_location: [post_update_chunk_location.x, post_update_chunk_location.z],
         }
 
         // println!(

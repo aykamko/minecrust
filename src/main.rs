@@ -15,6 +15,7 @@ mod world;
 
 use cgmath::prelude::*;
 use futures::executor::block_on;
+use itertools::Itertools;
 use spawner::Spawner;
 use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
 use vec_extra::Vec2d;
@@ -253,7 +254,7 @@ fn start(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                camera_controller.update_camera(&mut camera);
+                let update_result = camera_controller.update_camera(&mut camera);
                 camera_uniform.update_view_proj(&camera);
                 queue.write_buffer(
                     &scene.camera_staging_buf,
@@ -261,15 +262,23 @@ fn start(
                     bytemuck::cast_slice(&[camera_uniform]),
                 );
 
+                let mut chunks_modified: Vec<[usize; 2]> = vec![];
+                if update_result.did_move_blocks {
+                    chunks_modified.push(update_result.new_chunk_location);
+                    // TODO(aleks): if we moved between chunks, we need to update both of them
+                }
+
                 // Break a block with the camera!
                 if mouse_clicked {
                     mouse_clicked = false;
 
-                    let chunks_modified = if curr_modifier_state.shift() {
+                    let construction_chunks_modified = if curr_modifier_state.shift() {
                         world_state.place_block(&camera, world::BlockType::Sand)
                     } else {
                         world_state.break_block(&camera)
                     };
+                    chunks_modified.extend(construction_chunks_modified.iter());
+                    chunks_modified = chunks_modified.into_iter().unique().collect();
 
                     for chunk_idx in chunks_modified {
                         let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
@@ -710,7 +719,6 @@ fn render_scene(
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
         for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
-            // println!("Rendering {},{}", chunk_x, chunk_z);
             let instance_buffer = &scene.instance_buffers[[*chunk_x, *chunk_z]];
 
             rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));

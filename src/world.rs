@@ -87,8 +87,8 @@ struct Block {
     neighbors: NeighborBitmap, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
 }
 
-const CHUNK_XZ_SIZE: usize = 16;
-const CHUNK_Y_SIZE: usize = 256;
+pub const CHUNK_XZ_SIZE: usize = 16;
+pub const CHUNK_Y_SIZE: usize = 256;
 pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
 pub const WORLD_WIDTH_IN_CHUNKS: usize = 16;
