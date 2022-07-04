@@ -10,8 +10,7 @@ futures = "0.3"
 bytemuck = { version = "1.9.1", features = ["derive"] }
 winit = "0.26.1"
 wgpu = "0.13.1"
-cgmath = "0.18"
-cgmath-17 = { package = "cgmath", version = "0.17" }
+cgmath = "0.17"
 image = { version = "0.24", default-features = false, features = ["png"] }
 itertools = "0.5.9"
 collision = "0.20.1"

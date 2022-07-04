@@ -265,15 +265,15 @@ fn start(
                 let mut chunks_modified: Vec<[usize; 2]> = vec![];
                 if update_result.did_move_blocks {
                     let [chunk_x, chunk_z] = update_result.new_chunk_location;
-                    chunks_modified.push([chunk_x - 1, chunk_z - 1]);
-                    chunks_modified.push([chunk_x, chunk_z - 1]);
-                    chunks_modified.push([chunk_x + 1, chunk_z - 1]);
-                    chunks_modified.push([chunk_x - 1, chunk_z]);
+                    // chunks_modified.push([chunk_x - 1, chunk_z - 1]);
+                    // chunks_modified.push([chunk_x, chunk_z - 1]);
+                    // chunks_modified.push([chunk_x + 1, chunk_z - 1]);
+                    // chunks_modified.push([chunk_x - 1, chunk_z]);
                     chunks_modified.push([chunk_x, chunk_z]);
-                    chunks_modified.push([chunk_x + 1, chunk_z]);
-                    chunks_modified.push([chunk_x - 1, chunk_z + 1]);
-                    chunks_modified.push([chunk_x, chunk_z + 1]);
-                    chunks_modified.push([chunk_x + 1, chunk_z + 1]);
+                    // chunks_modified.push([chunk_x + 1, chunk_z]);
+                    // chunks_modified.push([chunk_x - 1, chunk_z + 1]);
+                    // chunks_modified.push([chunk_x, chunk_z + 1]);
+                    // chunks_modified.push([chunk_x + 1, chunk_z + 1]);
                 }
 
                 if update_result.did_move_chunks {

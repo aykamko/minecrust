@@ -1,6 +1,6 @@
 use crate::world::CHUNK_XZ_SIZE;
 #[cfg(not(target_arch = "wasm32"))]
-use cgmath::Rotation;
+use cgmath::{prelude::*, Matrix4, Point3, Vector3};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
@@ -12,6 +12,9 @@ pub struct Camera {
     pub znear: f32,
     pub zfar: f32,
 }
+// pub struct CameraFrustum {
+//     pub near_face: cgmath::Plane,
+// }
 
 #[rustfmt::skip]
 const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -21,11 +24,34 @@ const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     0.0, 0.0, 0.5, 1.0,
 );
 
+// From cgmath 18.0 source: https://docs.rs/cgmath/0.18.0/src/cgmath/matrix.rs.html#366-378
+fn look_to_rh<S: cgmath::BaseFloat>(eye: Point3<S>, dir: Vector3<S>, up: Vector3<S>) -> Matrix4<S> {
+    let f = dir.normalize();
+    let s = f.cross(up).normalize();
+    let u = s.cross(f);
+
+    #[cfg_attr(rustfmt, rustfmt_skip)]
+    cgmath::Matrix4::new(
+        s.x.clone(), u.x.clone(), -f.x.clone(), S::zero(),
+        s.y.clone(), u.y.clone(), -f.y.clone(), S::zero(),
+        s.z.clone(), u.z.clone(), -f.z.clone(), S::zero(),
+        -eye.dot(s), -eye.dot(u), eye.dot(f), S::one(),
+    )
+}
+
+pub fn look_at_rh<S: cgmath::BaseFloat>(
+    eye: Point3<S>,
+    center: Point3<S>,
+    up: Vector3<S>,
+) -> Matrix4<S> {
+    look_to_rh(eye, center - eye, up)
+}
+
 impl Camera {
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         // 1. The view matrix moves the world to be at the position and rotation of the camera. It's
         // essentially an inverse of whatever the transform matrix of the camera would be.
-        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+        let view = look_at_rh(self.eye, self.target, self.up);
         // 2. The proj matrix wraps the scene to give the effect of depth. Without this, objects up
         // close would be the same size as objects far away.
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);

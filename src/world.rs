@@ -5,7 +5,7 @@ use bitmaps::Bitmap;
 use itertools::Itertools;
 
 use super::instance::{Instance, InstanceRaw};
-use cgmath::{prelude::*, MetricSpace};
+use cgmath::{prelude::*, MetricSpace, Point3};
 use collision::Continuous;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -396,7 +396,6 @@ impl WorldState {
     //
     // Returns colliding cube and colliding point
     fn get_colliding_block(&self, camera: &Camera) -> Option<BlockCollision> {
-        use cgmath_17::{InnerSpace, MetricSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
         let camera_eye_cgmath17 = Point3::new(camera.eye.x, camera.eye.y, camera.eye.z);
@@ -446,7 +445,7 @@ impl WorldState {
         for cube in all_candidate_cubes.iter() {
             let collision_cube = collision::Aabb3::new(
                 *cube,
-                cgmath_17::Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0),
+                Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0),
             );
 
             if self
