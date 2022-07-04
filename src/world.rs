@@ -192,10 +192,7 @@ impl WorldState {
         }
     }
 
-    pub fn get_chunk_order_by_distance(
-        &self,
-        camera: &Camera,
-    ) -> Vec<[usize; 2]> {
+    pub fn get_chunk_order_by_distance(&self, camera: &Camera) -> Vec<[usize; 2]> {
         let mut chunk_index_order: Vec<[usize; 2]> = vec![];
         for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
             chunk_index_order.push([chunk_x, chunk_z]);
@@ -203,15 +200,17 @@ impl WorldState {
 
         chunk_index_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
             let chunk_a_center_pos = cgmath::Point3::new(
-              ((chunk_a_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
-              camera.eye.y,
-              ((chunk_a_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32);
+                ((chunk_a_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
+                camera.eye.y,
+                ((chunk_a_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
+            );
             let chunk_a_distance = camera.eye.distance(chunk_a_center_pos);
 
             let chunk_b_center_pos = cgmath::Point3::new(
-              ((chunk_b_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
-              camera.eye.y,
-              ((chunk_b_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32);
+                ((chunk_b_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
+                camera.eye.y,
+                ((chunk_b_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
+            );
             let chunk_b_distance = camera.eye.distance(chunk_b_center_pos);
 
             chunk_a_distance.partial_cmp(&chunk_b_distance).unwrap()
@@ -361,6 +360,14 @@ impl WorldState {
             })
             .iter()
             .rev() // reverse -- we want far blocks drawn first
+            // .map(|i| {
+            //     let mut adjusted_i = i.clone();
+            //     adjusted_i.color_adjust[0] *= 1.0 / i.distance_from_camera.log(2.0);
+            //     adjusted_i.color_adjust[1] *= 1.0 / i.distance_from_camera.log(2.0);
+            //     adjusted_i.color_adjust[2] *= 1.0 / i.distance_from_camera.log(2.0);
+            //     // adjusted_i.color_adjust[3] *= 1.0 / i.distance_from_camera;
+            //     Instance::to_raw(&adjusted_i)
+            // })
             .map(Instance::to_raw)
             .collect::<Vec<_>>();
 

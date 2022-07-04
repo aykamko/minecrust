@@ -264,12 +264,19 @@ fn start(
 
                 let mut chunks_modified: Vec<[usize; 2]> = vec![];
                 if update_result.did_move_blocks {
-                    chunks_modified.push(update_result.new_chunk_location);
-                    // TODO(aleks): if we moved between chunks, we need to update both of them
+                    let [chunk_x, chunk_z] = update_result.new_chunk_location;
+                    chunks_modified.push([chunk_x - 1, chunk_z - 1]);
+                    chunks_modified.push([chunk_x, chunk_z - 1]);
+                    chunks_modified.push([chunk_x + 1, chunk_z - 1]);
+                    chunks_modified.push([chunk_x - 1, chunk_z]);
+                    chunks_modified.push([chunk_x, chunk_z]);
+                    chunks_modified.push([chunk_x + 1, chunk_z]);
+                    chunks_modified.push([chunk_x - 1, chunk_z + 1]);
+                    chunks_modified.push([chunk_x, chunk_z + 1]);
+                    chunks_modified.push([chunk_x + 1, chunk_z + 1]);
                 }
 
                 if update_result.did_move_chunks {
-                    println!("did order chunks");
                     scene.chunk_order = world_state.get_chunk_order_by_distance(&camera);
                 }
 
@@ -285,17 +292,6 @@ fn start(
                     chunks_modified.extend(construction_chunks_modified.iter());
                     chunks_modified = chunks_modified.into_iter().unique().collect();
 
-                    for chunk_idx in chunks_modified {
-                        let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
-                        let mut target_instance_buf = &mut scene.instance_buffers[chunk_idx];
-                        queue.write_buffer(
-                            &target_instance_buf.buffer,
-                            0,
-                            bytemuck::cast_slice(&chunk_data),
-                        );
-                        target_instance_buf.len = chunk_data.len();
-                    }
-
                     let forward = (camera.target - camera.eye).normalize();
                     let horizon_target = camera.target + (forward * 100.0);
                     queue.write_buffer(
@@ -307,6 +303,19 @@ fn start(
                             vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
                         ]),
                     );
+                }
+
+                if !chunks_modified.is_empty() {
+                    for chunk_idx in chunks_modified {
+                        let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
+                        let mut target_instance_buf = &mut scene.instance_buffers[chunk_idx];
+                        queue.write_buffer(
+                            &target_instance_buf.buffer,
+                            0,
+                            bytemuck::cast_slice(&chunk_data),
+                        );
+                        target_instance_buf.len = chunk_data.len();
+                    }
                 }
 
                 render_scene(&view, &device, &queue, &scene, &spawner);
@@ -692,6 +701,13 @@ fn render_scene(
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    encoder.copy_buffer_to_buffer(
+        &scene.camera_staging_buf,
+        0,
+        &scene.camera_buf,
+        0,
+        mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
+    );
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -755,13 +771,6 @@ fn render_scene(
             }
         }
     }
-    encoder.copy_buffer_to_buffer(
-        &scene.camera_staging_buf,
-        0,
-        &scene.camera_buf,
-        0,
-        mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
-    );
 
     queue.submit(Some(encoder.finish()));
 
