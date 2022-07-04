@@ -147,17 +147,18 @@ fn start(
     let mut camera_controller = camera::CameraController::new(0.15, 0.01);
 
     // Start in the center
-    let mut camera = camera::Camera {
-        eye: ((WORLD_XZ_SIZE / 2) as f32, 60.0, (WORLD_XZ_SIZE / 2) as f32).into(),
+    let mut camera = camera::Camera::new(
+        ((WORLD_XZ_SIZE / 2) as f32, 60.0, (WORLD_XZ_SIZE / 2) as f32).into(),
         // have it look at the origin
-        target: (0.0, 0.0, 0.0).into(),
+        (0.0, 0.0, 0.0).into(),
         // which way is "up"
-        up: cgmath::Vector3::unit_y(),
-        aspect: config.width as f32 / config.height as f32,
-        fovy: 45.0,
-        znear: 1.0,
-        zfar: 300.0,
-    };
+        cgmath::Vector3::unit_y(),
+        cgmath::Vector3::unit_y(),
+        config.width as f32 / config.height as f32,
+        45.0,
+        1.0,
+        300.0,
+    );
 
     let mut camera_uniform = camera::CameraUniform::new();
     camera_uniform.update_view_proj(&camera);

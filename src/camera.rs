@@ -1,20 +1,22 @@
 use crate::world::CHUNK_XZ_SIZE;
 #[cfg(not(target_arch = "wasm32"))]
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
+use collision::{Plane, Frustum};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
     pub eye: cgmath::Point3<f32>,
     pub target: cgmath::Point3<f32>,
     pub up: cgmath::Vector3<f32>,
+    pub world_up: cgmath::Vector3<f32>,
+
     pub aspect: f32,
     pub fovy: f32,
     pub znear: f32,
     pub zfar: f32,
+
+    pub frustum: collision::Frustum<f32>,
 }
-// pub struct CameraFrustum {
-//     pub near_face: cgmath::Plane,
-// }
 
 #[rustfmt::skip]
 const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -48,6 +50,42 @@ pub fn look_at_rh<S: cgmath::BaseFloat>(
 }
 
 impl Camera {
+    pub fn new(
+        eye: cgmath::Point3<f32>,
+        target: cgmath::Point3<f32>,
+        up: cgmath::Vector3<f32>,
+        world_up: cgmath::Vector3<f32>,
+
+        aspect: f32,
+        fovy: f32,
+        znear: f32,
+        zfar: f32,
+    ) -> Self {
+        let dummy_plane = Plane::<f32>::new(cgmath::Vector3::new(0.0, 0.0, 0.0), 0.0);
+        let dummy_frustum = Frustum::new(
+            dummy_plane,
+            dummy_plane,
+            dummy_plane,
+            dummy_plane,
+            dummy_plane,
+            dummy_plane,
+        );
+        let mut partial_self = Self {
+            eye,
+            target,
+            up,
+            world_up,
+            aspect,
+            fovy,
+            znear,
+            zfar,
+            frustum: dummy_frustum,
+        };
+        partial_self.update_frustum();
+
+        partial_self
+    }
+
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         // 1. The view matrix moves the world to be at the position and rotation of the camera. It's
         // essentially an inverse of whatever the transform matrix of the camera would be.
@@ -64,6 +102,45 @@ impl Camera {
         // follows.
         return OPENGL_TO_WGPU_MATRIX * proj * view;
     }
+
+    pub fn update_frustum(&mut self) {
+        let half_v_side = self.zfar * (self.fovy * 0.5).tan();
+        let half_h_side = half_v_side * self.aspect;
+
+        let forward_norm = (self.target - self.eye).normalize();
+        let forward_zfar = forward_norm * self.zfar;
+
+        let right_norm = forward_norm.cross(self.world_up).normalize();
+        let up_norm = right_norm.cross(forward_norm).normalize();
+
+        self.frustum.left = Plane::from_point_normal(
+            self.eye,
+            (forward_zfar - right_norm * half_h_side)
+                .cross(up_norm)
+                .normalize(),
+        );
+        self.frustum.right = Plane::from_point_normal(
+            self.eye,
+            up_norm
+                .cross(forward_zfar + right_norm * half_h_side)
+                .normalize(),
+        );
+        self.frustum.bottom = Plane::from_point_normal(
+            self.eye,
+            (forward_zfar + up_norm * half_v_side)
+                .cross(right_norm)
+                .normalize(),
+        );
+        self.frustum.top = Plane::from_point_normal(
+            self.eye,
+            right_norm
+                .cross(forward_zfar - up_norm * half_v_side)
+                .normalize(),
+        );
+        self.frustum.near =
+            Plane::from_point_normal(self.eye + self.znear * forward_norm, forward_norm);
+        self.frustum.far = Plane::from_point_normal(self.eye + forward_zfar, -forward_norm);
+    }
 }
 
 // We need this for Rust to store our data correctly for the shaders
@@ -78,7 +155,6 @@ pub struct CameraUniform {
 
 impl CameraUniform {
     pub fn new() -> Self {
-        use cgmath::SquareMatrix;
         Self {
             view_proj: cgmath::Matrix4::identity().into(),
         }
@@ -180,7 +256,6 @@ impl CameraController {
             pre_update_block_location.z / CHUNK_XZ_SIZE,
         ];
 
-        use cgmath::InnerSpace;
         // Vector pointing out of the camera's eye towards the target
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
@@ -230,6 +305,9 @@ impl CameraController {
             let new_target = camera.target + forward_diff;
             camera.target = new_target;
         }
+
+        // Update view frustum
+        camera.update_frustum();
 
         let post_update_block_location = cgmath::Point3::new(
             camera.eye.x as usize,
