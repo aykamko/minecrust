@@ -159,7 +159,7 @@ fn start(
         cgmath::Vector3::unit_y(),
         cgmath::Vector3::unit_y(),
         config.width as f32 / config.height as f32,
-        45.0,
+        70.0,
         1.0,
         300.0,
     );
