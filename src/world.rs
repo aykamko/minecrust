@@ -1,11 +1,11 @@
+use crate::camera::Camera;
 use crate::map_generation::{self, save_elevation_to_file};
 use crate::vec_extra::{Vec2d, Vec3d};
 use bitmaps::Bitmap;
-use bmp::consts::THISTLE;
+use itertools::Itertools;
 
 use super::instance::{Instance, InstanceRaw};
-use cgmath::prelude::*;
-use cgmath_17::MetricSpace;
+use cgmath::{prelude::*, MetricSpace};
 use collision::Continuous;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -192,16 +192,22 @@ impl WorldState {
         }
     }
 
-    pub fn generate_world_data(&self) -> Vec2d<Vec<InstanceRaw>> {
+    pub fn generate_world_data(
+        &self,
+        camera: &Camera,
+    ) -> (Vec2d<Vec<InstanceRaw>>, Vec<[usize; 2]>) {
         let func_start = Instant::now();
 
         let mut all_raw_instances: Vec2d<Vec<InstanceRaw>> = Vec2d::new(
             vec![vec![]; WORLD_WIDTH_IN_CHUNKS * WORLD_WIDTH_IN_CHUNKS],
             [WORLD_WIDTH_IN_CHUNKS, WORLD_WIDTH_IN_CHUNKS],
         );
+        let mut chunk_index_order: Vec<[usize; 2]> = vec![];
 
         for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
-            all_raw_instances[[chunk_x, chunk_z]] = self.generate_chunk_data([chunk_x, chunk_z]);
+            all_raw_instances[[chunk_x, chunk_z]] =
+                self.generate_chunk_data([chunk_x, chunk_z], camera);
+            chunk_index_order.push([chunk_x, chunk_z]);
         }
 
         let elapsed_time = func_start.elapsed().as_millis();
@@ -210,13 +216,29 @@ impl WorldState {
             elapsed_time
         );
 
-        all_raw_instances
+        chunk_index_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
+            let chunk_a_center_pos = cgmath::Point3::new(
+              ((chunk_a_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
+              camera.eye.y,
+              ((chunk_a_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32);
+            let chunk_a_distance = camera.eye.distance(chunk_a_center_pos);
+
+            let chunk_b_center_pos = cgmath::Point3::new(
+              ((chunk_b_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
+              camera.eye.y,
+              ((chunk_b_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32);
+            let chunk_b_distance = camera.eye.distance(chunk_b_center_pos);
+
+            chunk_a_distance.partial_cmp(&chunk_b_distance).unwrap()
+        });
+        println!("Chunk order is {:?}", chunk_index_order);
+
+        (all_raw_instances, chunk_index_order)
     }
 
-    pub fn generate_chunk_data(&self, chunk_idx: [usize; 2]) -> Vec<InstanceRaw> {
+    pub fn generate_chunk_data(&self, chunk_idx: [usize; 2], camera: &Camera) -> Vec<InstanceRaw> {
         let func_start = Instant::now();
 
-        let mut chunk_instances: Vec<Instance> = vec![];
         use cgmath::{Deg, Quaternion, Vector3};
 
         let no_rotation: Quaternion<f32> = Quaternion::from_axis_angle(Vector3::unit_y(), Deg(0.0));
@@ -234,17 +256,23 @@ impl WorldState {
             Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
                 * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
 
+        let mut chunk_instances: Vec<Instance> = vec![];
+        let [chunk_x, chunk_z] = chunk_idx;
+
         for (chunk_rel_x, y, chunk_rel_z) in
             iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
         {
-            let x = (chunk_idx[0] * CHUNK_XZ_SIZE) + chunk_rel_x;
-            let z = (chunk_idx[1] * CHUNK_XZ_SIZE) + chunk_rel_z;
+            let x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
+            let z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
 
             let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
             let block = self.block_at(x, y, z);
             if block.block_type == BlockType::Empty {
                 continue;
             }
+
+            let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
+                .distance((x as f32, y as f32, z as f32).into());
 
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
             let alpha_adjust = if block.block_type == BlockType::Water {
@@ -264,6 +292,7 @@ impl WorldState {
                     rotation: flip_to_top,
                     texture_atlas_offset: top_offset,
                     color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
+                    distance_from_camera,
                 });
             }
             if !block.neighbors.get(Face::Bottom) {
@@ -272,6 +301,7 @@ impl WorldState {
                     rotation: no_rotation,
                     texture_atlas_offset: bottom_offset,
                     color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
+                    distance_from_camera,
                 });
             }
             if !block.neighbors.get(Face::Left) {
@@ -280,6 +310,7 @@ impl WorldState {
                     rotation: flip_to_left,
                     texture_atlas_offset: side_offset,
                     color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
+                    distance_from_camera,
                 });
             }
             if !block.neighbors.get(Face::Right) {
@@ -288,6 +319,7 @@ impl WorldState {
                     rotation: flip_to_right,
                     texture_atlas_offset: side_offset,
                     color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
+                    distance_from_camera,
                 });
             }
             if !block.neighbors.get(Face::Front) {
@@ -296,6 +328,7 @@ impl WorldState {
                     rotation: flip_to_back,
                     texture_atlas_offset: side_offset,
                     color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
+                    distance_from_camera,
                 });
             }
             if !block.neighbors.get(Face::Back) {
@@ -304,12 +337,20 @@ impl WorldState {
                     rotation: flip_to_front,
                     texture_atlas_offset: side_offset,
                     color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
+                    distance_from_camera,
                 });
             }
         }
 
         let raw_chunk_instances = chunk_instances
+            .into_iter()
+            .sorted_by(|a, b| {
+                a.distance_from_camera
+                    .partial_cmp(&b.distance_from_camera)
+                    .unwrap()
+            })
             .iter()
+            .rev() // reverse -- we want far blocks drawn first
             .map(Instance::to_raw)
             .collect::<Vec<_>>();
 
@@ -337,8 +378,8 @@ impl WorldState {
     //   pick closest colliding cube to camera eye
     //
     // Returns colliding cube and colliding point
-    fn get_colliding_block(&self, camera: &super::camera::Camera) -> Option<BlockCollision> {
-        use cgmath_17::{InnerSpace, Point3};
+    fn get_colliding_block(&self, camera: &Camera) -> Option<BlockCollision> {
+        use cgmath_17::{InnerSpace, MetricSpace, Point3};
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
         let camera_eye_cgmath17 = Point3::new(camera.eye.x, camera.eye.y, camera.eye.z);
@@ -480,7 +521,7 @@ impl WorldState {
     }
 
     // Returns which chunks were modified
-    pub fn break_block(&mut self, camera: &super::camera::Camera) -> Vec<[usize; 2]> {
+    pub fn break_block(&mut self, camera: &Camera) -> Vec<[usize; 2]> {
         let maybe_collision = self.get_colliding_block(camera);
         if let Some(ref collision) = maybe_collision {
             let (collider_x, collider_y, collider_z) = (
@@ -500,11 +541,7 @@ impl WorldState {
     }
 
     // Returns which chunks were modified
-    pub fn place_block(
-        &mut self,
-        camera: &super::camera::Camera,
-        block_type: BlockType,
-    ) -> Vec<[usize; 2]> {
+    pub fn place_block(&mut self, camera: &Camera, block_type: BlockType) -> Vec<[usize; 2]> {
         let maybe_collision = self.get_colliding_block(camera);
         if let Some(ref collision) = maybe_collision {
             println!("collision point is {:?}", collision.collision_point);

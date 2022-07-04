@@ -60,6 +60,7 @@ struct Scene {
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
     instance_buffers: Vec2d<InstanceBufferWithLen>,
+    chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
@@ -170,6 +171,7 @@ fn start(
         &queue,
         camera_uniform,
         &world_state,
+        &camera,
     );
 
     let mut curr_modifier_state: winit::event::ModifiersState =
@@ -220,7 +222,6 @@ fn start(
                             window.set_cursor_visible(false);
                             cursor_grabbed = true;
                         } else {
-                            println!("Left mouse clicked");
                             mouse_clicked = true;
                         }
                     }
@@ -271,7 +272,7 @@ fn start(
                     };
 
                     for chunk_idx in chunks_modified {
-                        let chunk_data = world_state.generate_chunk_data(chunk_idx);
+                        let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
                         let mut target_instance_buf = &mut scene.instance_buffers[chunk_idx];
                         queue.write_buffer(
                             &target_instance_buf.buffer,
@@ -321,6 +322,7 @@ fn setup_scene(
     queue: &wgpu::Queue,
     camera_uniform: camera::CameraUniform,
     world_state: &world::WorldState,
+    camera: &camera::Camera,
 ) -> Scene {
     let vertex_size = mem::size_of::<vertex::Vertex>();
 
@@ -510,7 +512,7 @@ fn setup_scene(
         ],
     };
 
-    let all_raw_instances = world_state.generate_world_data();
+    let (all_raw_instances, chunk_order) = world_state.generate_world_data(&camera);
     let chunk_dims = all_raw_instances.dims();
 
     let mut instance_buffers_flat: Vec<InstanceBufferWithLen> = vec![];
@@ -656,6 +658,7 @@ fn setup_scene(
         camera_buf,
         camera_staging_buf,
         instance_buffers,
+        chunk_order,
         depth_texture,
         pipeline,
         pipeline_wire,
@@ -706,11 +709,9 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-        for (chunk_x, chunk_y) in iproduct!(
-            0..scene.instance_buffers.dims()[0],
-            0..scene.instance_buffers.dims()[1]
-        ) {
-            let instance_buffer = &scene.instance_buffers[[chunk_x, chunk_y]];
+        for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
+            // println!("Rendering {},{}", chunk_x, chunk_z);
+            let instance_buffer = &scene.instance_buffers[[*chunk_x, *chunk_z]];
 
             rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
             rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);

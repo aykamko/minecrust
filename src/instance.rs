@@ -3,6 +3,7 @@ pub struct Instance {
     pub rotation: cgmath::Quaternion<f32>,
     pub texture_atlas_offset: [f32; 2],
     pub color_adjust: [f32; 4],
+    pub distance_from_camera: f32,
 }
 
 // WARNING this might be inefficient. A note from the guide: Using these values directly in the
