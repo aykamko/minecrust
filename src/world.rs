@@ -5,7 +5,7 @@ use bitmaps::Bitmap;
 use itertools::Itertools;
 
 use super::instance::{Instance, InstanceRaw};
-use cgmath::{prelude::*, MetricSpace, Point3};
+use cgmath::{prelude::*, MetricSpace, Point3, Vector2};
 use collision::Continuous;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -104,6 +104,24 @@ impl Default for Block {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum ChunkDataType {
+    Opaque,
+    Transluscent,
+}
+
+#[derive(Clone)]
+pub struct TypedInstances {
+    pub data_type: ChunkDataType,
+    pub instance_data: Vec<InstanceRaw>,
+}
+
+#[derive(Clone)]
+pub struct ChunkData {
+    pub position: [usize; 2],
+    pub typed_instances_vec: Vec<TypedInstances>,
+}
+
 pub struct WorldState {
     blocks: Vec3d<Block>,
 }
@@ -193,12 +211,12 @@ impl WorldState {
     }
 
     pub fn get_chunk_order_by_distance(&self, camera: &Camera) -> Vec<[usize; 2]> {
-        let mut chunk_index_order: Vec<[usize; 2]> = vec![];
+        let mut chunk_order: Vec<[usize; 2]> = vec![];
         for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
-            chunk_index_order.push([chunk_x, chunk_z]);
+            chunk_order.push([chunk_x, chunk_z]);
         }
 
-        chunk_index_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
+        chunk_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
             let chunk_a_center_pos = cgmath::Point3::new(
                 ((chunk_a_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
                 camera.eye.y,
@@ -217,22 +235,25 @@ impl WorldState {
         });
         // println!("Chunk order is {:?}", chunk_index_order);
 
-        chunk_index_order
+        chunk_order
     }
 
-    pub fn generate_world_data(
-        &self,
-        camera: &Camera,
-    ) -> (Vec2d<Vec<InstanceRaw>>, Vec<[usize; 2]>) {
+    pub fn generate_world_data(&self, camera: &Camera) -> (Vec2d<ChunkData>, Vec<[usize; 2]>) {
         let func_start = Instant::now();
 
-        let mut all_raw_instances: Vec2d<Vec<InstanceRaw>> = Vec2d::new(
-            vec![vec![]; WORLD_WIDTH_IN_CHUNKS * WORLD_WIDTH_IN_CHUNKS],
+        let mut all_chunk_data: Vec2d<ChunkData> = Vec2d::new(
+            vec![
+                ChunkData {
+                    position: [0, 0],
+                    typed_instances_vec: vec![],
+                };
+                WORLD_WIDTH_IN_CHUNKS * WORLD_WIDTH_IN_CHUNKS
+            ],
             [WORLD_WIDTH_IN_CHUNKS, WORLD_WIDTH_IN_CHUNKS],
         );
 
         for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
-            all_raw_instances[[chunk_x, chunk_z]] =
+            all_chunk_data[[chunk_x, chunk_z]] =
                 self.generate_chunk_data([chunk_x, chunk_z], camera);
         }
 
@@ -242,10 +263,10 @@ impl WorldState {
             elapsed_time
         );
 
-        (all_raw_instances, self.get_chunk_order_by_distance(&camera))
+        (all_chunk_data, self.get_chunk_order_by_distance(&camera))
     }
 
-    pub fn generate_chunk_data(&self, chunk_idx: [usize; 2], camera: &Camera) -> Vec<InstanceRaw> {
+    pub fn generate_chunk_data(&self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
         let func_start = Instant::now();
 
         use cgmath::{Deg, Quaternion, Vector3};
@@ -265,7 +286,8 @@ impl WorldState {
             Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
                 * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
 
-        let mut chunk_instances: Vec<Instance> = vec![];
+        let mut opaque_instances: Vec<Instance> = vec![];
+        let mut transluscent_instances: Vec<Instance> = vec![];
         let [chunk_x, chunk_z] = chunk_idx;
 
         for (chunk_rel_x, y, chunk_rel_z) in
@@ -290,13 +312,19 @@ impl WorldState {
                 1.0
             };
 
+            let instance_vec = if block.block_type.is_transluscent() {
+                &mut transluscent_instances
+            } else {
+                &mut opaque_instances
+            };
+
             if !block.neighbors.get(Face::Top) {
                 let y_offset = if block.block_type == BlockType::Water {
                     0.8
                 } else {
                     1.0
                 };
-                chunk_instances.push(Instance {
+                instance_vec.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, y_offset, 1.0),
                     rotation: flip_to_top,
                     texture_atlas_offset: top_offset,
@@ -305,7 +333,7 @@ impl WorldState {
                 });
             }
             if !block.neighbors.get(Face::Bottom) {
-                chunk_instances.push(Instance {
+                instance_vec.push(Instance {
                     position,
                     rotation: no_rotation,
                     texture_atlas_offset: bottom_offset,
@@ -314,7 +342,7 @@ impl WorldState {
                 });
             }
             if !block.neighbors.get(Face::Left) {
-                chunk_instances.push(Instance {
+                instance_vec.push(Instance {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
                     rotation: flip_to_left,
                     texture_atlas_offset: side_offset,
@@ -323,7 +351,7 @@ impl WorldState {
                 });
             }
             if !block.neighbors.get(Face::Right) {
-                chunk_instances.push(Instance {
+                instance_vec.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                     rotation: flip_to_right,
                     texture_atlas_offset: side_offset,
@@ -332,7 +360,7 @@ impl WorldState {
                 });
             }
             if !block.neighbors.get(Face::Front) {
-                chunk_instances.push(Instance {
+                instance_vec.push(Instance {
                     position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
                     rotation: flip_to_back,
                     texture_atlas_offset: side_offset,
@@ -341,7 +369,7 @@ impl WorldState {
                 });
             }
             if !block.neighbors.get(Face::Back) {
-                chunk_instances.push(Instance {
+                instance_vec.push(Instance {
                     position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
                     rotation: flip_to_front,
                     texture_atlas_offset: side_offset,
@@ -351,7 +379,12 @@ impl WorldState {
             }
         }
 
-        let raw_chunk_instances = chunk_instances
+        let raw_opaque_instances = opaque_instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+
+        let raw_transluscent_instances = transluscent_instances
             .into_iter()
             .sorted_by(|a, b| {
                 a.distance_from_camera
@@ -374,7 +407,19 @@ impl WorldState {
         let elapsed_time = func_start.elapsed().as_millis();
         println!("Took {}ms to generate chunk vertex data", elapsed_time);
 
-        raw_chunk_instances
+        ChunkData {
+            position: chunk_idx,
+            typed_instances_vec: vec![
+                TypedInstances {
+                    data_type: ChunkDataType::Opaque,
+                    instance_data: raw_opaque_instances,
+                },
+                TypedInstances {
+                    data_type: ChunkDataType::Transluscent,
+                    instance_data: raw_transluscent_instances,
+                },
+            ],
+        }
     }
 
     // Ray intersection algo pseudocode:
@@ -443,10 +488,8 @@ impl WorldState {
         let mut additional_checks = 0;
 
         for cube in all_candidate_cubes.iter() {
-            let collision_cube = collision::Aabb3::new(
-                *cube,
-                Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0),
-            );
+            let collision_cube =
+                collision::Aabb3::new(*cube, Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0));
 
             if self
                 .block_at(cube.x as usize, cube.y as usize, cube.z as usize)

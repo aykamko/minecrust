@@ -1,7 +1,7 @@
 use crate::world::CHUNK_XZ_SIZE;
 #[cfg(not(target_arch = "wasm32"))]
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
-use collision::{Plane, Frustum};
+use collision::{Plane, Frustum, Aabb3};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
@@ -140,6 +140,9 @@ impl Camera {
         self.frustum.near =
             Plane::from_point_normal(self.eye + self.znear * forward_norm, forward_norm);
         self.frustum.far = Plane::from_point_normal(self.eye + forward_zfar, -forward_norm);
+    }
+
+    pub fn filter_visible_chunks(&self, mut chunk_geoms: &Vec<Aabb3<f32>>) {
     }
 }
 

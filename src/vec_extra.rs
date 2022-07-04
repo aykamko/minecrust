@@ -35,8 +35,8 @@ impl<T> IndexMut<[usize; 3]> for Vec3d<T> {
 
 #[derive(Debug)]
 pub struct Vec2d<T> {
-    vec: Vec<T>,
-    dims: [usize; 2],
+    pub vec: Vec<T>,
+    pub dims: [usize; 2],
 }
 
 impl<T> Vec2d<T> {

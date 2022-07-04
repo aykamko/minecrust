@@ -25,7 +25,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-use crate::world::WORLD_XZ_SIZE;
+use crate::world::{ChunkDataType, WORLD_XZ_SIZE};
 
 fn main() {
     let s = block_on(setup());
@@ -46,9 +46,14 @@ struct Setup {
     // offscreen_canvas_setup: Option<OffscreenCanvasSetup>,
 }
 
-struct InstanceBufferWithLen {
+struct AnnotatedInstanceBuffer {
     buffer: wgpu::Buffer,
     len: usize,
+    data_type: world::ChunkDataType,
+}
+struct ChunkRenderDescriptor {
+    position: [usize; 2],
+    annotated_instance_buffers: Vec<AnnotatedInstanceBuffer>,
 }
 
 struct Scene {
@@ -60,7 +65,7 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    instance_buffers: Vec2d<InstanceBufferWithLen>,
+    chunk_render_data: Vec2d<ChunkRenderDescriptor>,
     chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
@@ -132,7 +137,6 @@ fn start(
     }: Setup,
 ) {
     let supported_formats = surface.get_supported_formats(&adapter);
-    println!("formats: {:?}", supported_formats);
     assert!(supported_formats.contains(&wgpu::TextureFormat::Bgra8Unorm));
 
     let config = wgpu::SurfaceConfiguration {
@@ -306,18 +310,18 @@ fn start(
                     );
                 }
 
-                if !chunks_modified.is_empty() {
-                    for chunk_idx in chunks_modified {
-                        let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
-                        let mut target_instance_buf = &mut scene.instance_buffers[chunk_idx];
-                        queue.write_buffer(
-                            &target_instance_buf.buffer,
-                            0,
-                            bytemuck::cast_slice(&chunk_data),
-                        );
-                        target_instance_buf.len = chunk_data.len();
-                    }
-                }
+                // if !chunks_modified.is_empty() {
+                //     for chunk_idx in chunks_modified {
+                //         let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
+                //         let mut target_render_data = &mut scene.chunk_render_data[chunk_idx];
+                //         queue.write_buffer(
+                //             &target_instance_buf.buffer,
+                //             0,
+                //             bytemuck::cast_slice(&chunk_data),
+                //         );
+                //         target_instance_buf.len = chunk_data.len();
+                //     }
+                // }
 
                 render_scene(&view, &device, &queue, &scene, &spawner);
 
@@ -536,49 +540,67 @@ fn setup_scene(
         ],
     };
 
-    let (all_raw_instances, chunk_order) = world_state.generate_world_data(&camera);
-    let chunk_dims = all_raw_instances.dims();
+    let (all_chunk_data, chunk_order) = world_state.generate_world_data(&camera);
+    let chunk_dims = all_chunk_data.dims();
 
-    let mut instance_buffers_flat: Vec<InstanceBufferWithLen> = vec![];
+    let mut chunk_render_data_flat: Vec<ChunkRenderDescriptor> = vec![];
 
     // HACK(aleks): the order needs to be reversed here for collisions to work later -- that's confusing
     for (chunk_z, chunk_x) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
-        let chunk_raw_instances = &all_raw_instances[[chunk_x, chunk_z]];
-        let instance_byte_contents: &[u8] = bytemuck::cast_slice(&chunk_raw_instances);
+        let chunk_data = &all_chunk_data[[chunk_x, chunk_z]];
 
-        const NUM_FACES: usize = 6;
+        let mut annotated_instance_buffers: Vec<AnnotatedInstanceBuffer> = vec![];
+        for typed_instances in &chunk_data.typed_instances_vec {
+            let instance_byte_contents: &[u8] =
+                bytemuck::cast_slice(&typed_instances.instance_data);
 
-        // Divide by 2 since worst case is a "3D checkerboard" where every other space is filled
-        let max_number_faces_possible =
-            world::NUM_BLOCKS_IN_CHUNK * instance::InstanceRaw::size() * NUM_FACES / 2;
-        let unpadded_size: u64 = max_number_faces_possible.try_into().unwrap();
+            const NUM_FACES: usize = 6;
 
-        // Valid vulkan usage is
-        // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
-        // 2. buffer size must be greater than 0.
-        // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
-        let align_mask = wgpu::COPY_BUFFER_ALIGNMENT - 1;
-        let padded_size =
-            ((unpadded_size + align_mask) & !align_mask).max(wgpu::COPY_BUFFER_ALIGNMENT);
+            // Divide by 2 since worst case is a "3D checkerboard" where every other space is filled
+            let mut max_number_faces_possible =
+                world::NUM_BLOCKS_IN_CHUNK * instance::InstanceRaw::size() * NUM_FACES / 2;
+                
+            // HACK(aleks) divide by 2 again because too much memory
+            max_number_faces_possible /= 2;
 
-        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(&*format!("Instance Buffer {},{}", chunk_x, chunk_z)),
-            size: padded_size,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: true,
-        });
+            let unpadded_size: u64 = max_number_faces_possible.try_into().unwrap();
 
-        instance_buffer.slice(..).get_mapped_range_mut()[..instance_byte_contents.len() as usize]
-            .copy_from_slice(instance_byte_contents);
-        instance_buffer.unmap();
+            // Valid vulkan usage is
+            // 1. buffer size must be a multiple of COPY_BUFFER_ALIGNMENT.
+            // 2. buffer size must be greater than 0.
+            // Therefore we round the value up to the nearest multiple, and ensure it's at least COPY_BUFFER_ALIGNMENT.
+            let align_mask = wgpu::COPY_BUFFER_ALIGNMENT - 1;
+            let padded_size =
+                ((unpadded_size + align_mask) & !align_mask).max(wgpu::COPY_BUFFER_ALIGNMENT);
 
-        instance_buffers_flat.push(InstanceBufferWithLen {
-            buffer: instance_buffer,
-            len: chunk_raw_instances.len(),
-        });
+            let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&*format!(
+                    "Instance Buffer {:?} {},{}",
+                    typed_instances.data_type, chunk_x, chunk_z
+                )),
+                size: padded_size,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: true,
+            });
+
+            instance_buffer.slice(..).get_mapped_range_mut()
+                [..instance_byte_contents.len() as usize]
+                .copy_from_slice(instance_byte_contents);
+            instance_buffer.unmap();
+
+            annotated_instance_buffers.push(AnnotatedInstanceBuffer {
+                buffer: instance_buffer,
+                len: typed_instances.instance_data.len(),
+                data_type: typed_instances.data_type.clone(),
+            });
+        }
+        chunk_render_data_flat.push(ChunkRenderDescriptor {
+            position: [chunk_x, chunk_z],
+            annotated_instance_buffers,
+        })
     }
-    let instance_buffers: Vec2d<InstanceBufferWithLen> =
-        Vec2d::new(instance_buffers_flat, [chunk_dims[0], chunk_dims[1]]);
+    let chunk_render_data: Vec2d<ChunkRenderDescriptor> =
+        Vec2d::new(chunk_render_data_flat, [chunk_dims[0], chunk_dims[1]]);
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
@@ -681,7 +703,7 @@ fn setup_scene(
         camera_bind_group,
         camera_buf,
         camera_staging_buf,
-        instance_buffers,
+        chunk_render_data,
         chunk_order,
         depth_texture,
         pipeline,
@@ -740,34 +762,42 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-        for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
-            let instance_buffer = &scene.instance_buffers[[*chunk_x, *chunk_z]];
+        for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
+            for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
+                let chunk_render_datum = &scene.chunk_render_data[[*chunk_x, *chunk_z]];
+                let maybe_instance_buffer = chunk_render_datum
+                    .annotated_instance_buffers
+                    .iter()
+                    .find(|&ib| ib.data_type == data_type);
 
-            rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-            rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+                if let Some(ref instance_buffer) = maybe_instance_buffer {
+                    rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+                    rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
 
-            if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
-                if let Some(ref pipe) = &scene.pipeline_wire {
-                    rpass.set_pipeline(pipe);
-                    if RENDER_WIREFRAME {
-                        rpass.draw_indexed(
-                            0..scene.index_count as u32,
-                            0,
-                            0..instance_buffer.len as _,
-                        );
+                    if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
+                        if let Some(ref pipe) = &scene.pipeline_wire {
+                            rpass.set_pipeline(pipe);
+                            if RENDER_WIREFRAME {
+                                rpass.draw_indexed(
+                                    0..scene.index_count as u32,
+                                    0,
+                                    0..instance_buffer.len as _,
+                                );
+                            }
+
+                            // Draw camera line
+                            if RENDER_CAMERA_RAY {
+                                rpass.set_index_buffer(
+                                    scene.line_index_buf.slice(..),
+                                    wgpu::IndexFormat::Uint16,
+                                );
+                                rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+                                rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
+                            }
+
+                            rpass.set_pipeline(&scene.pipeline);
+                        }
                     }
-
-                    // Draw camera line
-                    if RENDER_CAMERA_RAY {
-                        rpass.set_index_buffer(
-                            scene.line_index_buf.slice(..),
-                            wgpu::IndexFormat::Uint16,
-                        );
-                        rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
-                        rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
-                    }
-
-                    rpass.set_pipeline(&scene.pipeline);
                 }
             }
         }
