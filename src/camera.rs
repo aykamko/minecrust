@@ -149,7 +149,10 @@ impl CameraController {
             camera.eye.y as usize,
             camera.eye.z as usize,
         );
-        let pre_update_chunk_location = pre_update_block_location / CHUNK_XZ_SIZE;
+        let pre_update_chunk_location = [
+            pre_update_block_location.x / CHUNK_XZ_SIZE,
+            pre_update_block_location.z / CHUNK_XZ_SIZE,
+        ];
 
         use cgmath::InnerSpace;
         // Vector pointing out of the camera's eye towards the target
@@ -207,13 +210,16 @@ impl CameraController {
             camera.eye.y as usize,
             camera.eye.z as usize,
         );
-        let post_update_chunk_location = pre_update_block_location / CHUNK_XZ_SIZE;
+        let post_update_chunk_location = [
+            post_update_block_location.x / CHUNK_XZ_SIZE,
+            post_update_block_location.z / CHUNK_XZ_SIZE,
+        ];
 
         CameraUpdateResult {
             did_move_blocks: pre_update_block_location != post_update_block_location,
             did_move_chunks: pre_update_chunk_location != post_update_chunk_location,
             new_block_location: post_update_block_location,
-            new_chunk_location: [post_update_chunk_location.x, post_update_chunk_location.z],
+            new_chunk_location: post_update_chunk_location,
         }
 
         // println!(

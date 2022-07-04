@@ -192,29 +192,14 @@ impl WorldState {
         }
     }
 
-    pub fn generate_world_data(
+    pub fn get_chunk_order_by_distance(
         &self,
         camera: &Camera,
-    ) -> (Vec2d<Vec<InstanceRaw>>, Vec<[usize; 2]>) {
-        let func_start = Instant::now();
-
-        let mut all_raw_instances: Vec2d<Vec<InstanceRaw>> = Vec2d::new(
-            vec![vec![]; WORLD_WIDTH_IN_CHUNKS * WORLD_WIDTH_IN_CHUNKS],
-            [WORLD_WIDTH_IN_CHUNKS, WORLD_WIDTH_IN_CHUNKS],
-        );
+    ) -> Vec<[usize; 2]> {
         let mut chunk_index_order: Vec<[usize; 2]> = vec![];
-
         for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
-            all_raw_instances[[chunk_x, chunk_z]] =
-                self.generate_chunk_data([chunk_x, chunk_z], camera);
             chunk_index_order.push([chunk_x, chunk_z]);
         }
-
-        let elapsed_time = func_start.elapsed().as_millis();
-        println!(
-            "Took {}ms to generate whole world vertex data",
-            elapsed_time
-        );
 
         chunk_index_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
             let chunk_a_center_pos = cgmath::Point3::new(
@@ -231,9 +216,34 @@ impl WorldState {
 
             chunk_a_distance.partial_cmp(&chunk_b_distance).unwrap()
         });
-        println!("Chunk order is {:?}", chunk_index_order);
+        // println!("Chunk order is {:?}", chunk_index_order);
 
-        (all_raw_instances, chunk_index_order)
+        chunk_index_order
+    }
+
+    pub fn generate_world_data(
+        &self,
+        camera: &Camera,
+    ) -> (Vec2d<Vec<InstanceRaw>>, Vec<[usize; 2]>) {
+        let func_start = Instant::now();
+
+        let mut all_raw_instances: Vec2d<Vec<InstanceRaw>> = Vec2d::new(
+            vec![vec![]; WORLD_WIDTH_IN_CHUNKS * WORLD_WIDTH_IN_CHUNKS],
+            [WORLD_WIDTH_IN_CHUNKS, WORLD_WIDTH_IN_CHUNKS],
+        );
+
+        for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
+            all_raw_instances[[chunk_x, chunk_z]] =
+                self.generate_chunk_data([chunk_x, chunk_z], camera);
+        }
+
+        let elapsed_time = func_start.elapsed().as_millis();
+        println!(
+            "Took {}ms to generate whole world vertex data",
+            elapsed_time
+        );
+
+        (all_raw_instances, self.get_chunk_order_by_distance(&camera))
     }
 
     pub fn generate_chunk_data(&self, chunk_idx: [usize; 2], camera: &Camera) -> Vec<InstanceRaw> {

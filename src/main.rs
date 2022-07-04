@@ -268,6 +268,11 @@ fn start(
                     // TODO(aleks): if we moved between chunks, we need to update both of them
                 }
 
+                if update_result.did_move_chunks {
+                    println!("did order chunks");
+                    scene.chunk_order = world_state.get_chunk_order_by_distance(&camera);
+                }
+
                 // Break a block with the camera!
                 if mouse_clicked {
                     mouse_clicked = false;
