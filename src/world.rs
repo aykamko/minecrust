@@ -2,6 +2,7 @@ use crate::camera::Camera;
 use crate::map_generation::{self, save_elevation_to_file};
 use crate::vec_extra::{Vec2d, Vec3d};
 use bitmaps::Bitmap;
+use futures::executor::block_on;
 use itertools::Itertools;
 
 use super::instance::{Instance, InstanceRaw};
@@ -29,6 +30,7 @@ impl BlockType {
     }
 }
 
+#[derive(PartialEq)]
 #[repr(usize)]
 enum Face {
     Top = 0,
@@ -141,55 +143,102 @@ impl WorldState {
         }
     }
 
-    fn set_block(&mut self, x: usize, y: usize, z: usize, block_type: BlockType) {
-        let curr_block = &mut self.blocks[[x, y, z]];
-        curr_block.block_type = block_type;
+    fn set_block(&mut self, x: usize, y: usize, z: usize, mut block_type: BlockType) {
+        struct Neighbor {
+            pos: [usize; 3],
+            block: Block,
+            this_shared_face: Face,
+            other_shared_face: Face,
+        }
 
-        let mut set_neighbor_state =
-            |neighbor_pos: [usize; 3], neighbor_shared_face: Face, curr_shared_face: Face| {
-                let neighbor_block = &mut self.blocks[neighbor_pos];
-
-                match (block_type, neighbor_block.block_type) {
-                    (BlockType::Water, BlockType::Water) => {
-                        neighbor_block.neighbors.set(neighbor_shared_face, true);
-                        self.blocks[[x, y, z]].neighbors.set(curr_shared_face, true);
-                    }
-                    // (BlockType::Water, _) => {
-                    //     if neighbor_block.block_type != BlockType::Empty {
-                    //         neighbor_block.block_type = BlockType::Sand;
-                    //     }
-                    // }
-                    (_, _) => {
-                        neighbor_block
-                            .neighbors
-                            .set(neighbor_shared_face, !block_type.is_transluscent());
-                    }
-                }
-            };
+        let mut neighbors: Vec<Neighbor> = vec![];
 
         if y != WORLD_Y_SIZE - 1 {
-            let top_neighbor = [x, y + 1, z];
-            set_neighbor_state(top_neighbor, Face::Bottom, Face::Top);
+            neighbors.push(Neighbor {
+                pos: [x, y + 1, z],
+                block: self.blocks[[x, y + 1, z]],
+                this_shared_face: Face::Top,
+                other_shared_face: Face::Bottom,
+            });
         }
         if y != 0 {
-            let bottom_neighbor = [x, y - 1, z];
-            set_neighbor_state(bottom_neighbor, Face::Top, Face::Bottom);
+            neighbors.push(Neighbor {
+                pos: [x, y - 1, z],
+                block: self.blocks[[x, y - 1, z]],
+                other_shared_face: Face::Top,
+                this_shared_face: Face::Bottom,
+            });
         }
         if x != WORLD_XZ_SIZE - 1 {
-            let left_neighbor = [x + 1, y, z];
-            set_neighbor_state(left_neighbor, Face::Right, Face::Left);
+            neighbors.push(Neighbor {
+                pos: [x + 1, y, z],
+                block: self.blocks[[x + 1, y, z]],
+                other_shared_face: Face::Right,
+                this_shared_face: Face::Left,
+            });
         }
         if x != 0 {
-            let right_neighbor = [x - 1, y, z];
-            set_neighbor_state(right_neighbor, Face::Left, Face::Right);
+            neighbors.push(Neighbor {
+                pos: [x - 1, y, z],
+                block: self.blocks[[x - 1, y, z]],
+                other_shared_face: Face::Left,
+                this_shared_face: Face::Right,
+            });
         }
         if z != WORLD_XZ_SIZE - 1 {
-            let front_neighbor = [x, y, z + 1];
-            set_neighbor_state(front_neighbor, Face::Back, Face::Front);
+            neighbors.push(Neighbor {
+                pos: [x, y, z + 1],
+                block: self.blocks[[x, y, z + 1]],
+                other_shared_face: Face::Back,
+                this_shared_face: Face::Front,
+            });
         }
         if z != 0 {
-            let back_neighbor = [x, y, z - 1];
-            set_neighbor_state(back_neighbor, Face::Front, Face::Back);
+            neighbors.push(Neighbor {
+                pos: [x, y, z - 1],
+                block: self.blocks[[x, y, z - 1]],
+                other_shared_face: Face::Front,
+                this_shared_face: Face::Back,
+            });
+        }
+
+        let curr_block = &mut self.blocks[[x, y, z]];
+
+        // If we're breaking a block next to water, fill this block with water instead
+        if block_type == BlockType::Empty {
+            for neighbor in neighbors.iter() {
+                if neighbor.block.block_type == BlockType::Water
+                    && neighbor.this_shared_face != Face::Bottom
+                {
+                    block_type = BlockType::Water;
+                }
+            }
+        }
+        curr_block.block_type = block_type;
+
+        for neighbor in neighbors.into_iter() {
+            let neighbor_block = &mut self.blocks[neighbor.pos];
+
+            match (block_type, neighbor_block.block_type) {
+                (BlockType::Water, BlockType::Water) => {
+                    neighbor_block
+                        .neighbors
+                        .set(neighbor.other_shared_face, true);
+                    self.blocks[[x, y, z]]
+                        .neighbors
+                        .set(neighbor.this_shared_face, true);
+                }
+                // (BlockType::Water, _) => {
+                //     if neighbor_block.block_type != BlockType::Empty {
+                //         neighbor_block.block_type = BlockType::Sand;
+                //     }
+                // }
+                (_, _) => {
+                    neighbor_block
+                        .neighbors
+                        .set(neighbor.other_shared_face, !block_type.is_transluscent());
+                }
+            }
         }
     }
 
