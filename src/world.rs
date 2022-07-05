@@ -198,8 +198,18 @@ impl WorldState {
 
         for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
             let ground_elevation = map_elevation[x][z] as usize;
-            self.set_block(x, ground_elevation, z, BlockType::Grass);
-            for y in 0..ground_elevation {
+
+            let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
+                BlockType::Sand
+            } else {
+                BlockType::Grass
+            };
+            self.set_block(x, ground_elevation, z, top_block_type);
+
+            for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
+                self.set_block(x, y, z, BlockType::Sand);
+            }
+            for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
                 self.set_block(x, y, z, BlockType::Dirt);
             }
             for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
@@ -307,7 +317,7 @@ impl WorldState {
 
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
             let alpha_adjust = if block.block_type == BlockType::Water {
-                0.90
+                0.7
             } else {
                 1.0
             };

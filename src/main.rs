@@ -183,7 +183,9 @@ fn start(
     let mut curr_modifier_state: winit::event::ModifiersState =
         winit::event::ModifiersState::empty();
     let mut cursor_grabbed = false;
-    let mut mouse_clicked = false;
+
+    let mut left_mouse_clicked = false;
+    let mut right_mouse_clicked = false;
 
     let spawner = Spawner::new();
 
@@ -228,8 +230,11 @@ fn start(
                             window.set_cursor_visible(false);
                             cursor_grabbed = true;
                         } else {
-                            mouse_clicked = true;
+                            left_mouse_clicked = true;
                         }
+                    }
+                    (ElementState::Pressed, MouseButton::Right) => {
+                        right_mouse_clicked = true;
                     }
                     _ => (),
                 },
@@ -270,15 +275,7 @@ fn start(
                 let mut chunks_modified: Vec<[usize; 2]> = vec![];
                 if update_result.did_move_blocks {
                     let [chunk_x, chunk_z] = update_result.new_chunk_location;
-                    // chunks_modified.push([chunk_x - 1, chunk_z - 1]);
-                    // chunks_modified.push([chunk_x, chunk_z - 1]);
-                    // chunks_modified.push([chunk_x + 1, chunk_z - 1]);
-                    // chunks_modified.push([chunk_x - 1, chunk_z]);
                     chunks_modified.push([chunk_x, chunk_z]);
-                    // chunks_modified.push([chunk_x + 1, chunk_z]);
-                    // chunks_modified.push([chunk_x - 1, chunk_z + 1]);
-                    // chunks_modified.push([chunk_x, chunk_z + 1]);
-                    // chunks_modified.push([chunk_x + 1, chunk_z + 1]);
                 }
 
                 if update_result.did_move_chunks {
@@ -286,14 +283,15 @@ fn start(
                 }
 
                 // Break a block with the camera!
-                if mouse_clicked {
-                    mouse_clicked = false;
-
-                    let construction_chunks_modified = if curr_modifier_state.shift() {
+                if left_mouse_clicked || right_mouse_clicked {
+                    let construction_chunks_modified = if right_mouse_clicked {
                         world_state.place_block(&camera, world::BlockType::Sand)
                     } else {
                         world_state.break_block(&camera)
                     };
+                    left_mouse_clicked = false;
+                    right_mouse_clicked = false;
+
                     chunks_modified.extend(construction_chunks_modified.iter());
                     chunks_modified = chunks_modified.into_iter().unique().collect();
 

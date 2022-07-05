@@ -1,7 +1,7 @@
 use crate::world::CHUNK_XZ_SIZE;
 #[cfg(not(target_arch = "wasm32"))]
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
-use collision::{Plane, Frustum, Aabb3};
+use collision::{Aabb3, Frustum, Plane};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
@@ -142,8 +142,7 @@ impl Camera {
         self.frustum.far = Plane::from_point_normal(self.eye + forward_zfar, -forward_norm);
     }
 
-    pub fn filter_visible_chunks(&self, mut chunk_geoms: &Vec<Aabb3<f32>>) {
-    }
+    pub fn filter_visible_chunks(&self, mut chunk_geoms: &Vec<Aabb3<f32>>) {}
 }
 
 // We need this for Rust to store our data correctly for the shaders
@@ -175,6 +174,8 @@ pub struct CameraController {
     is_backward_pressed: bool,
     is_left_pressed: bool,
     is_right_pressed: bool,
+    is_space_pressed: bool,
+    is_shift_pressed: bool,
     last_mouse_delta: (f64, f64),
 }
 
@@ -194,6 +195,8 @@ impl CameraController {
             is_backward_pressed: false,
             is_left_pressed: false,
             is_right_pressed: false,
+            is_space_pressed: false,
+            is_shift_pressed: false,
             last_mouse_delta: (0.0, 0.0),
         }
     }
@@ -225,6 +228,14 @@ impl CameraController {
                     }
                     VirtualKeyCode::D | VirtualKeyCode::Right => {
                         self.is_right_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::Space => {
+                        self.is_space_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::LShift | VirtualKeyCode::RShift  => {
+                        self.is_shift_pressed = is_pressed;
                         true
                     }
                     _ => false,
@@ -279,9 +290,6 @@ impl CameraController {
         // Strafing vector
         let right_norm = forward_norm.cross(camera.up);
 
-        // "Vertical" strafing vector
-        let up_norm = right_norm.cross(forward).normalize();
-
         if self.is_right_pressed {
             camera.eye += right_norm * self.speed;
             camera.target += right_norm * self.speed;
@@ -290,6 +298,18 @@ impl CameraController {
             camera.eye -= right_norm * self.speed;
             camera.target -= right_norm * self.speed;
         }
+
+        if self.is_space_pressed {
+            camera.eye += camera.world_up * self.speed;
+            camera.target += camera.world_up * self.speed;
+        }
+        if self.is_shift_pressed {
+            camera.eye -= camera.world_up * self.speed;
+            camera.target -= camera.world_up * self.speed;
+        }
+
+        // "Vertical" strafing vector
+        let up_norm = right_norm.cross(forward).normalize();
 
         let (x_delta, y_delta) = self.last_mouse_delta;
         if y_delta != 0.0 {
