@@ -93,7 +93,7 @@ pub const CHUNK_XZ_SIZE: usize = 16;
 pub const CHUNK_Y_SIZE: usize = 256;
 pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
-pub const WORLD_WIDTH_IN_CHUNKS: usize = 16;
+pub const WORLD_WIDTH_IN_CHUNKS: usize = 20;
 pub const WORLD_XZ_SIZE: usize = CHUNK_XZ_SIZE * WORLD_WIDTH_IN_CHUNKS;
 pub const WORLD_Y_SIZE: usize = CHUNK_Y_SIZE;
 

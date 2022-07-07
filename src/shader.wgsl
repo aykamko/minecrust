@@ -8,10 +8,12 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(1) texture_atlas_offset: vec2<f32>,
     @location(2) color_adjust: vec4<f32>,
+    @location(3) world_position: vec4<f32>,
 }
 
 struct CameraUniform {
     view_proj: mat4x4<f32>,
+    eye_position: vec4<f32>,
 }
 
 struct InstanceInput {
@@ -44,6 +46,7 @@ fn vs_main(
     out.position = camera_position.view_proj * model_matrix * model.position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
+    out.world_position = model_matrix * model.position;
     return out;
 }
 
@@ -52,13 +55,23 @@ var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
 var s_diffuse: sampler;
 
+
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var unit_offset: f32 = 1.0 / 32.0;
     var atlas_scaled_coords = vertex.tex_coord / 32.0;
     var offset_coords = atlas_scaled_coords + (unit_offset * vertex.texture_atlas_offset);
 
-    return textureSample(t_diffuse, s_diffuse, offset_coords) * vertex.color_adjust;
+    var distance_from_camera = distance(vertex.world_position, camera_position.eye_position);
+
+    var zfar: f32 = 150.0;
+    var z_fade_start: f32 = 130.0;
+    var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
+
+    var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vertex.color_adjust;
+    color[3] -= distance_alpha_adjust; // fade distant vertices gradually (fog effect)
+
+    return color;
 }
 
 @fragment

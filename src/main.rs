@@ -161,7 +161,7 @@ fn start(
         config.width as f32 / config.height as f32,
         70.0,
         1.0,
-        300.0,
+        150.0,
     );
 
     let mut camera_uniform = camera::CameraUniform::new();
@@ -471,11 +471,11 @@ fn setup_scene(
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(64),
+                    min_binding_size: wgpu::BufferSize::new(mem::size_of::<camera::CameraUniform>() as u64),
                 },
                 count: None,
             }],
@@ -568,8 +568,8 @@ fn setup_scene(
             let mut max_number_faces_possible =
                 world::NUM_BLOCKS_IN_CHUNK * instance::InstanceRaw::size() * NUM_FACES / 2;
 
-            // HACK(aleks) divide by 2 again because too much memory
-            max_number_faces_possible /= 2;
+            // HACK(aleks) divide by 4 because too much memory
+            max_number_faces_possible /= 4;
 
             let unpadded_size: u64 = max_number_faces_possible.try_into().unwrap();
 
@@ -653,7 +653,7 @@ fn setup_scene(
         multiview: None,
     });
 
-    let pipeline_wire = if device
+    let pipeline_wire = if false && device
         .features()
         .contains(wgpu::Features::POLYGON_MODE_LINE)
     {
