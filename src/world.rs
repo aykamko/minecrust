@@ -333,10 +333,7 @@ impl WorldState {
     }
 
     pub fn get_chunk_order_by_distance(&self, camera: &Camera) -> Vec<[usize; 2]> {
-        let mut chunk_order: Vec<[usize; 2]> = vec![];
-        for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
-            chunk_order.push([chunk_x, chunk_z]);
-        }
+        let mut chunk_order = self.iter_visible_chunks(camera).collect::<Vec<_>>();
 
         chunk_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
             let chunk_a_center_pos = cgmath::Point3::new(
@@ -360,6 +357,25 @@ impl WorldState {
         chunk_order
     }
 
+    fn iter_visible_chunks(&self, camera: &Camera) -> std::vec::IntoIter<[usize; 2]> {
+        let (camera_chunk_x, camera_chunk_z) = (
+            (camera.eye.x / CHUNK_XZ_SIZE as f32) as usize,
+            (camera.eye.z / CHUNK_XZ_SIZE as f32) as usize,
+        );
+        let first_chunk_x_index = camera_chunk_x - (VISIBLE_CHUNK_WIDTH / 2);
+        let first_chunk_z_index = camera_chunk_z - (VISIBLE_CHUNK_WIDTH / 2);
+
+        let mut chunk_idxs: Vec<[usize; 2]> = vec![];
+        for (chunk_x, chunk_z) in iproduct!(
+            first_chunk_x_index..first_chunk_x_index + VISIBLE_CHUNK_WIDTH,
+            first_chunk_z_index..first_chunk_z_index + VISIBLE_CHUNK_WIDTH
+        ) {
+            chunk_idxs.push([chunk_x, chunk_z]);
+        }
+
+        chunk_idxs.into_iter()
+    }
+
     pub fn generate_world_data(&self, camera: &Camera) -> (Vec2d<ChunkData>, Vec<[usize; 2]>) {
         let func_start = Instant::now();
 
@@ -369,12 +385,12 @@ impl WorldState {
                     position: [0, 0],
                     typed_instances_vec: vec![],
                 };
-                WORLD_WIDTH_IN_CHUNKS * WORLD_WIDTH_IN_CHUNKS
+                VISIBLE_CHUNK_WIDTH * VISIBLE_CHUNK_WIDTH
             ],
-            [WORLD_WIDTH_IN_CHUNKS, WORLD_WIDTH_IN_CHUNKS],
+            [VISIBLE_CHUNK_WIDTH, VISIBLE_CHUNK_WIDTH],
         );
 
-        for (chunk_x, chunk_z) in iproduct!(0..WORLD_WIDTH_IN_CHUNKS, 0..WORLD_WIDTH_IN_CHUNKS) {
+        for [chunk_x, chunk_z] in self.iter_visible_chunks(camera) {
             all_chunk_data[[chunk_x, chunk_z]] =
                 self.generate_chunk_data([chunk_x, chunk_z], camera);
         }

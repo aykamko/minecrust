@@ -25,7 +25,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-use crate::world::{ChunkDataType, MAX_CHUNK_WORLD_WIDTH, WORLD_XZ_SIZE};
+use crate::world::{ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
 
 fn main() {
     let s = block_on(setup());

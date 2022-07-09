@@ -6,9 +6,12 @@ use noise::NoiseFn;
 const BASE_FREQUENCY: f64 = 5.0;
 const NUM_OCTAVES: usize = 4;
 
-type ChunkElevationMap = [[u16; CHUNK_XZ_SIZE]; CHUNK_XZ_SIZE];
+struct WorldNoise {
+    noise: Option<noise::OpenSimplex>,
+}
+static mut noise_generator: WorldNoise = WorldNoise { noise: None };
 
-const NOISE_GENERATOR: noise::OpenSimplex = noise::OpenSimplex::new();
+type ChunkElevationMap = [[u16; CHUNK_XZ_SIZE]; CHUNK_XZ_SIZE];
 
 // Source: https://www.redblobgames.com/maps/terrain-from-noise/
 pub fn generate_chunk_elevation_map(
@@ -16,6 +19,16 @@ pub fn generate_chunk_elevation_map(
     min_elevation: u16,
     max_elevation: u16,
 ) -> ChunkElevationMap {
+    let noise = unsafe {
+        match noise_generator.noise {
+            None => {
+                noise_generator.noise = Some(noise::OpenSimplex::new());
+                noise_generator.noise.unwrap()
+            }
+            _ => noise_generator.noise.unwrap(),
+        }
+    };
+
     let base_x = chunk_x * CHUNK_XZ_SIZE;
     let base_z = chunk_z * CHUNK_XZ_SIZE;
 
@@ -23,10 +36,7 @@ pub fn generate_chunk_elevation_map(
 
     let max_height = max_elevation - min_elevation;
 
-    for (x, z) in iproduct!(
-        0..CHUNK_XZ_SIZE,
-        0..CHUNK_XZ_SIZE
-    ) {
+    for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
         let (world_x, world_z) = (base_x + x, base_z + z);
         let nx: f64 = ((world_x as f64) / (CHUNK_XZ_SIZE as f64)) * BASE_FREQUENCY;
         let nz: f64 = ((world_z as f64) / (CHUNK_XZ_SIZE as f64)) * BASE_FREQUENCY;
@@ -39,7 +49,7 @@ pub fn generate_chunk_elevation_map(
             let amplitude = 1.0 / octave;
 
             // Normalize [-1.0, 1.0] to [0.0, 1.0]
-            let noise_normalized = (NOISE_GENERATOR.get([octave * nx, octave * nz]) + 1.0) / 2.0;
+            let noise_normalized = (noise.get([octave * nx, octave * nz]) + 1.0) / 2.0;
             elevation += amplitude * noise_normalized;
             sum_of_amplitudes += amplitude;
         }
