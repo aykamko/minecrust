@@ -13,7 +13,7 @@ mod vec_extra;
 mod vertex;
 mod world;
 
-use cgmath::prelude::*;
+use cgmath::{prelude::*, Point3};
 use futures::executor::block_on;
 use itertools::Itertools;
 use spawner::Spawner;
@@ -25,7 +25,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-use crate::world::{ChunkDataType, WORLD_XZ_SIZE};
+use crate::world::{ChunkDataType, MAX_CHUNK_WORLD_WIDTH, WORLD_XZ_SIZE};
 
 fn main() {
     let s = block_on(setup());
@@ -151,8 +151,9 @@ fn start(
     let mut camera_controller = camera::CameraController::new(0.15, 0.01);
 
     // Start in the center
+    let center = world::get_world_center();
     let mut camera = camera::Camera::new(
-        ((WORLD_XZ_SIZE / 2) as f32, 60.0, (WORLD_XZ_SIZE / 2) as f32).into(),
+        Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
         // have it look at the origin
         (0.0, 0.0, 0.0).into(),
         // which way is "up"
@@ -475,7 +476,9 @@ fn setup_scene(
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(mem::size_of::<camera::CameraUniform>() as u64),
+                    min_binding_size: wgpu::BufferSize::new(
+                        mem::size_of::<camera::CameraUniform>() as u64,
+                    ),
                 },
                 count: None,
             }],
@@ -568,8 +571,8 @@ fn setup_scene(
             let mut max_number_faces_possible =
                 world::NUM_BLOCKS_IN_CHUNK * instance::InstanceRaw::size() * NUM_FACES / 2;
 
-            // HACK(aleks) divide by 4 because too much memory
-            max_number_faces_possible /= 4;
+            // HACK(aleks) divide by 16 because too much memory
+            max_number_faces_possible /= 16;
 
             let unpadded_size: u64 = max_number_faces_possible.try_into().unwrap();
 
@@ -653,9 +656,10 @@ fn setup_scene(
         multiview: None,
     });
 
-    let pipeline_wire = if false && device
-        .features()
-        .contains(wgpu::Features::POLYGON_MODE_LINE)
+    let pipeline_wire = if false
+        && device
+            .features()
+            .contains(wgpu::Features::POLYGON_MODE_LINE)
     {
         let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,

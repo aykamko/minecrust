@@ -69,7 +69,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
 
     var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vertex.color_adjust;
-    color[3] -= distance_alpha_adjust; // fade distant vertices gradually (fog effect)
+    // color[3] -= distance_alpha_adjust; // fog effect: fade distant vertices
 
     return color;
 }

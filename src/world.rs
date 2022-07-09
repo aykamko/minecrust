@@ -2,12 +2,13 @@ use crate::camera::Camera;
 use crate::map_generation::{self, save_elevation_to_file};
 use crate::vec_extra::{Vec2d, Vec3d};
 use bitmaps::Bitmap;
-use futures::executor::block_on;
 use itertools::Itertools;
 
 use super::instance::{Instance, InstanceRaw};
-use cgmath::{prelude::*, MetricSpace, Point3, Vector2};
+use cgmath::{prelude::*, MetricSpace, Point2, Point3};
 use collision::Continuous;
+use std::convert::Into;
+use std::default;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
@@ -93,9 +94,18 @@ pub const CHUNK_XZ_SIZE: usize = 16;
 pub const CHUNK_Y_SIZE: usize = 256;
 pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
-pub const WORLD_WIDTH_IN_CHUNKS: usize = 20;
-pub const WORLD_XZ_SIZE: usize = CHUNK_XZ_SIZE * WORLD_WIDTH_IN_CHUNKS;
-pub const WORLD_Y_SIZE: usize = CHUNK_Y_SIZE;
+// The largest the world can be in xz dimension
+pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
+// How many chunks are visible in xz dimension
+pub const VISIBLE_CHUNK_WIDTH: usize = 16;
+
+// Goal: infinite world generation
+
+// Today: whole world is represented as one contiguous 3D array
+//   I can't resize this array in 3D -- that doesn't make sense
+// Maybe solution?: move to an array of chunks, where each chunk knows it's x/z position in world space
+//   Ok -- how will I quickly index on a particular x/z chunk in a flat array?
+//     Need a separate 2D array with some absurd size (1024 x 1024 chunks). Each element is an index to the flat array
 
 impl Default for Block {
     fn default() -> Block {
@@ -104,6 +114,19 @@ impl Default for Block {
             neighbors: NeighborBitmap::new(),
         }
     }
+}
+
+pub fn get_world_center() -> Point3<usize> {
+    Point3::new(
+        MAX_CHUNK_WORLD_WIDTH * CHUNK_XZ_SIZE / 2,
+        40,
+        MAX_CHUNK_WORLD_WIDTH * CHUNK_XZ_SIZE / 2,
+    )
+}
+
+pub struct Chunk {
+    position: [usize; 2],
+    blocks: Vec3d<Block>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -125,22 +148,33 @@ pub struct ChunkData {
 }
 
 pub struct WorldState {
-    blocks: Vec3d<Block>,
+    pub chunk_indices: Vec2d<u32>,
+    chunks: Vec<Chunk>,
 }
 
 impl WorldState {
     pub fn new() -> Self {
         Self {
-            blocks: Vec3d::new(
-                vec![
-                    Block {
-                        ..Default::default()
-                    };
-                    WORLD_XZ_SIZE * WORLD_Y_SIZE * WORLD_XZ_SIZE
-                ],
-                [WORLD_XZ_SIZE, WORLD_Y_SIZE, WORLD_XZ_SIZE],
+            chunk_indices: Vec2d::new(
+                vec![u32::max_value(); MAX_CHUNK_WORLD_WIDTH * MAX_CHUNK_WORLD_WIDTH],
+                [MAX_CHUNK_WORLD_WIDTH, MAX_CHUNK_WORLD_WIDTH],
             ),
+            chunks: vec![],
         }
+    }
+
+    fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
+        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, y / CHUNK_XZ_SIZE]];
+        let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
+        let chunk = &mut self.chunks[chunk_idx as usize];
+        &mut chunk.blocks[block_idx]
+    }
+
+    fn get_block(&self, x: usize, y: usize, z: usize) -> &Block {
+        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, y / CHUNK_XZ_SIZE]];
+        let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
+        let chunk = &self.chunks[chunk_idx as usize];
+        &chunk.blocks[block_idx]
     }
 
     fn set_block(&mut self, x: usize, y: usize, z: usize, mut block_type: BlockType) {
@@ -153,56 +187,45 @@ impl WorldState {
 
         let mut neighbors: Vec<Neighbor> = vec![];
 
-        if y != WORLD_Y_SIZE - 1 {
-            neighbors.push(Neighbor {
-                pos: [x, y + 1, z],
-                block: self.blocks[[x, y + 1, z]],
-                this_shared_face: Face::Top,
-                other_shared_face: Face::Bottom,
-            });
-        }
-        if y != 0 {
-            neighbors.push(Neighbor {
-                pos: [x, y - 1, z],
-                block: self.blocks[[x, y - 1, z]],
-                other_shared_face: Face::Top,
-                this_shared_face: Face::Bottom,
-            });
-        }
-        if x != WORLD_XZ_SIZE - 1 {
-            neighbors.push(Neighbor {
-                pos: [x + 1, y, z],
-                block: self.blocks[[x + 1, y, z]],
-                other_shared_face: Face::Right,
-                this_shared_face: Face::Left,
-            });
-        }
-        if x != 0 {
-            neighbors.push(Neighbor {
-                pos: [x - 1, y, z],
-                block: self.blocks[[x - 1, y, z]],
-                other_shared_face: Face::Left,
-                this_shared_face: Face::Right,
-            });
-        }
-        if z != WORLD_XZ_SIZE - 1 {
-            neighbors.push(Neighbor {
-                pos: [x, y, z + 1],
-                block: self.blocks[[x, y, z + 1]],
-                other_shared_face: Face::Back,
-                this_shared_face: Face::Front,
-            });
-        }
-        if z != 0 {
-            neighbors.push(Neighbor {
-                pos: [x, y, z - 1],
-                block: self.blocks[[x, y, z - 1]],
-                other_shared_face: Face::Front,
-                this_shared_face: Face::Back,
-            });
-        }
+        // TODO: bounds checks?
+        neighbors.push(Neighbor {
+            pos: [x, y + 1, z],
+            block: *self.get_block(x, y + 1, z),
+            this_shared_face: Face::Top,
+            other_shared_face: Face::Bottom,
+        });
+        neighbors.push(Neighbor {
+            pos: [x, y - 1, z],
+            block: *self.get_block(x, y - 1, z),
+            other_shared_face: Face::Top,
+            this_shared_face: Face::Bottom,
+        });
+        neighbors.push(Neighbor {
+            pos: [x + 1, y, z],
+            block: *self.get_block(x + 1, y, z),
+            other_shared_face: Face::Right,
+            this_shared_face: Face::Left,
+        });
+        neighbors.push(Neighbor {
+            pos: [x - 1, y, z],
+            block: *self.get_block(x - 1, y, z),
+            other_shared_face: Face::Left,
+            this_shared_face: Face::Right,
+        });
+        neighbors.push(Neighbor {
+            pos: [x, y, z + 1],
+            block: *self.get_block(x, y, z + 1),
+            other_shared_face: Face::Back,
+            this_shared_face: Face::Front,
+        });
+        neighbors.push(Neighbor {
+            pos: [x, y, z - 1],
+            block: *self.get_block(x, y, z - 1),
+            other_shared_face: Face::Front,
+            this_shared_face: Face::Back,
+        });
 
-        let curr_block = &mut self.blocks[[x, y, z]];
+        let curr_block = self.get_block_mut(x, y, z);
 
         // If we're breaking a block next to water, fill this block with water instead
         if block_type == BlockType::Empty {
@@ -217,14 +240,15 @@ impl WorldState {
         curr_block.block_type = block_type;
 
         for neighbor in neighbors.into_iter() {
-            let neighbor_block = &mut self.blocks[neighbor.pos];
+            let neighbor_block =
+                self.get_block_mut(neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
 
             match (block_type, neighbor_block.block_type) {
                 (BlockType::Water, BlockType::Water) => {
                     neighbor_block
                         .neighbors
                         .set(neighbor.other_shared_face, true);
-                    self.blocks[[x, y, z]]
+                    self.get_block_mut(x, y, z)
                         .neighbors
                         .set(neighbor.this_shared_face, true);
                 }
@@ -242,37 +266,67 @@ impl WorldState {
         }
     }
 
-    fn block_at(&self, x: usize, y: usize, z: usize) -> &Block {
-        &self.blocks[[x, y, z]]
-    }
-
     pub fn initial_setup(&mut self) {
+        // Generate initial chunks in the center of the world
+        let first_chunk_xz_index = (MAX_CHUNK_WORLD_WIDTH / 2) - (VISIBLE_CHUNK_WIDTH / 2);
+        let last_chunk_xz_index = first_chunk_xz_index + VISIBLE_CHUNK_WIDTH;
+        for (chunk_x, chunk_z) in iproduct!(
+            // allocate an extra chunk on either side to stay in bounds when modifying blocks
+            first_chunk_xz_index - 1..last_chunk_xz_index + 1,
+            first_chunk_xz_index - 1..last_chunk_xz_index + 1
+        ) {
+            self.chunks.push(Chunk {
+                position: [chunk_x, chunk_z],
+                blocks: Vec3d::new(
+                    vec![
+                        Block {
+                            ..Default::default()
+                        };
+                        CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
+                    ],
+                    [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
+                ),
+            });
+            self.chunk_indices[[chunk_x, chunk_z]] = self.chunks.len() as u32 - 1;
+        }
+
         const MIN_HEIGHT: u16 = 2;
         const MAX_HEIGHT: u16 = 80;
         const WATER_HEIGHT: u16 = 26;
 
-        let map_elevation = map_generation::generate_elevation_map(MIN_HEIGHT, MAX_HEIGHT);
-        save_elevation_to_file(map_elevation, "map.bmp");
+        for (chunk_x, chunk_z) in iproduct!(
+            first_chunk_xz_index..last_chunk_xz_index,
+            first_chunk_xz_index..last_chunk_xz_index
+        ) {
+            let map_elevation = map_generation::generate_chunk_elevation_map(
+                [chunk_x, chunk_z],
+                MIN_HEIGHT,
+                MAX_HEIGHT,
+            );
+            let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
+            // save_elevation_to_file(map_elevation, "map.bmp");
 
-        for (x, z) in iproduct!(0..WORLD_XZ_SIZE, 0..WORLD_XZ_SIZE) {
-            let ground_elevation = map_elevation[x][z] as usize;
+            for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+                let ground_elevation = map_elevation[x][z] as usize;
+                let (world_x, world_z) = (base_x + x, base_z + z);
 
-            let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
-                BlockType::Sand
-            } else {
-                BlockType::Grass
-            };
-            self.set_block(x, ground_elevation, z, top_block_type);
+                let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
+                    BlockType::Sand
+                } else {
+                    BlockType::Grass
+                };
+                self.set_block(world_x, ground_elevation, z, top_block_type);
 
-            for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
-                self.set_block(x, y, z, BlockType::Sand);
-            }
-            for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
-                self.set_block(x, y, z, BlockType::Dirt);
-            }
-            for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
-                if self.block_at(x, y, z).block_type == BlockType::Empty {
-                    self.set_block(x, y, z, BlockType::Water);
+                for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
+                    self.set_block(world_x, y, world_z, BlockType::Sand);
+                }
+                for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
+                    self.set_block(world_x, y, world_z, BlockType::Dirt);
+                }
+                for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
+                    if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
+                        self.set_block(world_x, y, world_z, BlockType::Water);
+                    }
                 }
             }
         }
@@ -365,7 +419,7 @@ impl WorldState {
             let z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
 
             let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
-            let block = self.block_at(x, y, z);
+            let block = self.get_block(x, y, z);
             if block.block_type == BlockType::Empty {
                 continue;
             }
@@ -560,7 +614,7 @@ impl WorldState {
                 collision::Aabb3::new(*cube, Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0));
 
             if !self
-                .block_at(cube.x as usize, cube.y as usize, cube.z as usize)
+                .get_block(cube.x as usize, cube.y as usize, cube.z as usize)
                 .block_type
                 .is_transluscent()
             {
@@ -636,9 +690,9 @@ impl WorldState {
             .into_iter()
             .filter(|[chunk_x, chunk_z]| {
                 *chunk_x >= 0
-                    && *chunk_x < WORLD_WIDTH_IN_CHUNKS.try_into().unwrap()
+                    && *chunk_x < MAX_CHUNK_WORLD_WIDTH.try_into().unwrap()
                     && *chunk_z >= 0
-                    && *chunk_z < WORLD_WIDTH_IN_CHUNKS.try_into().unwrap()
+                    && *chunk_z < MAX_CHUNK_WORLD_WIDTH.try_into().unwrap()
             })
             .map(|[chunk_x, chunk_z]| [chunk_x as usize, chunk_z as usize])
             .collect();
