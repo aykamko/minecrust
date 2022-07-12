@@ -144,6 +144,9 @@ pub struct TypedInstances {
 #[derive(Clone)]
 pub struct ChunkData {
     pub position: [usize; 2],
+    // Position of chunk relative to camera (16x16 grid of chunks)
+    // TODO: find a better name
+    pub camera_relative_position: [usize; 2],
     pub typed_instances_vec: Vec<TypedInstances>,
 }
 
@@ -391,6 +394,18 @@ impl WorldState {
         chunk_idxs.into_iter()
     }
 
+    fn camera_relative_position_from_world_position(&self, chunk_idx: [usize; 2], camera: &Camera) -> [usize; 2] {
+        let [world_chunk_x, world_chunk_z] = chunk_idx;
+        let (camera_chunk_x, camera_chunk_z) = (
+            (camera.eye.x / CHUNK_XZ_SIZE as f32) as usize,
+            (camera.eye.z / CHUNK_XZ_SIZE as f32) as usize,
+        );
+        let first_chunk_x_index = camera_chunk_x - (VISIBLE_CHUNK_WIDTH / 2);
+        let first_chunk_z_index = camera_chunk_z - (VISIBLE_CHUNK_WIDTH / 2);
+
+        [world_chunk_x - first_chunk_x_index, world_chunk_z - first_chunk_z_index]
+    }
+
     pub fn generate_world_data(&self, camera: &Camera) -> (Vec2d<ChunkData>, Vec<[usize; 2]>) {
         let func_start = Instant::now();
 
@@ -398,6 +413,7 @@ impl WorldState {
             vec![
                 ChunkData {
                     position: [0, 0],
+                    camera_relative_position: [0, 0],
                     typed_instances_vec: vec![],
                 };
                 VISIBLE_CHUNK_WIDTH * VISIBLE_CHUNK_WIDTH
@@ -564,6 +580,7 @@ impl WorldState {
 
         ChunkData {
             position: chunk_idx,
+            camera_relative_position: self.camera_relative_position_from_world_position(chunk_idx, camera),
             typed_instances_vec: vec![
                 TypedInstances {
                     data_type: ChunkDataType::Opaque,

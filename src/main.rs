@@ -309,28 +309,28 @@ fn start(
                     );
                 }
 
-                // if !chunks_modified.is_empty() {
-                //     for chunk_idx in chunks_modified {
-                //         let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
-                //         let chunk_render_datum = &mut scene.chunk_render_data[chunk_idx];
+                if !chunks_modified.is_empty() {
+                    for chunk_idx in chunks_modified {
+                        let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
+                        let chunk_render_datum = &mut scene.chunk_render_data[chunk_data.camera_relative_position];
 
-                //         for typed_instances in chunk_data.typed_instances_vec.iter() {
-                //             let maybe_instance_buffer = chunk_render_datum
-                //                 .annotated_instance_buffers
-                //                 .iter_mut()
-                //                 .find(|ib| ib.data_type == typed_instances.data_type);
+                        for typed_instances in chunk_data.typed_instances_vec.iter() {
+                            let maybe_instance_buffer = chunk_render_datum
+                                .annotated_instance_buffers
+                                .iter_mut()
+                                .find(|ib| ib.data_type == typed_instances.data_type);
 
-                //             if let Some(mut instance_buffer) = maybe_instance_buffer {
-                //                 queue.write_buffer(
-                //                     &instance_buffer.buffer,
-                //                     0,
-                //                     bytemuck::cast_slice(&typed_instances.instance_data),
-                //                 );
-                //                 instance_buffer.len = typed_instances.instance_data.len();
-                //             }
-                //         }
-                //     }
-                // }
+                            if let Some(mut instance_buffer) = maybe_instance_buffer {
+                                queue.write_buffer(
+                                    &instance_buffer.buffer,
+                                    0,
+                                    bytemuck::cast_slice(&typed_instances.instance_data),
+                                );
+                                instance_buffer.len = typed_instances.instance_data.len();
+                            }
+                        }
+                    }
+                }
 
                 render_scene(&view, &device, &queue, &scene, &spawner);
 
