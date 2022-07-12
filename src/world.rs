@@ -99,6 +99,8 @@ pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 // How many chunks are visible in xz dimension
 pub const VISIBLE_CHUNK_WIDTH: usize = 16;
 
+const CHUNK_DOES_NOT_EXIST_VALUE: u32 = u32::max_value();
+
 // Goal: infinite world generation
 
 // Today: whole world is represented as one contiguous 3D array
@@ -159,7 +161,7 @@ impl WorldState {
     pub fn new() -> Self {
         Self {
             chunk_indices: Vec2d::new(
-                vec![u32::max_value(); MAX_CHUNK_WORLD_WIDTH * MAX_CHUNK_WORLD_WIDTH],
+                vec![CHUNK_DOES_NOT_EXIST_VALUE; MAX_CHUNK_WORLD_WIDTH * MAX_CHUNK_WORLD_WIDTH],
                 [MAX_CHUNK_WORLD_WIDTH, MAX_CHUNK_WORLD_WIDTH],
             ),
             chunks: vec![],
@@ -274,18 +276,10 @@ impl WorldState {
         }
     }
 
-    pub fn initial_setup(&mut self) {
-        // Generate initial chunks in the center of the world
-        let first_chunk_xz_index = (MAX_CHUNK_WORLD_WIDTH / 2) - (VISIBLE_CHUNK_WIDTH / 2);
-        let last_chunk_xz_index = first_chunk_xz_index + VISIBLE_CHUNK_WIDTH;
-        for (chunk_x, chunk_z) in iproduct!(
-            // allocate an extra chunk on either side to stay in bounds when modifying blocks
-            first_chunk_xz_index - 1..last_chunk_xz_index + 1,
-            first_chunk_xz_index - 1..last_chunk_xz_index + 1
-        ) {
-            // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
+    fn maybe_allocate_chunk(&mut self, chunk_idx: [usize; 2]) {
+        if self.chunk_indices[chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
             self.chunks.push(Chunk {
-                position: [chunk_x, chunk_z],
+                position: chunk_idx,
                 blocks: Vec3d::new(
                     vec![
                         Block {
@@ -296,7 +290,21 @@ impl WorldState {
                     [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
                 ),
             });
-            self.chunk_indices[[chunk_x, chunk_z]] = self.chunks.len() as u32 - 1;
+            self.chunk_indices[chunk_idx] = self.chunks.len() as u32 - 1;
+        }
+    }
+
+    pub fn initial_setup(&mut self) {
+        // Generate initial chunks in the center of the world
+        let first_chunk_xz_index = (MAX_CHUNK_WORLD_WIDTH / 2) - (VISIBLE_CHUNK_WIDTH / 2);
+        let last_chunk_xz_index = first_chunk_xz_index + VISIBLE_CHUNK_WIDTH;
+        for (chunk_x, chunk_z) in iproduct!(
+            // allocate an extra chunk on either side to stay in bounds when modifying blocks
+            first_chunk_xz_index - 1..last_chunk_xz_index + 1,
+            first_chunk_xz_index - 1..last_chunk_xz_index + 1
+        ) {
+            // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
+            self.maybe_allocate_chunk([chunk_x, chunk_z])
         }
 
         const MIN_HEIGHT: u16 = 2;
@@ -394,7 +402,11 @@ impl WorldState {
         chunk_idxs.into_iter()
     }
 
-    fn camera_relative_position_from_world_position(&self, chunk_idx: [usize; 2], camera: &Camera) -> [usize; 2] {
+    fn camera_relative_position_from_world_position(
+        &self,
+        chunk_idx: [usize; 2],
+        camera: &Camera,
+    ) -> [usize; 2] {
         let [world_chunk_x, world_chunk_z] = chunk_idx;
         let (camera_chunk_x, camera_chunk_z) = (
             (camera.eye.x / CHUNK_XZ_SIZE as f32) as usize,
@@ -403,10 +415,13 @@ impl WorldState {
         let first_chunk_x_index = camera_chunk_x - (VISIBLE_CHUNK_WIDTH / 2);
         let first_chunk_z_index = camera_chunk_z - (VISIBLE_CHUNK_WIDTH / 2);
 
-        [world_chunk_x - first_chunk_x_index, world_chunk_z - first_chunk_z_index]
+        [
+            world_chunk_x - first_chunk_x_index,
+            world_chunk_z - first_chunk_z_index,
+        ]
     }
 
-    pub fn generate_world_data(&self, camera: &Camera) -> (Vec2d<ChunkData>, Vec<[usize; 2]>) {
+    pub fn generate_world_data(&mut self, camera: &Camera) -> (Vec2d<ChunkData>, Vec<[usize; 2]>) {
         let func_start = Instant::now();
 
         let mut all_chunk_data: Vec2d<ChunkData> = Vec2d::new(
@@ -422,7 +437,8 @@ impl WorldState {
         );
 
         let mut abs_chunk_iter = self.iter_visible_chunks(camera);
-        for (rel_chunk_x, rel_chunk_z) in iproduct!(0..VISIBLE_CHUNK_WIDTH, 0..VISIBLE_CHUNK_WIDTH) {
+        for (rel_chunk_x, rel_chunk_z) in iproduct!(0..VISIBLE_CHUNK_WIDTH, 0..VISIBLE_CHUNK_WIDTH)
+        {
             let [abs_chunk_x, abs_chunk_z] = abs_chunk_iter.next().unwrap();
             all_chunk_data[[rel_chunk_x, rel_chunk_z]] =
                 self.generate_chunk_data([abs_chunk_x, abs_chunk_z], camera);
@@ -437,8 +453,10 @@ impl WorldState {
         (all_chunk_data, self.get_chunk_order_by_distance(&camera))
     }
 
-    pub fn generate_chunk_data(&self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
+    pub fn generate_chunk_data(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
         let func_start = Instant::now();
+
+        self.maybe_allocate_chunk(chunk_idx);
 
         use cgmath::{Deg, Quaternion, Vector3};
 
@@ -580,7 +598,8 @@ impl WorldState {
 
         ChunkData {
             position: chunk_idx,
-            camera_relative_position: self.camera_relative_position_from_world_position(chunk_idx, camera),
+            camera_relative_position: self
+                .camera_relative_position_from_world_position(chunk_idx, camera),
             typed_instances_vec: vec![
                 TypedInstances {
                     data_type: ChunkDataType::Opaque,

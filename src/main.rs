@@ -177,7 +177,7 @@ fn start(
         &device,
         &queue,
         camera_uniform,
-        &world_state,
+        &mut world_state,
         &camera,
     );
 
@@ -279,8 +279,17 @@ fn start(
                     chunks_modified.push([chunk_x, chunk_z]);
                 }
 
+                // TODO(aleks): this no longer works correctly if we're moving around in an infinite world
+                // because the camera is always positioned at the center chunk in the visible world, relatively
+                // if update_result.did_move_chunks {
+                //     // scene.chunk_order = world_state.get_chunk_order_by_distance(&camera);
+                // }
+
                 if update_result.did_move_chunks {
-                    scene.chunk_order = world_state.get_chunk_order_by_distance(&camera);
+                    if update_result.new_chunk_location[0] > update_result.old_chunk_location[0] {
+                        println!("moved in +x direction");
+                        chunks_modified.push([update_result.new_chunk_location[0] + 8, update_result.new_chunk_location[1]]);
+                    }
                 }
 
                 // Break a block with the camera!
@@ -312,6 +321,7 @@ fn start(
                 if !chunks_modified.is_empty() {
                     for chunk_idx in chunks_modified {
                         let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
+                        // println!("Chunk modified is {:?}", chunk_data.camera_relative_position);
                         let chunk_render_datum = &mut scene.chunk_render_data[chunk_data.camera_relative_position];
 
                         for typed_instances in chunk_data.typed_instances_vec.iter() {
@@ -358,7 +368,7 @@ fn setup_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     camera_uniform: camera::CameraUniform,
-    world_state: &world::WorldState,
+    world_state: &mut world::WorldState,
     camera: &camera::Camera,
 ) -> Scene {
     let vertex_size = mem::size_of::<vertex::Vertex>();
