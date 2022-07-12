@@ -164,14 +164,15 @@ impl WorldState {
     }
 
     fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
-        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, y / CHUNK_XZ_SIZE]];
+        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
         let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
         let chunk = &mut self.chunks[chunk_idx as usize];
         &mut chunk.blocks[block_idx]
     }
 
     fn get_block(&self, x: usize, y: usize, z: usize) -> &Block {
-        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, y / CHUNK_XZ_SIZE]];
+        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
+        // println!("fetched chunk {:?}", [x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]);
         let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
         let chunk = &self.chunks[chunk_idx as usize];
         &chunk.blocks[block_idx]
@@ -187,19 +188,23 @@ impl WorldState {
 
         let mut neighbors: Vec<Neighbor> = vec![];
 
-        // TODO: bounds checks?
-        neighbors.push(Neighbor {
-            pos: [x, y + 1, z],
-            block: *self.get_block(x, y + 1, z),
-            this_shared_face: Face::Top,
-            other_shared_face: Face::Bottom,
-        });
-        neighbors.push(Neighbor {
-            pos: [x, y - 1, z],
-            block: *self.get_block(x, y - 1, z),
-            other_shared_face: Face::Top,
-            this_shared_face: Face::Bottom,
-        });
+        if y < CHUNK_Y_SIZE {
+            neighbors.push(Neighbor {
+                pos: [x, y + 1, z],
+                block: *self.get_block(x, y + 1, z),
+                this_shared_face: Face::Top,
+                other_shared_face: Face::Bottom,
+            });
+        }
+        if y > 0 {
+            neighbors.push(Neighbor {
+                pos: [x, y - 1, z],
+                block: *self.get_block(x, y - 1, z),
+                other_shared_face: Face::Top,
+                this_shared_face: Face::Bottom,
+            });
+        }
+        // TODO: more bounds checks?
         neighbors.push(Neighbor {
             pos: [x + 1, y, z],
             block: *self.get_block(x + 1, y, z),
@@ -275,6 +280,7 @@ impl WorldState {
             first_chunk_xz_index - 1..last_chunk_xz_index + 1,
             first_chunk_xz_index - 1..last_chunk_xz_index + 1
         ) {
+            // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
             self.chunks.push(Chunk {
                 position: [chunk_x, chunk_z],
                 blocks: Vec3d::new(
@@ -310,12 +316,17 @@ impl WorldState {
                 let ground_elevation = map_elevation[x][z] as usize;
                 let (world_x, world_z) = (base_x + x, base_z + z);
 
+                // println!(
+                //     "settingblock chunk_x {}, chunk_z {}, world_x {}, world_z {}, x {}, z {}",
+                //     chunk_x, chunk_z, world_x, world_z, x, z
+                // );
+
                 let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
                     BlockType::Sand
                 } else {
                     BlockType::Grass
                 };
-                self.set_block(world_x, ground_elevation, z, top_block_type);
+                self.set_block(world_x, ground_elevation, world_z, top_block_type);
 
                 for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
                     self.set_block(world_x, y, world_z, BlockType::Sand);
@@ -333,7 +344,11 @@ impl WorldState {
     }
 
     pub fn get_chunk_order_by_distance(&self, camera: &Camera) -> Vec<[usize; 2]> {
-        let mut chunk_order = self.iter_visible_chunks(camera).collect::<Vec<_>>();
+        // let mut chunk_order = self.iter_visible_chunks(camera).collect::<Vec<_>>();
+        let mut chunk_order: Vec<[usize; 2]> = vec![];
+        for (chunk_x, chunk_z) in iproduct!(0..VISIBLE_CHUNK_WIDTH, 0..VISIBLE_CHUNK_WIDTH) {
+            chunk_order.push([chunk_x, chunk_z]);
+        }
 
         chunk_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
             let chunk_a_center_pos = cgmath::Point3::new(
@@ -390,9 +405,11 @@ impl WorldState {
             [VISIBLE_CHUNK_WIDTH, VISIBLE_CHUNK_WIDTH],
         );
 
-        for [chunk_x, chunk_z] in self.iter_visible_chunks(camera) {
-            all_chunk_data[[chunk_x, chunk_z]] =
-                self.generate_chunk_data([chunk_x, chunk_z], camera);
+        let mut abs_chunk_iter = self.iter_visible_chunks(camera);
+        for (rel_chunk_x, rel_chunk_z) in iproduct!(0..VISIBLE_CHUNK_WIDTH, 0..VISIBLE_CHUNK_WIDTH) {
+            let [abs_chunk_x, abs_chunk_z] = abs_chunk_iter.next().unwrap();
+            all_chunk_data[[rel_chunk_x, rel_chunk_z]] =
+                self.generate_chunk_data([abs_chunk_x, abs_chunk_z], camera);
         }
 
         let elapsed_time = func_start.elapsed().as_millis();
