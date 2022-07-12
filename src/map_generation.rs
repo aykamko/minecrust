@@ -3,7 +3,7 @@ use bmp::{Image, Pixel};
 use crate::world::CHUNK_XZ_SIZE;
 use noise::NoiseFn;
 
-const BASE_FREQUENCY: f64 = 5.0;
+const BASE_FREQUENCY: f64 = 5.0 / 16.0;
 const NUM_OCTAVES: usize = 4;
 
 struct WorldNoise {
