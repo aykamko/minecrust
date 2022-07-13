@@ -17,6 +17,7 @@ collision = "0.20.1"
 bitmaps = "3.2.0"
 noise = "0.7.0"
 bmp = "0.5.0"
+rand = "0.8.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-executor = "1.0"

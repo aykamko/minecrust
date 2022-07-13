@@ -304,15 +304,17 @@ impl WorldState {
 
         let [chunk_x, chunk_z] = outer_chunk_idx;
         // Allocate neighbors to avoid out-of-bounds array accessing when modifying blocks
-        allocate_inner([chunk_x - 1, chunk_z - 1]);
-        allocate_inner([chunk_x - 1, chunk_z]);
-        allocate_inner([chunk_x - 1, chunk_z + 1]);
-        allocate_inner([chunk_x, chunk_z - 1]);
-        let did_allocate = allocate_inner([chunk_x, chunk_z]);
-        allocate_inner([chunk_x, chunk_z + 1]);
-        allocate_inner([chunk_x + 1, chunk_z - 1]);
-        allocate_inner([chunk_x + 1, chunk_z]);
-        allocate_inner([chunk_x + 1, chunk_z + 1]);
+        let did_allocate = [
+          allocate_inner([chunk_x - 1, chunk_z - 1]),
+          allocate_inner([chunk_x - 1, chunk_z]),
+          allocate_inner([chunk_x - 1, chunk_z + 1]),
+          allocate_inner([chunk_x, chunk_z - 1]),
+          allocate_inner([chunk_x, chunk_z]),
+          allocate_inner([chunk_x, chunk_z + 1]),
+          allocate_inner([chunk_x + 1, chunk_z - 1]),
+          allocate_inner([chunk_x + 1, chunk_z]),
+          allocate_inner([chunk_x + 1, chunk_z + 1]),
+        ].into_iter().reduce(|accum, item| { accum || item }).unwrap();
 
         did_allocate
     }
