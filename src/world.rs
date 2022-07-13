@@ -101,6 +101,10 @@ pub const VISIBLE_CHUNK_WIDTH: usize = 16;
 
 const CHUNK_DOES_NOT_EXIST_VALUE: u32 = u32::max_value();
 
+const MIN_HEIGHT: u16 = 2;
+const MAX_HEIGHT: u16 = 80;
+const WATER_HEIGHT: u16 = 26;
+
 // Goal: infinite world generation
 
 // Today: whole world is represented as one contiguous 3D array
@@ -276,7 +280,7 @@ impl WorldState {
         }
     }
 
-    fn maybe_allocate_chunk(&mut self, chunk_idx: [usize; 2]) {
+    fn maybe_allocate_chunk(&mut self, chunk_idx: [usize; 2]) -> bool {
         if self.chunk_indices[chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
             self.chunks.push(Chunk {
                 position: chunk_idx,
@@ -291,7 +295,9 @@ impl WorldState {
                 ),
             });
             self.chunk_indices[chunk_idx] = self.chunks.len() as u32 - 1;
+            return true;
         }
+        return false;
     }
 
     pub fn initial_setup(&mut self) {
@@ -304,12 +310,8 @@ impl WorldState {
             first_chunk_xz_index - 1..last_chunk_xz_index + 1
         ) {
             // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
-            self.maybe_allocate_chunk([chunk_x, chunk_z])
+            self.maybe_allocate_chunk([chunk_x, chunk_z]);
         }
-
-        const MIN_HEIGHT: u16 = 2;
-        const MAX_HEIGHT: u16 = 80;
-        const WATER_HEIGHT: u16 = 26;
 
         for (chunk_x, chunk_z) in iproduct!(
             first_chunk_xz_index..last_chunk_xz_index,
@@ -456,7 +458,46 @@ impl WorldState {
     pub fn generate_chunk_data(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
         let func_start = Instant::now();
 
-        self.maybe_allocate_chunk(chunk_idx);
+        let [chunk_x, chunk_z] = chunk_idx;
+
+        if self.maybe_allocate_chunk(chunk_idx) {
+            let map_elevation = map_generation::generate_chunk_elevation_map(
+                [chunk_x, chunk_z],
+                MIN_HEIGHT,
+                MAX_HEIGHT,
+            );
+            let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
+            // save_elevation_to_file(map_elevation, "map.bmp");
+
+            for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+                let ground_elevation = map_elevation[x][z] as usize;
+                let (world_x, world_z) = (base_x + x, base_z + z);
+
+                // println!(
+                //     "settingblock chunk_x {}, chunk_z {}, world_x {}, world_z {}, x {}, z {}",
+                //     chunk_x, chunk_z, world_x, world_z, x, z
+                // );
+
+                let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
+                    BlockType::Sand
+                } else {
+                    BlockType::Grass
+                };
+                self.set_block(world_x, ground_elevation, world_z, top_block_type);
+
+                for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
+                    self.set_block(world_x, y, world_z, BlockType::Sand);
+                }
+                for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
+                    self.set_block(world_x, y, world_z, BlockType::Dirt);
+                }
+                for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
+                    if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
+                        self.set_block(world_x, y, world_z, BlockType::Water);
+                    }
+                }
+            }
+        }
 
         use cgmath::{Deg, Quaternion, Vector3};
 
@@ -477,7 +518,6 @@ impl WorldState {
 
         let mut opaque_instances: Vec<Instance> = vec![];
         let mut transluscent_instances: Vec<Instance> = vec![];
-        let [chunk_x, chunk_z] = chunk_idx;
 
         for (chunk_rel_x, y, chunk_rel_z) in
             iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)

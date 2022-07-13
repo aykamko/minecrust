@@ -287,8 +287,9 @@ fn start(
 
                 if update_result.did_move_chunks {
                     if update_result.new_chunk_location[0] > update_result.old_chunk_location[0] {
-                        println!("moved in +x direction");
-                        chunks_modified.push([update_result.new_chunk_location[0] + 8, update_result.new_chunk_location[1]]);
+                        let new_block = [update_result.new_chunk_location[0] + 8, update_result.new_chunk_location[1]];
+                        println!("moved in +x direction, generating new block {:?}", new_block);
+                        chunks_modified.push(new_block);
                     }
                 }
 
@@ -321,8 +322,9 @@ fn start(
                 if !chunks_modified.is_empty() {
                     for chunk_idx in chunks_modified {
                         let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
-                        // println!("Chunk modified is {:?}", chunk_data.camera_relative_position);
+                        println!("Chunk modified is {:?}", chunk_data.camera_relative_position);
                         let chunk_render_datum = &mut scene.chunk_render_data[chunk_data.camera_relative_position];
+                        // let chunk_render_datum = &mut scene.chunk_render_data[[9, 9]];
 
                         for typed_instances in chunk_data.typed_instances_vec.iter() {
                             let maybe_instance_buffer = chunk_render_datum
