@@ -280,34 +280,58 @@ impl WorldState {
         }
     }
 
-    fn maybe_allocate_chunk(&mut self, chunk_idx: [usize; 2]) -> bool {
-        if self.chunk_indices[chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
-            self.chunks.push(Chunk {
-                position: chunk_idx,
-                blocks: Vec3d::new(
-                    vec![
-                        Block {
-                            ..Default::default()
-                        };
-                        CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
-                    ],
-                    [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
-                ),
-            });
-            self.chunk_indices[chunk_idx] = self.chunks.len() as u32 - 1;
-            return true;
-        }
-        return false;
+    fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
+        let mut allocate_inner = move |inner_chunk_idx: [usize; 2]| -> bool {
+            if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
+                self.chunks.push(Chunk {
+                    position: inner_chunk_idx,
+                    blocks: Vec3d::new(
+                        vec![
+                            Block {
+                                ..Default::default()
+                            };
+                            CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
+                        ],
+                        [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
+                    ),
+                });
+                self.chunk_indices[inner_chunk_idx] = self.chunks.len() as u32 - 1;
+                true
+            } else {
+                false
+            }
+        };
+
+        let [chunk_x, chunk_z] = outer_chunk_idx;
+        // Allocate neighbors to avoid out-of-bounds array accessing when modifying blocks
+        allocate_inner([chunk_x - 1, chunk_z - 1]);
+        allocate_inner([chunk_x - 1, chunk_z]);
+        allocate_inner([chunk_x - 1, chunk_z + 1]);
+        allocate_inner([chunk_x, chunk_z - 1]);
+        let did_allocate = allocate_inner([chunk_x, chunk_z]);
+        allocate_inner([chunk_x, chunk_z + 1]);
+        allocate_inner([chunk_x + 1, chunk_z - 1]);
+        allocate_inner([chunk_x + 1, chunk_z]);
+        allocate_inner([chunk_x + 1, chunk_z + 1]);
+
+        did_allocate
     }
 
     pub fn initial_setup(&mut self) {
         // Generate initial chunks in the center of the world
         let first_chunk_xz_index = (MAX_CHUNK_WORLD_WIDTH / 2) - (VISIBLE_CHUNK_WIDTH / 2);
         let last_chunk_xz_index = first_chunk_xz_index + VISIBLE_CHUNK_WIDTH;
+        // for (chunk_x, chunk_z) in iproduct!(
+        //     // allocate an extra chunk on either side to stay in bounds when modifying blocks
+        //     first_chunk_xz_index - 1..last_chunk_xz_index + 1,
+        //     first_chunk_xz_index - 1..last_chunk_xz_index + 1
+        // ) {
+        //     // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
+        //     self.maybe_allocate_chunk([chunk_x, chunk_z]);
+        // }
         for (chunk_x, chunk_z) in iproduct!(
-            // allocate an extra chunk on either side to stay in bounds when modifying blocks
-            first_chunk_xz_index - 1..last_chunk_xz_index + 1,
-            first_chunk_xz_index - 1..last_chunk_xz_index + 1
+            first_chunk_xz_index..last_chunk_xz_index,
+            first_chunk_xz_index..last_chunk_xz_index
         ) {
             // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
             self.maybe_allocate_chunk([chunk_x, chunk_z]);
@@ -461,6 +485,7 @@ impl WorldState {
         let [chunk_x, chunk_z] = chunk_idx;
 
         if self.maybe_allocate_chunk(chunk_idx) {
+            println!("Did allocate chunk {:?}", chunk_idx);
             let map_elevation = map_generation::generate_chunk_elevation_map(
                 [chunk_x, chunk_z],
                 MIN_HEIGHT,
@@ -634,7 +659,7 @@ impl WorldState {
             .collect::<Vec<_>>();
 
         let elapsed_time = func_start.elapsed().as_millis();
-        println!("Took {}ms to generate chunk vertex data", elapsed_time);
+        // println!("Took {}ms to generate chunk vertex data", elapsed_time);
 
         ChunkData {
             position: chunk_idx,
