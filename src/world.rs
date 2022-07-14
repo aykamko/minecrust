@@ -1,6 +1,7 @@
 use crate::camera::Camera;
 use crate::map_generation::{self, save_elevation_to_file};
 use crate::vec_extra::{Vec2d, Vec3d};
+use crate::ChunkRenderDescriptor;
 use bitmaps::Bitmap;
 use itertools::Itertools;
 
@@ -100,6 +101,7 @@ pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 pub const VISIBLE_CHUNK_WIDTH: usize = 16;
 
 const CHUNK_DOES_NOT_EXIST_VALUE: u32 = u32::max_value();
+const NO_RENDER_DESCRIPTOR_INDEX: usize = usize::max_value();
 
 const MIN_HEIGHT: u16 = 2;
 const MAX_HEIGHT: u16 = 80;
@@ -130,10 +132,6 @@ pub fn get_world_center() -> Point3<usize> {
     )
 }
 
-pub struct Chunk {
-    position: [usize; 2],
-    blocks: Vec3d<Block>,
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ChunkDataType {
@@ -156,6 +154,13 @@ pub struct ChunkData {
     pub typed_instances_vec: Vec<TypedInstances>,
 }
 
+pub struct Chunk {
+    position: [usize; 2],
+    blocks: Vec3d<Block>,
+    // Index into RenderDescriptor array for rendering this chunk
+    pub render_descriptor_idx: usize,
+}
+
 pub struct WorldState {
     pub chunk_indices: Vec2d<u32>,
     chunks: Vec<Chunk>,
@@ -170,6 +175,16 @@ impl WorldState {
             ),
             chunks: vec![],
         }
+    }
+
+    fn get_chunk_mut(&mut self, chunk_idx: [usize; 2]) -> &mut Chunk {
+        let chunk_idx = self.chunk_indices[chunk_idx];
+        &mut self.chunks[chunk_idx as usize]
+    }
+
+    pub fn get_chunk(&self, chunk_idx: [usize; 2]) -> &Chunk {
+        let chunk_idx = self.chunk_indices[chunk_idx];
+        &self.chunks[chunk_idx as usize]
     }
 
     fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
@@ -281,7 +296,7 @@ impl WorldState {
     }
 
     fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
-        let mut allocate_inner = move |inner_chunk_idx: [usize; 2]| -> bool {
+        let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
                     position: inner_chunk_idx,
@@ -294,6 +309,7 @@ impl WorldState {
                         ],
                         [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
                     ),
+                    render_descriptor_idx: NO_RENDER_DESCRIPTOR_INDEX,
                 });
                 self.chunk_indices[inner_chunk_idx] = self.chunks.len() as u32 - 1;
                 true
@@ -305,89 +321,81 @@ impl WorldState {
         let [chunk_x, chunk_z] = outer_chunk_idx;
         // Allocate neighbors to avoid out-of-bounds array accessing when modifying blocks
         let did_allocate = [
-          allocate_inner([chunk_x - 1, chunk_z - 1]),
-          allocate_inner([chunk_x - 1, chunk_z]),
-          allocate_inner([chunk_x - 1, chunk_z + 1]),
-          allocate_inner([chunk_x, chunk_z - 1]),
-          allocate_inner([chunk_x, chunk_z]),
-          allocate_inner([chunk_x, chunk_z + 1]),
-          allocate_inner([chunk_x + 1, chunk_z - 1]),
-          allocate_inner([chunk_x + 1, chunk_z]),
-          allocate_inner([chunk_x + 1, chunk_z + 1]),
-        ].into_iter().reduce(|accum, item| { accum || item }).unwrap();
+            allocate_inner([chunk_x - 1, chunk_z - 1]),
+            allocate_inner([chunk_x - 1, chunk_z]),
+            allocate_inner([chunk_x - 1, chunk_z + 1]),
+            allocate_inner([chunk_x, chunk_z - 1]),
+            allocate_inner([chunk_x, chunk_z]),
+            allocate_inner([chunk_x, chunk_z + 1]),
+            allocate_inner([chunk_x + 1, chunk_z - 1]),
+            allocate_inner([chunk_x + 1, chunk_z]),
+            allocate_inner([chunk_x + 1, chunk_z + 1]),
+        ]
+        .into_iter()
+        .reduce(|accum, item| accum || item)
+        .unwrap();
+
+        // Generate initial blocks
+        let elevation_map = map_generation::generate_chunk_elevation_map(
+            [chunk_x, chunk_z],
+            MIN_HEIGHT,
+            MAX_HEIGHT,
+        );
+        let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
+        // save_elevation_to_file(map_elevation, "map.bmp");
+
+        for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+            let ground_elevation = elevation_map[x][z] as usize;
+            let (world_x, world_z) = (base_x + x, base_z + z);
+            let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
+                BlockType::Sand
+            } else {
+                BlockType::Grass
+            };
+            self.set_block(world_x, ground_elevation, world_z, top_block_type);
+
+            for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
+                self.set_block(world_x, y, world_z, BlockType::Sand);
+            }
+            for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
+                self.set_block(world_x, y, world_z, BlockType::Dirt);
+            }
+            for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
+                if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
+                    self.set_block(world_x, y, world_z, BlockType::Water);
+                }
+            }
+        }
 
         did_allocate
     }
 
     pub fn initial_setup(&mut self) {
+        // HACK: we're assuming the camera is at the center of the world
+
         // Generate initial chunks in the center of the world
         let first_chunk_xz_index = (MAX_CHUNK_WORLD_WIDTH / 2) - (VISIBLE_CHUNK_WIDTH / 2);
         let last_chunk_xz_index = first_chunk_xz_index + VISIBLE_CHUNK_WIDTH;
-        // for (chunk_x, chunk_z) in iproduct!(
-        //     // allocate an extra chunk on either side to stay in bounds when modifying blocks
-        //     first_chunk_xz_index - 1..last_chunk_xz_index + 1,
-        //     first_chunk_xz_index - 1..last_chunk_xz_index + 1
-        // ) {
-        //     // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
-        //     self.maybe_allocate_chunk([chunk_x, chunk_z]);
-        // }
         for (chunk_x, chunk_z) in iproduct!(
             first_chunk_xz_index..last_chunk_xz_index,
             first_chunk_xz_index..last_chunk_xz_index
         ) {
-            // println!("allocating chunk_x {}, chunk_z {}", chunk_x, chunk_z);
             self.maybe_allocate_chunk([chunk_x, chunk_z]);
-        }
-
-        for (chunk_x, chunk_z) in iproduct!(
-            first_chunk_xz_index..last_chunk_xz_index,
-            first_chunk_xz_index..last_chunk_xz_index
-        ) {
-            let map_elevation = map_generation::generate_chunk_elevation_map(
-                [chunk_x, chunk_z],
-                MIN_HEIGHT,
-                MAX_HEIGHT,
-            );
-            let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
-            // save_elevation_to_file(map_elevation, "map.bmp");
-
-            for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
-                let ground_elevation = map_elevation[x][z] as usize;
-                let (world_x, world_z) = (base_x + x, base_z + z);
-
-                // println!(
-                //     "settingblock chunk_x {}, chunk_z {}, world_x {}, world_z {}, x {}, z {}",
-                //     chunk_x, chunk_z, world_x, world_z, x, z
-                // );
-
-                let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
-                    BlockType::Sand
-                } else {
-                    BlockType::Grass
-                };
-                self.set_block(world_x, ground_elevation, world_z, top_block_type);
-
-                for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
-                    self.set_block(world_x, y, world_z, BlockType::Sand);
-                }
-                for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
-                    self.set_block(world_x, y, world_z, BlockType::Dirt);
-                }
-                for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
-                    if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
-                        self.set_block(world_x, y, world_z, BlockType::Water);
-                    }
-                }
-            }
         }
     }
 
+    pub fn set_render_descriptor_idx(&mut self, chunk_idx: [usize; 2], render_descriptor_idx: usize) {
+        let mut chunk = self.get_chunk_mut(chunk_idx);
+        chunk.render_descriptor_idx = render_descriptor_idx;
+    }
+
     pub fn get_chunk_order_by_distance(&self, camera: &Camera) -> Vec<[usize; 2]> {
-        // let mut chunk_order = self.iter_visible_chunks(camera).collect::<Vec<_>>();
-        let mut chunk_order: Vec<[usize; 2]> = vec![];
-        for (chunk_x, chunk_z) in iproduct!(0..VISIBLE_CHUNK_WIDTH, 0..VISIBLE_CHUNK_WIDTH) {
-            chunk_order.push([chunk_x, chunk_z]);
-        }
+        // let mut chunk_order: Vec<[usize; 2]> = vec![];
+        // for (chunk_x, chunk_z) in iproduct!(0..VISIBLE_CHUNK_WIDTH, 0..VISIBLE_CHUNK_WIDTH) {
+        //     chunk_order.push([chunk_x, chunk_z]);
+        // }
+
+        let mut chunk_order = self.iter_visible_chunks(camera).collect::<Vec<_>>();
 
         chunk_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
             let chunk_a_center_pos = cgmath::Point3::new(
@@ -484,47 +492,7 @@ impl WorldState {
     pub fn generate_chunk_data(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
         let func_start = Instant::now();
 
-        let [chunk_x, chunk_z] = chunk_idx;
-
-        if self.maybe_allocate_chunk(chunk_idx) {
-            println!("Did allocate chunk {:?}", chunk_idx);
-            let map_elevation = map_generation::generate_chunk_elevation_map(
-                [chunk_x, chunk_z],
-                MIN_HEIGHT,
-                MAX_HEIGHT,
-            );
-            let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
-            // save_elevation_to_file(map_elevation, "map.bmp");
-
-            for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
-                let ground_elevation = map_elevation[x][z] as usize;
-                let (world_x, world_z) = (base_x + x, base_z + z);
-
-                // println!(
-                //     "settingblock chunk_x {}, chunk_z {}, world_x {}, world_z {}, x {}, z {}",
-                //     chunk_x, chunk_z, world_x, world_z, x, z
-                // );
-
-                let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
-                    BlockType::Sand
-                } else {
-                    BlockType::Grass
-                };
-                self.set_block(world_x, ground_elevation, world_z, top_block_type);
-
-                for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
-                    self.set_block(world_x, y, world_z, BlockType::Sand);
-                }
-                for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
-                    self.set_block(world_x, y, world_z, BlockType::Dirt);
-                }
-                for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
-                    if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
-                        self.set_block(world_x, y, world_z, BlockType::Water);
-                    }
-                }
-            }
-        }
+        self.maybe_allocate_chunk(chunk_idx);
 
         use cgmath::{Deg, Quaternion, Vector3};
 
@@ -546,6 +514,7 @@ impl WorldState {
         let mut opaque_instances: Vec<Instance> = vec![];
         let mut transluscent_instances: Vec<Instance> = vec![];
 
+        let [chunk_x, chunk_z] = chunk_idx;
         for (chunk_rel_x, y, chunk_rel_z) in
             iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
         {

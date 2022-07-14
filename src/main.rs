@@ -52,7 +52,7 @@ struct AnnotatedInstanceBuffer {
     data_type: world::ChunkDataType,
 }
 struct ChunkRenderDescriptor {
-    position: [usize; 2],
+    world_chunk_position: [usize; 2],
     annotated_instance_buffers: Vec<AnnotatedInstanceBuffer>,
 }
 
@@ -65,7 +65,7 @@ struct Scene {
     camera_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
-    chunk_render_data: Vec2d<ChunkRenderDescriptor>,
+    chunk_render_descriptors: Vec<ChunkRenderDescriptor>,
     chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
@@ -288,7 +288,7 @@ fn start(
                 if update_result.did_move_chunks {
                     if update_result.new_chunk_location[0] > update_result.old_chunk_location[0] {
                         let new_block = [
-                            update_result.new_chunk_location[0] + 8,
+                            update_result.new_chunk_location[0] + 7,
                             update_result.new_chunk_location[1],
                         ];
                         println!(
@@ -325,43 +325,43 @@ fn start(
                     );
                 }
 
-                if !chunks_modified.is_empty() {
-                    for chunk_idx in chunks_modified {
-                        let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
+                // if !chunks_modified.is_empty() {
+                //     for chunk_idx in chunks_modified {
+                //         let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
 
-                        // MEGA HACK, pls remove
-                        let mut mod_pos = chunk_data.camera_relative_position;
-                        if chunk_data.camera_relative_position[0] == 16 {
-                            use rand::Rng;
-                            let mut rng = rand::thread_rng();
-                            mod_pos = [rng.gen_range(0..16), rng.gen_range(0..16)];
-                        }
-                        println!(
-                            "Chunk modified is {:?}",
-                            mod_pos
-                        );
+                //         // MEGA HACK, pls remove
+                //         let mut mod_pos = chunk_data.camera_relative_position;
+                //         if chunk_data.camera_relative_position[0] == 15 {
+                //             use rand::Rng;
+                //             let mut rng = rand::thread_rng();
+                //             mod_pos = [rng.gen_range(0..16), rng.gen_range(0..16)];
+                //         }
+                //         println!(
+                //             "Chunk modified is {:?}, pos is {:?}",
+                //             chunk_idx, chunk_data.camera_relative_position
+                //         );
 
-                        let chunk_render_datum = &mut scene.chunk_render_data[mod_pos];
+                //         let chunk_render_datum = &mut scene.chunk_render_data[mod_pos];
 
-                        for typed_instances in chunk_data.typed_instances_vec.iter() {
-                            let maybe_instance_buffer = chunk_render_datum
-                                .annotated_instance_buffers
-                                .iter_mut()
-                                .find(|ib| ib.data_type == typed_instances.data_type);
+                //         for typed_instances in chunk_data.typed_instances_vec.iter() {
+                //             let maybe_instance_buffer = chunk_render_datum
+                //                 .annotated_instance_buffers
+                //                 .iter_mut()
+                //                 .find(|ib| ib.data_type == typed_instances.data_type);
 
-                            if let Some(mut instance_buffer) = maybe_instance_buffer {
-                                queue.write_buffer(
-                                    &instance_buffer.buffer,
-                                    0,
-                                    bytemuck::cast_slice(&typed_instances.instance_data),
-                                );
-                                instance_buffer.len = typed_instances.instance_data.len();
-                            }
-                        }
-                    }
-                }
+                //             if let Some(mut instance_buffer) = maybe_instance_buffer {
+                //                 queue.write_buffer(
+                //                     &instance_buffer.buffer,
+                //                     0,
+                //                     bytemuck::cast_slice(&typed_instances.instance_data),
+                //                 );
+                //                 instance_buffer.len = typed_instances.instance_data.len();
+                //             }
+                //         }
+                //     }
+                // }
 
-                render_scene(&view, &device, &queue, &scene, &spawner);
+                render_scene(&view, &device, &queue, &scene, &world_state, &spawner);
 
                 frame.present();
                 camera_controller.reset_mouse_delta();
@@ -583,9 +583,9 @@ fn setup_scene(
     let (all_chunk_data, chunk_order) = world_state.generate_world_data(&camera);
     let chunk_dims = all_chunk_data.dims();
 
-    let mut chunk_render_data_flat: Vec<ChunkRenderDescriptor> = vec![];
+    let mut chunk_render_descriptors: Vec<ChunkRenderDescriptor> = vec![];
 
-    // HACK(aleks): the order needs to be reversed here for collisions to work later -- that's confusing
+    // HACK(aleks): the order of (x, z) needs to be reversed here for collisions to work later -- that's confusing
     for (chunk_z, chunk_x) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
         let chunk_data = &all_chunk_data[[chunk_x, chunk_z]];
 
@@ -599,7 +599,6 @@ fn setup_scene(
             // Divide by 2 since worst case is a "3D checkerboard" where every other space is filled
             let mut max_number_faces_possible =
                 world::NUM_BLOCKS_IN_CHUNK * instance::InstanceRaw::size() * NUM_FACES / 2;
-
             // HACK(aleks) divide by 16 because too much memory
             max_number_faces_possible /= 16;
 
@@ -634,13 +633,14 @@ fn setup_scene(
                 data_type: typed_instances.data_type.clone(),
             });
         }
-        chunk_render_data_flat.push(ChunkRenderDescriptor {
-            position: [chunk_x, chunk_z],
+
+        chunk_render_descriptors.push(ChunkRenderDescriptor {
+            world_chunk_position: chunk_data.position,
             annotated_instance_buffers,
-        })
+        });
+        let render_descriptor_idx = chunk_render_descriptors.len() - 1;
+        world_state.set_render_descriptor_idx(chunk_data.position, render_descriptor_idx);
     }
-    let chunk_render_data: Vec2d<ChunkRenderDescriptor> =
-        Vec2d::new(chunk_render_data_flat, [chunk_dims[0], chunk_dims[1]]);
 
     let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
@@ -744,7 +744,7 @@ fn setup_scene(
         camera_bind_group,
         camera_buf,
         camera_staging_buf,
-        chunk_render_data,
+        chunk_render_descriptors,
         chunk_order,
         depth_texture,
         pipeline,
@@ -757,6 +757,7 @@ fn render_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     scene: &Scene,
+    world_state: &world::WorldState,
     spawner: &Spawner,
 ) {
     static RENDER_WIREFRAME: bool = false;
@@ -805,7 +806,11 @@ fn render_scene(
 
         for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
             for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
-                let chunk_render_datum = &scene.chunk_render_data[[*chunk_x, *chunk_z]];
+                let render_descriptor_idx = world_state
+                    .get_chunk([*chunk_x, *chunk_z])
+                    .render_descriptor_idx;
+                let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
+
                 let maybe_instance_buffer = chunk_render_datum
                     .annotated_instance_buffers
                     .iter()
