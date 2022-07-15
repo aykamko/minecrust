@@ -227,7 +227,8 @@ impl WorldState {
                 this_shared_face: Face::Bottom,
             });
         }
-        // TODO: more bounds checks?
+
+        // TODO: bounds checks for edge of world?
         neighbors.push(Neighbor {
             pos: [x + 1, y, z],
             block: *self.get_block(x + 1, y, z),
@@ -272,12 +273,7 @@ impl WorldState {
                 self.get_block_mut(neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
 
             match (block_type, neighbor_block.block_type) {
-                (BlockType::Water, BlockType::Water | BlockType::Empty) => {
-                    // HACK: gets me seamless water when generating infinite world
-                    // I hope this doesn't bite me later...
-                    if neighbor_block.block_type == BlockType::Empty && neighbor.this_shared_face == Face::Top {
-                        continue;
-                    }
+                (BlockType::Water, BlockType::Water) => {
                     neighbor_block
                         .neighbors
                         .set(neighbor.other_shared_face, true);
@@ -285,11 +281,16 @@ impl WorldState {
                         .neighbors
                         .set(neighbor.this_shared_face, true);
                 }
-                // (BlockType::Water, _) => {
-                //     if neighbor_block.block_type != BlockType::Empty {
-                //         neighbor_block.block_type = BlockType::Sand;
-                //     }
-                // }
+                // HACK: let's me spawn water on the edge of the world when generating on the horizon
+                // This will come back to bite me if I implement waterfalls
+                (BlockType::Water, BlockType::Empty)=> {
+                    if neighbor.this_shared_face == Face::Top {
+                        continue;
+                    }
+                    self.get_block_mut(x, y, z)
+                        .neighbors
+                        .set(neighbor.this_shared_face, true);
+                }
                 (_, _) => {
                     neighbor_block
                         .neighbors
@@ -339,7 +340,6 @@ impl WorldState {
         .reduce(|accum, item| accum || item)
         .unwrap();
 
-        // Generate initial blocks
         let elevation_map = map_generation::generate_chunk_elevation_map(
             [chunk_x, chunk_z],
             MIN_HEIGHT,
@@ -358,10 +358,11 @@ impl WorldState {
             };
             self.set_block(world_x, ground_elevation, world_z, top_block_type);
 
-            for y in 0..core::cmp::min(ground_elevation, WATER_HEIGHT as usize) {
+            let min_ground_or_water = core::cmp::min(ground_elevation, WATER_HEIGHT as usize);
+            for y in 0..min_ground_or_water {
                 self.set_block(world_x, y, world_z, BlockType::Sand);
             }
-            for y in core::cmp::min(ground_elevation, WATER_HEIGHT as usize)..ground_elevation {
+            for y in min_ground_or_water..ground_elevation {
                 self.set_block(world_x, y, world_z, BlockType::Dirt);
             }
             for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
