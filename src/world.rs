@@ -98,7 +98,7 @@ pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_S
 // The largest the world can be in xz dimension
 pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 // How many chunks are visible in xz dimension
-pub const VISIBLE_CHUNK_WIDTH: usize = 16;
+pub const VISIBLE_CHUNK_WIDTH: usize = 24;
 
 const CHUNK_DOES_NOT_EXIST_VALUE: u32 = u32::max_value();
 pub const NO_RENDER_DESCRIPTOR_INDEX: usize = usize::max_value();

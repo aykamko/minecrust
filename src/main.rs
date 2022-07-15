@@ -286,6 +286,37 @@ fn start(
                     });
                 }
 
+                // Break a block with the camera!
+                if left_mouse_clicked || right_mouse_clicked {
+                    let chunks_modified = if right_mouse_clicked {
+                        world_state.place_block(&camera, world::BlockType::Sand)
+                    } else {
+                        world_state.break_block(&camera)
+                    };
+                    left_mouse_clicked = false;
+                    right_mouse_clicked = false;
+
+                    for chunk_idx in chunks_modified {
+                        chunk_mods.push(ChunkModification {
+                            new_chunk: chunk_idx,
+                            old_chunk: chunk_idx,
+                        });
+                    }
+
+                    // Draw camera ray
+                    let forward = (camera.target - camera.eye).normalize();
+                    let horizon_target = camera.target + (forward * 100.0);
+                    queue.write_buffer(
+                        &scene.vertex_buffers[1],
+                        0,
+                        bytemuck::cast_slice(&[
+                            vertex::Vertex::new_from_pos(camera.eye.into()),
+                            vertex::Vertex::new_from_pos(horizon_target.into()),
+                            vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
+                        ]),
+                    );
+                }
+
                 if update_result.did_move_chunks {
                     let new_chunk_order = world_state.get_chunk_order_by_distance(&camera);
 
@@ -311,30 +342,6 @@ fn start(
                     }
 
                     scene.chunk_order = new_chunk_order;
-                }
-
-                // Break a block with the camera!
-                if left_mouse_clicked || right_mouse_clicked {
-                    let construction_chunks_modified = if right_mouse_clicked {
-                        world_state.place_block(&camera, world::BlockType::Sand)
-                    } else {
-                        world_state.break_block(&camera)
-                    };
-                    left_mouse_clicked = false;
-                    right_mouse_clicked = false;
-
-                    // Draw camera ray
-                    let forward = (camera.target - camera.eye).normalize();
-                    let horizon_target = camera.target + (forward * 100.0);
-                    queue.write_buffer(
-                        &scene.vertex_buffers[1],
-                        0,
-                        bytemuck::cast_slice(&[
-                            vertex::Vertex::new_from_pos(camera.eye.into()),
-                            vertex::Vertex::new_from_pos(horizon_target.into()),
-                            vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
-                        ]),
-                    );
                 }
 
                 if !chunk_mods.is_empty() {
