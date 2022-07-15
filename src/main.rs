@@ -17,8 +17,7 @@ use cgmath::{prelude::*, Point3};
 use futures::executor::block_on;
 use itertools::Itertools;
 use spawner::Spawner;
-use std::{borrow::Cow, future::Future, mem, pin::Pin, task};
-use vec_extra::Vec2d;
+use std::{borrow::Cow, collections::HashSet, future::Future, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
@@ -273,30 +272,45 @@ fn start(
                     bytemuck::cast_slice(&[camera_uniform]),
                 );
 
-                let mut chunks_modified: Vec<[usize; 2]> = vec![];
+                struct ChunkModification {
+                    new_chunk: [usize; 2],
+                    old_chunk: [usize; 2],
+                }
+                let mut chunk_mods: Vec<ChunkModification> = vec![];
+
                 if update_result.did_move_blocks {
-                    let [chunk_x, chunk_z] = update_result.new_chunk_location;
-                    chunks_modified.push([chunk_x, chunk_z]);
+                    let chunk_idx = update_result.new_chunk_location;
+                    chunk_mods.push(ChunkModification {
+                        new_chunk: chunk_idx,
+                        old_chunk: chunk_idx,
+                    });
                 }
 
-                // TODO(aleks): this no longer works correctly if we're moving around in an infinite world
-                // because the camera is always positioned at the center chunk in the visible world, relatively
-                // if update_result.did_move_chunks {
-                //     // scene.chunk_order = world_state.get_chunk_order_by_distance(&camera);
-                // }
-
                 if update_result.did_move_chunks {
-                    if update_result.new_chunk_location[0] > update_result.old_chunk_location[0] {
-                        let new_block = [
-                            update_result.new_chunk_location[0] + 7,
-                            update_result.new_chunk_location[1],
-                        ];
-                        println!(
-                            "moved in +x direction, generating new block {:?}",
-                            new_block
-                        );
-                        chunks_modified.push(new_block);
+                    let new_chunk_order = world_state.get_chunk_order_by_distance(&camera);
+
+                    let new_chunk_order_hashset =
+                        new_chunk_order.iter().cloned().collect::<HashSet<_>>();
+                    let old_chunk_order_hashset =
+                        scene.chunk_order.iter().cloned().collect::<HashSet<_>>();
+
+                    let new_chunks = (&new_chunk_order_hashset - &old_chunk_order_hashset)
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let old_chunks = (&old_chunk_order_hashset - &new_chunk_order_hashset)
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>();
+
+                    for (new_chunk, old_chunk) in izip!(new_chunks, old_chunks) {
+                        chunk_mods.push(ChunkModification {
+                            new_chunk,
+                            old_chunk,
+                        });
                     }
+
+                    scene.chunk_order = new_chunk_order;
                 }
 
                 // Break a block with the camera!
@@ -309,9 +323,7 @@ fn start(
                     left_mouse_clicked = false;
                     right_mouse_clicked = false;
 
-                    chunks_modified.extend(construction_chunks_modified.iter());
-                    chunks_modified = chunks_modified.into_iter().unique().collect();
-
+                    // Draw camera ray
                     let forward = (camera.target - camera.eye).normalize();
                     let horizon_target = camera.target + (forward * 100.0);
                     queue.write_buffer(
@@ -325,41 +337,44 @@ fn start(
                     );
                 }
 
-                // if !chunks_modified.is_empty() {
-                //     for chunk_idx in chunks_modified {
-                //         let chunk_data = world_state.generate_chunk_data(chunk_idx, &camera);
+                if !chunk_mods.is_empty() {
+                    for chunk_mod in chunk_mods.into_iter() {
+                        let new_chunk_data =
+                            world_state.generate_chunk_data(chunk_mod.new_chunk, &camera);
 
-                //         // MEGA HACK, pls remove
-                //         let mut mod_pos = chunk_data.camera_relative_position;
-                //         if chunk_data.camera_relative_position[0] == 15 {
-                //             use rand::Rng;
-                //             let mut rng = rand::thread_rng();
-                //             mod_pos = [rng.gen_range(0..16), rng.gen_range(0..16)];
-                //         }
-                //         println!(
-                //             "Chunk modified is {:?}, pos is {:?}",
-                //             chunk_idx, chunk_data.camera_relative_position
-                //         );
+                        let render_descriptor_idx =
+                            world_state.get_render_descriptor_idx(chunk_mod.old_chunk);
+                        if chunk_mod.new_chunk != chunk_mod.old_chunk {
+                            world_state.set_render_descriptor_idx(
+                                chunk_mod.old_chunk,
+                                world::NO_RENDER_DESCRIPTOR_INDEX,
+                            );
+                            world_state.set_render_descriptor_idx(
+                                chunk_mod.new_chunk,
+                                render_descriptor_idx,
+                            );
+                        }
 
-                //         let chunk_render_datum = &mut scene.chunk_render_data[mod_pos];
+                        let chunk_render_descriptor =
+                            &mut scene.chunk_render_descriptors[render_descriptor_idx];
 
-                //         for typed_instances in chunk_data.typed_instances_vec.iter() {
-                //             let maybe_instance_buffer = chunk_render_datum
-                //                 .annotated_instance_buffers
-                //                 .iter_mut()
-                //                 .find(|ib| ib.data_type == typed_instances.data_type);
+                        for typed_instances in new_chunk_data.typed_instances_vec.iter() {
+                            let maybe_instance_buffer = chunk_render_descriptor
+                                .annotated_instance_buffers
+                                .iter_mut()
+                                .find(|ib| ib.data_type == typed_instances.data_type);
 
-                //             if let Some(mut instance_buffer) = maybe_instance_buffer {
-                //                 queue.write_buffer(
-                //                     &instance_buffer.buffer,
-                //                     0,
-                //                     bytemuck::cast_slice(&typed_instances.instance_data),
-                //                 );
-                //                 instance_buffer.len = typed_instances.instance_data.len();
-                //             }
-                //         }
-                //     }
-                // }
+                            if let Some(mut instance_buffer) = maybe_instance_buffer {
+                                queue.write_buffer(
+                                    &instance_buffer.buffer,
+                                    0,
+                                    bytemuck::cast_slice(&typed_instances.instance_data),
+                                );
+                                instance_buffer.len = typed_instances.instance_data.len();
+                            }
+                        }
+                    }
+                }
 
                 render_scene(&view, &device, &queue, &scene, &world_state, &spawner);
 
@@ -806,9 +821,8 @@ fn render_scene(
 
         for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
             for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
-                let render_descriptor_idx = world_state
-                    .get_chunk([*chunk_x, *chunk_z])
-                    .render_descriptor_idx;
+                let render_descriptor_idx =
+                    world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);
                 let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
 
                 let maybe_instance_buffer = chunk_render_datum

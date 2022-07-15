@@ -101,7 +101,7 @@ pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 pub const VISIBLE_CHUNK_WIDTH: usize = 16;
 
 const CHUNK_DOES_NOT_EXIST_VALUE: u32 = u32::max_value();
-const NO_RENDER_DESCRIPTOR_INDEX: usize = usize::max_value();
+pub const NO_RENDER_DESCRIPTOR_INDEX: usize = usize::max_value();
 
 const MIN_HEIGHT: u16 = 2;
 const MAX_HEIGHT: u16 = 80;
@@ -182,7 +182,7 @@ impl WorldState {
         &mut self.chunks[chunk_idx as usize]
     }
 
-    pub fn get_chunk(&self, chunk_idx: [usize; 2]) -> &Chunk {
+    fn get_chunk(&self, chunk_idx: [usize; 2]) -> &Chunk {
         let chunk_idx = self.chunk_indices[chunk_idx];
         &self.chunks[chunk_idx as usize]
     }
@@ -387,6 +387,11 @@ impl WorldState {
     pub fn set_render_descriptor_idx(&mut self, chunk_idx: [usize; 2], render_descriptor_idx: usize) {
         let mut chunk = self.get_chunk_mut(chunk_idx);
         chunk.render_descriptor_idx = render_descriptor_idx;
+    }
+
+    pub fn get_render_descriptor_idx(&self, chunk_idx: [usize; 2]) -> usize {
+        let chunk = self.get_chunk(chunk_idx);
+        chunk.render_descriptor_idx
     }
 
     pub fn get_chunk_order_by_distance(&self, camera: &Camera) -> Vec<[usize; 2]> {
