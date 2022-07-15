@@ -826,7 +826,8 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-        for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
+        // for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
+        for data_type in [ChunkDataType::Transluscent] {
             for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
                 let render_descriptor_idx =
                     world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);

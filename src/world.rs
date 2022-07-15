@@ -132,7 +132,6 @@ pub fn get_world_center() -> Point3<usize> {
     )
 }
 
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum ChunkDataType {
     Opaque,
@@ -384,7 +383,11 @@ impl WorldState {
         }
     }
 
-    pub fn set_render_descriptor_idx(&mut self, chunk_idx: [usize; 2], render_descriptor_idx: usize) {
+    pub fn set_render_descriptor_idx(
+        &mut self,
+        chunk_idx: [usize; 2],
+        render_descriptor_idx: usize,
+    ) {
         let mut chunk = self.get_chunk_mut(chunk_idx);
         chunk.render_descriptor_idx = render_descriptor_idx;
     }
@@ -395,31 +398,25 @@ impl WorldState {
     }
 
     pub fn get_chunk_order_by_distance(&self, camera: &Camera) -> Vec<[usize; 2]> {
-        // let mut chunk_order: Vec<[usize; 2]> = vec![];
-        // for (chunk_x, chunk_z) in iproduct!(0..VISIBLE_CHUNK_WIDTH, 0..VISIBLE_CHUNK_WIDTH) {
-        //     chunk_order.push([chunk_x, chunk_z]);
-        // }
-
         let mut chunk_order = self.iter_visible_chunks(camera).collect::<Vec<_>>();
 
+        let camera_chunk_pos = cgmath::Point2::<f32>::new(
+            camera.eye.x / (CHUNK_XZ_SIZE as f32),
+            camera.eye.z / (CHUNK_XZ_SIZE as f32),
+        );
         chunk_order.sort_by(|[chunk_a_x, chunk_a_z], [chunk_b_x, chunk_b_z]| {
-            let chunk_a_center_pos = cgmath::Point3::new(
-                ((chunk_a_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
-                camera.eye.y,
-                ((chunk_a_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
-            );
-            let chunk_a_distance = camera.eye.distance(chunk_a_center_pos);
-
-            let chunk_b_center_pos = cgmath::Point3::new(
-                ((chunk_b_x * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
-                camera.eye.y,
-                ((chunk_b_z * CHUNK_XZ_SIZE) + (CHUNK_XZ_SIZE / 2)) as f32,
-            );
-            let chunk_b_distance = camera.eye.distance(chunk_b_center_pos);
+            let chunk_a_pos = cgmath::Point2::<f32>::new(*chunk_a_x as f32, *chunk_a_z as f32);
+            let chunk_a_distance = camera_chunk_pos.distance(chunk_a_pos);
+            let chunk_b_pos = cgmath::Point2::<f32>::new(*chunk_b_x as f32, *chunk_b_z as f32);
+            let chunk_b_distance = camera_chunk_pos.distance(chunk_b_pos);
 
             chunk_a_distance.partial_cmp(&chunk_b_distance).unwrap()
         });
-        // println!("Chunk order is {:?}", chunk_index_order);
+        // println!(
+        //     "Camera chunk pos is {:?}",
+        //     [(camera.eye.x as usize) / CHUNK_XZ_SIZE, (camera.eye.z as usize) / CHUNK_XZ_SIZE]
+        // );
+        // println!("Chunk order is {:?}", chunk_order);
 
         chunk_order
     }
