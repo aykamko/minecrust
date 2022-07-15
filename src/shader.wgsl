@@ -64,8 +64,8 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     var distance_from_camera = distance(vertex.world_position, camera_position.eye_position);
 
-    var zfar: f32 = 150.0;
-    var z_fade_start: f32 = 130.0;
+    var zfar: f32 = 250.0;
+    var z_fade_start: f32 = 230.0;
     var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
 
     var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vertex.color_adjust;

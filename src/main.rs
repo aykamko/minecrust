@@ -151,6 +151,7 @@ fn start(
 
     // Start in the center
     let center = world::get_world_center();
+    let zfar = 250.0;
     let mut camera = camera::Camera::new(
         Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
         // have it look at the origin
@@ -160,8 +161,8 @@ fn start(
         cgmath::Vector3::unit_y(),
         config.width as f32 / config.height as f32,
         70.0,
-        1.0,
-        150.0,
+        0.1,
+        zfar,
     );
 
     let mut camera_uniform = camera::CameraUniform::new();
