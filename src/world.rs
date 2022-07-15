@@ -272,7 +272,12 @@ impl WorldState {
                 self.get_block_mut(neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
 
             match (block_type, neighbor_block.block_type) {
-                (BlockType::Water, BlockType::Water) => {
+                (BlockType::Water, BlockType::Water | BlockType::Empty) => {
+                    // HACK: gets me seamless water when generating infinite world
+                    // I hope this doesn't bite me later...
+                    if neighbor_block.block_type == BlockType::Empty && neighbor.this_shared_face == Face::Top {
+                        continue;
+                    }
                     neighbor_block
                         .neighbors
                         .set(neighbor.other_shared_face, true);
