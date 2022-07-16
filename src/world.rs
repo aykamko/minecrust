@@ -10,11 +10,10 @@ use cgmath::{prelude::*, MetricSpace, Point2, Point3};
 use collision::Continuous;
 use std::collections::HashSet;
 use std::convert::Into;
-use std::default;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(u8)]
 pub enum BlockType {
     Empty,
@@ -166,6 +165,15 @@ pub struct WorldState {
     chunks: Vec<Chunk>,
 }
 
+macro_rules! set_block {
+    ($self:ident, $x:expr, $y:expr, $z:expr, $block_type:expr) => {
+        $self.set_block($x, $y, $z, $block_type, false)
+    };
+    ($self:ident, $x:expr, $y:expr, $z:expr, $block_type:expr, $verbose:expr) => {
+        $self.set_block($x, $y, $z, $block_type, $verbose)
+    };
+}
+
 impl WorldState {
     pub fn new() -> Self {
         Self {
@@ -202,7 +210,14 @@ impl WorldState {
         &chunk.blocks[block_idx]
     }
 
-    fn set_block(&mut self, x: usize, y: usize, z: usize, mut block_type: BlockType) {
+    fn set_block(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        mut block_type: BlockType,
+        verbose: bool,
+    ) {
         struct Neighbor {
             pos: [usize; 3],
             block: Block,
@@ -266,6 +281,14 @@ impl WorldState {
                     block_type = BlockType::Water;
                 }
             }
+        }
+        if verbose || (x == 8182 && y == 35 && z == 8198) {
+            println!(
+                "Setting block @ {:?} from {:?} to {:?}",
+                [x, y, z],
+                curr_block.block_type,
+                block_type
+            );
         }
         curr_block.block_type = block_type;
 
@@ -357,34 +380,36 @@ impl WorldState {
         .reduce(|accum, item| accum || item)
         .unwrap();
 
-        let elevation_map = map_generation::generate_chunk_elevation_map(
-            [chunk_x, chunk_z],
-            MIN_HEIGHT,
-            MAX_HEIGHT,
-        );
-        let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
-        // save_elevation_to_file(map_elevation, "map.bmp");
+        if did_allocate {
+            let elevation_map = map_generation::generate_chunk_elevation_map(
+                [chunk_x, chunk_z],
+                MIN_HEIGHT,
+                MAX_HEIGHT,
+            );
+            let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
+            // save_elevation_to_file(map_elevation, "map.bmp");
 
-        for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
-            let ground_elevation = elevation_map[x][z] as usize;
-            let (world_x, world_z) = (base_x + x, base_z + z);
-            let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
-                BlockType::Sand
-            } else {
-                BlockType::Grass
-            };
-            self.set_block(world_x, ground_elevation, world_z, top_block_type);
+            for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+                let ground_elevation = elevation_map[x][z] as usize;
+                let (world_x, world_z) = (base_x + x, base_z + z);
+                let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
+                    BlockType::Sand
+                } else {
+                    BlockType::Grass
+                };
+                set_block!(self, world_x, ground_elevation, world_z, top_block_type);
 
-            let min_ground_or_water = core::cmp::min(ground_elevation, WATER_HEIGHT as usize);
-            for y in 0..min_ground_or_water {
-                self.set_block(world_x, y, world_z, BlockType::Sand);
-            }
-            for y in min_ground_or_water..ground_elevation {
-                self.set_block(world_x, y, world_z, BlockType::Dirt);
-            }
-            for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
-                if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
-                    self.set_block(world_x, y, world_z, BlockType::Water);
+                let min_ground_or_water = core::cmp::min(ground_elevation, WATER_HEIGHT as usize);
+                for y in 0..min_ground_or_water {
+                    set_block!(self, world_x, y, world_z, BlockType::Sand);
+                }
+                for y in min_ground_or_water..ground_elevation {
+                    set_block!(self, world_x, y, world_z, BlockType::Dirt);
+                }
+                for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
+                    if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
+                        set_block!(self, world_x, y, world_z, BlockType::Water);
+                    }
                 }
             }
         }
@@ -550,6 +575,11 @@ impl WorldState {
             let block = self.get_block(x, y, z);
             if block.block_type == BlockType::Empty {
                 continue;
+            }
+
+            let mut verbose = false;
+            if x == 8182 && y == 35 && z == 8198 {
+                println!("Generating for block {:?}", block.block_type);
             }
 
             let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
@@ -841,11 +871,32 @@ impl WorldState {
                 collision.block_pos.z,
             );
 
-            self.set_block(collider_x, collider_y, collider_z, BlockType::Empty);
+            let block = self.get_block(collider_x, collider_y, collider_z);
+            println!(
+                "block before breaking is a {:?}, neighbors {:?}",
+                block.block_type, block.neighbors.bitmap
+            );
+
             println!("collision point is {:?}", collision.collision_point);
             println!("collision block is {:?}", collision.block_pos);
+            set_block!(
+                self,
+                collider_x,
+                collider_y,
+                collider_z,
+                BlockType::Empty,
+                true
+            );
 
-            self.get_affected_chunks(&collision.block_pos)
+            let block = self.get_block(collider_x, collider_y, collider_z);
+            println!(
+                "block after breaking is a {:?}, neighbors {:?}",
+                block.block_type, block.neighbors.bitmap
+            );
+
+            let affected_chunks = self.get_affected_chunks(&collision.block_pos);
+            println!("collision chunks are {:?}", affected_chunks);
+            affected_chunks
         } else {
             vec![]
         }
@@ -894,11 +945,12 @@ impl WorldState {
             }
             println!("new block pos is {:?}", collision.block_pos);
 
-            self.set_block(
+            set_block!(
+                self,
                 new_block_pos.x,
                 new_block_pos.y,
                 new_block_pos.z,
-                block_type,
+                block_type
             );
 
             self.get_affected_chunks(&new_block_pos)
