@@ -241,7 +241,7 @@ impl WorldState {
 
         let mut neighbors: Vec<Neighbor> = vec![];
 
-        if y < CHUNK_Y_SIZE {
+        if y < CHUNK_Y_SIZE - 1 {
             neighbors.push(Neighbor {
                 pos: [x, y + 1, z],
                 block: chunk.blocks[[x, y + 1, z]],
@@ -257,7 +257,7 @@ impl WorldState {
                 this_shared_face: Face::Bottom,
             });
         }
-        if x < CHUNK_XZ_SIZE {
+        if x < CHUNK_XZ_SIZE - 1 {
             neighbors.push(Neighbor {
                 pos: [x + 1, y, z],
                 block: chunk.blocks[[x + 1, y, z]],
@@ -273,7 +273,7 @@ impl WorldState {
                 this_shared_face: Face::Right,
             });
         }
-        if z < CHUNK_XZ_SIZE {
+        if z < CHUNK_XZ_SIZE - 1 {
             neighbors.push(Neighbor {
                 pos: [x, y, z + 1],
                 block: chunk.blocks[[x, y, z + 1]],
