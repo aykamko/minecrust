@@ -623,21 +623,23 @@ impl WorldState {
         let mut opaque_instances: Vec<Instance> = vec![];
         let mut transluscent_instances: Vec<Instance> = vec![];
 
+        let chunk = self.get_chunk(chunk_idx);
+
         let [chunk_x, chunk_z] = chunk_idx;
         for (chunk_rel_x, y, chunk_rel_z) in
             iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
         {
-            let x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
-            let z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
+            let world_x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
+            let world_z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
 
-            let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
-            let block = self.get_block(x, y, z);
+            let position = cgmath::Vector3::new(world_x as f32, y as f32, world_z as f32);
+            let block = chunk.blocks.get_unchecked(chunk_rel_x, y, chunk_rel_z);
             if block.block_type == BlockType::Empty {
                 continue;
             }
 
             let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
-                .distance((x as f32, y as f32, z as f32).into());
+                .distance((world_x as f32, y as f32, world_z as f32).into());
 
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
             let alpha_adjust = if block.block_type == BlockType::Water {
