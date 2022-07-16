@@ -354,8 +354,16 @@ fn start(
                 }
 
                 if !chunk_mods.is_empty() {
+                    let chunk_mod_time = std::time::Instant::now();
+
                     for chunk_mod in chunk_mods.iter() {
                         world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
+                    }
+                    if update_result.did_move_chunks {
+                        println!(
+                            "Took {}ms to allocate chunks",
+                            chunk_mod_time.elapsed().as_millis()
+                        );
                     }
 
                     let new_chunk_datas = chunk_mods
@@ -380,6 +388,13 @@ fn start(
                             (new_chunk_data, render_descriptor_idx)
                         })
                         .collect::<Vec<_>>();
+
+                    if update_result.did_move_chunks {
+                        println!(
+                            "Took {}ms to update chunks",
+                            chunk_mod_time.elapsed().as_millis()
+                        );
+                    }
 
                     for (new_chunk_data, render_descriptor_idx) in new_chunk_datas.into_iter() {
                         let chunk_render_descriptor =

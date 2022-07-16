@@ -1,3 +1,5 @@
+pub(crate) use firestorm::{profile_fn, profile_method, profile_section};
+
 use crate::camera::Camera;
 use crate::map_generation::{self, save_elevation_to_file};
 use crate::vec_extra::{Vec2d, Vec3d};
@@ -221,12 +223,15 @@ impl WorldState {
 
     fn set_block(
         &mut self,
-        x: usize,
+        world_x: usize,
         y: usize,
-        z: usize,
+        world_z: usize,
         mut block_type: BlockType,
         verbose: bool,
     ) {
+        let chunk = self.get_chunk_mut([world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE]);
+        let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
+
         struct Neighbor {
             pos: [usize; 3],
             block: Block,
@@ -239,7 +244,7 @@ impl WorldState {
         if y < CHUNK_Y_SIZE {
             neighbors.push(Neighbor {
                 pos: [x, y + 1, z],
-                block: *self.get_block(x, y + 1, z),
+                block: chunk.blocks[[x, y + 1, z]],
                 this_shared_face: Face::Top,
                 other_shared_face: Face::Bottom,
             });
@@ -247,39 +252,43 @@ impl WorldState {
         if y > 0 {
             neighbors.push(Neighbor {
                 pos: [x, y - 1, z],
-                block: *self.get_block(x, y - 1, z),
+                block: chunk.blocks[[x, y - 1, z]],
                 other_shared_face: Face::Top,
                 this_shared_face: Face::Bottom,
             });
         }
-
-        // TODO: bounds checks for edge of world?
-        neighbors.push(Neighbor {
-            pos: [x + 1, y, z],
-            block: *self.get_block(x + 1, y, z),
-            other_shared_face: Face::Right,
-            this_shared_face: Face::Left,
-        });
-        neighbors.push(Neighbor {
-            pos: [x - 1, y, z],
-            block: *self.get_block(x - 1, y, z),
-            other_shared_face: Face::Left,
-            this_shared_face: Face::Right,
-        });
-        neighbors.push(Neighbor {
-            pos: [x, y, z + 1],
-            block: *self.get_block(x, y, z + 1),
-            other_shared_face: Face::Back,
-            this_shared_face: Face::Front,
-        });
-        neighbors.push(Neighbor {
-            pos: [x, y, z - 1],
-            block: *self.get_block(x, y, z - 1),
-            other_shared_face: Face::Front,
-            this_shared_face: Face::Back,
-        });
-
-        let curr_block = self.get_block_mut(x, y, z);
+        if x < CHUNK_XZ_SIZE {
+            neighbors.push(Neighbor {
+                pos: [x + 1, y, z],
+                block: chunk.blocks[[x + 1, y, z]],
+                other_shared_face: Face::Right,
+                this_shared_face: Face::Left,
+            });
+        }
+        if x > 0 {
+            neighbors.push(Neighbor {
+                pos: [x - 1, y, z],
+                block: chunk.blocks[[x - 1, y, z]],
+                other_shared_face: Face::Left,
+                this_shared_face: Face::Right,
+            });
+        }
+        if z < CHUNK_XZ_SIZE {
+            neighbors.push(Neighbor {
+                pos: [x, y, z + 1],
+                block: chunk.blocks[[x, y, z + 1]],
+                other_shared_face: Face::Back,
+                this_shared_face: Face::Front,
+            });
+        }
+        if z > 0 {
+            neighbors.push(Neighbor {
+                pos: [x, y, z - 1],
+                block: chunk.blocks[[x, y, z - 1]],
+                other_shared_face: Face::Front,
+                this_shared_face: Face::Back,
+            });
+        }
 
         // If we're breaking a block next to water, fill this block with water instead
         if block_type == BlockType::Empty {
@@ -295,37 +304,26 @@ impl WorldState {
             println!(
                 "Setting block @ {:?} from {:?} to {:?}",
                 [x, y, z],
-                curr_block.block_type,
+                chunk.blocks[[x, y, z]].block_type,
                 block_type
             );
         }
-        curr_block.block_type = block_type;
 
+        chunk.blocks[[x, y, z]].block_type = block_type;
         for neighbor in neighbors.into_iter() {
-            let neighbor_block =
-                self.get_block_mut(neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
+            let neighbor_block = chunk.blocks[neighbor.pos];
 
             match (block_type, neighbor_block.block_type) {
                 (BlockType::Water, BlockType::Water) => {
-                    neighbor_block
-                        .neighbors
-                        .set(neighbor.other_shared_face, true);
-                    self.get_block_mut(x, y, z)
+                    chunk.blocks[[x, y, z]]
                         .neighbors
                         .set(neighbor.this_shared_face, true);
+                    chunk.blocks[neighbor.pos]
+                        .neighbors
+                        .set(neighbor.other_shared_face, true);
                 }
-                // HACK: let's me spawn water on the edge of the world when generating on the horizon
-                // This will come back to bite me if I implement waterfalls
-                // (BlockType::Water, BlockType::Empty)=> {
-                //     if neighbor.this_shared_face == Face::Top {
-                //         continue;
-                //     }
-                //     self.get_block_mut(x, y, z)
-                //         .neighbors
-                //         .set(neighbor.this_shared_face, true);
-                // }
                 (_, _) => {
-                    neighbor_block
+                    chunk.blocks[neighbor.pos]
                         .neighbors
                         .set(neighbor.other_shared_face, !block_type.is_transluscent());
                 }
@@ -354,6 +352,10 @@ impl WorldState {
     }
 
     pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
+        profile_method!(maybe_allocate_chunk);
+
+        let func_start = Instant::now();
+
         let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
@@ -390,12 +392,25 @@ impl WorldState {
         .unwrap();
 
         if did_allocate {
+            println!(
+                "Took {}ms to allocate memory",
+                func_start.elapsed().as_millis()
+            );
+        }
+
+        if did_allocate {
             let elevation_map = map_generation::generate_chunk_elevation_map(
                 [chunk_x, chunk_z],
                 MIN_HEIGHT,
                 MAX_HEIGHT,
             );
             let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
+            if did_allocate {
+                println!(
+                    "Took {}ms to generate elevation map",
+                    func_start.elapsed().as_millis()
+                );
+            }
             // save_elevation_to_file(map_elevation, "map.bmp");
 
             for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
@@ -421,6 +436,13 @@ impl WorldState {
                     }
                 }
             }
+        }
+
+        if did_allocate {
+            println!(
+                "Took {}ms to process elevation map",
+                func_start.elapsed().as_millis()
+            );
         }
 
         did_allocate
@@ -688,8 +710,7 @@ impl WorldState {
             .map(Instance::to_raw)
             .collect::<Vec<_>>();
 
-        let elapsed_time = func_start.elapsed().as_millis();
-        // println!("Took {}ms to generate chunk vertex data", elapsed_time);
+        // println!("Took {:?}ms to generate chunk vertex data", func_start.elapsed().as_micros());
 
         ChunkData {
             position: chunk_idx,
