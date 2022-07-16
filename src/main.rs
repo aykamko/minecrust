@@ -67,7 +67,6 @@ struct Scene {
     chunk_render_descriptors: Vec<ChunkRenderDescriptor>,
     chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
-    supersampled_framebuffer: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
 }
@@ -689,24 +688,6 @@ fn setup_scene(
 
     let buffers = &[vertex_buffer_layout, instance::InstanceRaw::desc()];
 
-    let supersampled_texture_extent = wgpu::Extent3d {
-        width: config.width * 2,
-        height: config.height * 2,
-        depth_or_array_layers: 1,
-    };
-    let supersampled_frame_descriptor = &wgpu::TextureDescriptor {
-        size: supersampled_texture_extent,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: config.format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        label: None,
-    };
-    let supersampled_framebuffer = device
-        .create_texture(supersampled_frame_descriptor)
-        .create_view(&wgpu::TextureViewDescriptor::default());
-
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
@@ -808,7 +789,6 @@ fn setup_scene(
         chunk_render_descriptors,
         chunk_order,
         depth_texture,
-        supersampled_framebuffer,
         pipeline,
         pipeline_wire,
     }
@@ -839,8 +819,8 @@ fn render_scene(
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &scene.supersampled_framebuffer,
-                resolve_target: Some(view),
+                view,
+                resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
                         r: 120.0 / 255.0,
