@@ -26,8 +26,6 @@ use winit::{
 
 use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
 
-pub const MSAA_SAMPLE_COUNT: u32 = 1;
-
 fn main() {
     let s = block_on(setup());
     start(s);
@@ -69,7 +67,6 @@ struct Scene {
     chunk_render_descriptors: Vec<ChunkRenderDescriptor>,
     chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
-    multisampled_framebuffer: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
 }
@@ -691,24 +688,6 @@ fn setup_scene(
 
     let buffers = &[vertex_buffer_layout, instance::InstanceRaw::desc()];
 
-    let multisampled_texture_extent = wgpu::Extent3d {
-        width: config.width,
-        height: config.height,
-        depth_or_array_layers: 1,
-    };
-    let multisampled_frame_descriptor = &wgpu::TextureDescriptor {
-        size: multisampled_texture_extent,
-        mip_level_count: 1,
-        sample_count: MSAA_SAMPLE_COUNT,
-        dimension: wgpu::TextureDimension::D2,
-        format: config.format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        label: None,
-    };
-    let multisampled_framebuffer = device
-        .create_texture(multisampled_frame_descriptor)
-        .create_view(&wgpu::TextureViewDescriptor::default());
-
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
@@ -744,11 +723,7 @@ fn setup_scene(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState {
-            count: 4,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
+        multisample: wgpu::MultisampleState::default(),
         multiview: None,
     });
 
@@ -814,7 +789,6 @@ fn setup_scene(
         chunk_render_descriptors,
         chunk_order,
         depth_texture,
-        multisampled_framebuffer,
         pipeline,
         pipeline_wire,
     }
@@ -845,8 +819,8 @@ fn render_scene(
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &scene.multisampled_framebuffer,
-                resolve_target: Some(view),
+                view,
+                resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
                         r: 120.0 / 255.0,
