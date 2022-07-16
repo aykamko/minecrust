@@ -13,6 +13,15 @@ use std::convert::Into;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
+const VERBOSE_LOGS: bool = false;
+macro_rules! vprintln {
+    ($($arg:tt)*) => {{
+        if VERBOSE_LOGS {
+            println!($($arg)*)
+        }
+    }};
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(u8)]
 pub enum BlockType {
@@ -866,8 +875,11 @@ impl WorldState {
                 collision.block_pos.z,
             );
 
-            // println!("collision point is {:?}", collision.collision_point);
-            // println!("collision block is {:?}", collision.block_pos);
+            vprintln!(
+                "break_block collision point is {:?}",
+                collision.collision_point
+            );
+            vprintln!("break_block collision block is {:?}", collision.block_pos);
             set_block!(self, collider_x, collider_y, collider_z, BlockType::Empty);
 
             self.get_affected_chunks(&collision.block_pos)
@@ -880,8 +892,11 @@ impl WorldState {
     pub fn place_block(&mut self, camera: &Camera, block_type: BlockType) -> Vec<[usize; 2]> {
         let maybe_collision = self.get_colliding_block(camera);
         if let Some(ref collision) = maybe_collision {
-            println!("collision point is {:?}", collision.collision_point);
-            println!("collision block is {:?}", collision.block_pos);
+            vprintln!(
+                "place_block collision point is {:?}",
+                collision.collision_point
+            );
+            vprintln!("place_block collision block is {:?}", collision.block_pos);
 
             let mut new_block_pos = cgmath::Point3::<usize>::new(0, 0, 0);
             if collision.collision_point.x - collision.collision_point.x.floor() == 0.0 {
@@ -917,7 +932,7 @@ impl WorldState {
                     },
                 )
             }
-            println!("new block pos is {:?}", collision.block_pos);
+            vprintln!("place_block new block pos is {:?}", collision.block_pos);
 
             set_block!(
                 self,
