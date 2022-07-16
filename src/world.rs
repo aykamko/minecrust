@@ -315,7 +315,8 @@ impl WorldState {
 
         // If we're breaking a block next to water, fill this block with water instead
         if block_type == BlockType::Empty {
-            for neighbor in neighbors {
+            for i in 0..6 {
+                let neighbor = neighbors[i];
                 if neighbor.block.block_type == BlockType::Water
                     && neighbor.this_shared_face != Face::Bottom
                 {
@@ -333,7 +334,8 @@ impl WorldState {
         }
 
         chunk_blocks.get_unchecked_mut(x, y, z).block_type = block_type;
-        for neighbor in neighbors {
+        for i in 0..6 {
+            let neighbor = neighbors[i];
             if !neighbor.exists {
                 continue;
             }
