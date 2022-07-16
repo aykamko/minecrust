@@ -282,7 +282,7 @@ impl WorldState {
                 }
             }
         }
-        if verbose || (x == 8182 && y == 35 && z == 8198) {
+        if verbose {
             println!(
                 "Setting block @ {:?} from {:?} to {:?}",
                 [x, y, z],
@@ -577,11 +577,6 @@ impl WorldState {
                 continue;
             }
 
-            let mut verbose = false;
-            if x == 8182 && y == 35 && z == 8198 {
-                println!("Generating for block {:?}", block.block_type);
-            }
-
             let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
                 .distance((x as f32, y as f32, z as f32).into());
 
@@ -871,32 +866,11 @@ impl WorldState {
                 collision.block_pos.z,
             );
 
-            let block = self.get_block(collider_x, collider_y, collider_z);
-            println!(
-                "block before breaking is a {:?}, neighbors {:?}",
-                block.block_type, block.neighbors.bitmap
-            );
+            // println!("collision point is {:?}", collision.collision_point);
+            // println!("collision block is {:?}", collision.block_pos);
+            set_block!(self, collider_x, collider_y, collider_z, BlockType::Empty);
 
-            println!("collision point is {:?}", collision.collision_point);
-            println!("collision block is {:?}", collision.block_pos);
-            set_block!(
-                self,
-                collider_x,
-                collider_y,
-                collider_z,
-                BlockType::Empty,
-                true
-            );
-
-            let block = self.get_block(collider_x, collider_y, collider_z);
-            println!(
-                "block after breaking is a {:?}, neighbors {:?}",
-                block.block_type, block.neighbors.bitmap
-            );
-
-            let affected_chunks = self.get_affected_chunks(&collision.block_pos);
-            println!("collision chunks are {:?}", affected_chunks);
-            affected_chunks
+            self.get_affected_chunks(&collision.block_pos)
         } else {
             vec![]
         }
