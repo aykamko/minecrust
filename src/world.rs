@@ -47,7 +47,7 @@ impl BlockType {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(usize)]
 enum Face {
     Top = 0,
@@ -239,67 +239,83 @@ impl WorldState {
             .blocks;
         let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
 
+        #[derive(Clone, Copy)]
         struct Neighbor {
+            exists: bool,
             pos: [usize; 3],
             block: Block,
             this_shared_face: Face,
             other_shared_face: Face,
         }
 
-        let mut neighbors: Vec<Neighbor> = vec![];
+        let mut neighbors = [Neighbor {
+            exists: false,
+            pos: [0, 0, 0],
+            block: Block {
+                ..Default::default()
+            },
+            this_shared_face: Face::Top,
+            other_shared_face: Face::Bottom,
+        }; 6];
 
         if y < CHUNK_Y_SIZE - 1 {
-            neighbors.push(Neighbor {
+            neighbors[0] = Neighbor {
+                exists: true,
                 pos: [x, y + 1, z],
                 block: *chunk_blocks.get_unchecked(x, y + 1, z),
                 this_shared_face: Face::Top,
                 other_shared_face: Face::Bottom,
-            });
+            };
         }
         if y > 0 {
-            neighbors.push(Neighbor {
+            neighbors[1] = Neighbor {
+                exists: true,
                 pos: [x, y - 1, z],
                 block: *chunk_blocks.get_unchecked(x, y - 1, z),
                 other_shared_face: Face::Top,
                 this_shared_face: Face::Bottom,
-            });
+            };
         }
         if x < CHUNK_XZ_SIZE - 1 {
-            neighbors.push(Neighbor {
+            neighbors[2] = Neighbor {
+                exists: true,
                 pos: [x + 1, y, z],
                 block: *chunk_blocks.get_unchecked(x + 1, y, z),
                 other_shared_face: Face::Right,
                 this_shared_face: Face::Left,
-            });
+            };
         }
         if x > 0 {
-            neighbors.push(Neighbor {
+            neighbors[3] = Neighbor {
+                exists: true,
                 pos: [x - 1, y, z],
                 block: *chunk_blocks.get_unchecked(x - 1, y, z),
                 other_shared_face: Face::Left,
                 this_shared_face: Face::Right,
-            });
+            };
         }
         if z < CHUNK_XZ_SIZE - 1 {
-            neighbors.push(Neighbor {
+            neighbors[4] = Neighbor {
+                exists: true,
                 pos: [x, y, z + 1],
                 block: *chunk_blocks.get_unchecked(x, y, z + 1),
                 other_shared_face: Face::Back,
                 this_shared_face: Face::Front,
-            });
+            };
         }
         if z > 0 {
-            neighbors.push(Neighbor {
+            neighbors[5] = Neighbor {
+                exists: true,
                 pos: [x, y, z - 1],
                 block: *chunk_blocks.get_unchecked(x, y, z - 1),
                 other_shared_face: Face::Front,
                 this_shared_face: Face::Back,
-            });
+            };
         }
 
         // If we're breaking a block next to water, fill this block with water instead
         if block_type == BlockType::Empty {
-            for neighbor in neighbors.iter() {
+            for neighbor in neighbors {
                 if neighbor.block.block_type == BlockType::Water
                     && neighbor.this_shared_face != Face::Bottom
                 {
@@ -317,7 +333,10 @@ impl WorldState {
         }
 
         chunk_blocks.get_unchecked_mut(x, y, z).block_type = block_type;
-        for neighbor in neighbors.into_iter() {
+        for neighbor in neighbors {
+            if !neighbor.exists {
+                continue;
+            }
             let (nx, ny, nz) = (neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
 
             match (block_type, neighbor.block.block_type) {
