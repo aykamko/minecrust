@@ -22,14 +22,16 @@ impl<T> Index<[usize; 3]> for Vec3d<T> {
 
     fn index(&self, index: [usize; 3]) -> &T {
         let [x, y, z] = index;
-        &self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
+        //&self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
+        &self.vec[(x * self.dims[1] * self.dims[2]) + (y * self.dims[2]) + z]
     }
 }
 
 impl<T> IndexMut<[usize; 3]> for Vec3d<T> {
     fn index_mut<'a>(&'a mut self, index: [usize; 3]) -> &'a mut T {
         let [x, y, z] = index;
-        &mut self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
+        //&mut self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
+        &mut self.vec[(x * self.dims[1] * self.dims[2]) + (y * self.dims[2]) + z]
     }
 }
 

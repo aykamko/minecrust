@@ -6,6 +6,7 @@ use crate::vec_extra::{Vec2d, Vec3d};
 use crate::ChunkRenderDescriptor;
 use bitmaps::Bitmap;
 use itertools::Itertools;
+use zarray::z3d::ZArray3D;
 
 use super::instance::{Instance, InstanceRaw};
 use cgmath::{prelude::*, MetricSpace, Point2, Point3};
@@ -166,7 +167,7 @@ pub struct ChunkData {
 
 pub struct Chunk {
     position: [usize; 2],
-    blocks: Vec3d<Block>,
+    blocks: ZArray3D<Block>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
 }
@@ -206,19 +207,20 @@ impl WorldState {
         &self.chunks[chunk_idx as usize]
     }
 
-    fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
-        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
-        let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
-        let chunk = &mut self.chunks[chunk_idx as usize];
-        &mut chunk.blocks[block_idx]
-    }
+    // fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
+    //     let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
+    //     let chunk = &mut self.chunks[chunk_idx as usize];
+    //     &mut chunk
+    //         .blocks
+    //         .get_unchecked(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
+    // }
 
     fn get_block(&self, x: usize, y: usize, z: usize) -> &Block {
         let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
-        // println!("fetched chunk {:?}", [x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]);
-        let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
         let chunk = &self.chunks[chunk_idx as usize];
-        &chunk.blocks[block_idx]
+        &chunk
+            .blocks
+            .get_unchecked(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
     }
 
     fn set_block(
@@ -229,7 +231,9 @@ impl WorldState {
         mut block_type: BlockType,
         verbose: bool,
     ) {
-        let chunk = self.get_chunk_mut([world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE]);
+        let mut chunk_blocks = &mut self
+            .get_chunk_mut([world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE])
+            .blocks;
         let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
 
         struct Neighbor {
@@ -244,7 +248,7 @@ impl WorldState {
         if y < CHUNK_Y_SIZE - 1 {
             neighbors.push(Neighbor {
                 pos: [x, y + 1, z],
-                block: chunk.blocks[[x, y + 1, z]],
+                block: *chunk_blocks.get_unchecked(x, y + 1, z),
                 this_shared_face: Face::Top,
                 other_shared_face: Face::Bottom,
             });
@@ -252,7 +256,7 @@ impl WorldState {
         if y > 0 {
             neighbors.push(Neighbor {
                 pos: [x, y - 1, z],
-                block: chunk.blocks[[x, y - 1, z]],
+                block: *chunk_blocks.get_unchecked(x, y - 1, z),
                 other_shared_face: Face::Top,
                 this_shared_face: Face::Bottom,
             });
@@ -260,7 +264,7 @@ impl WorldState {
         if x < CHUNK_XZ_SIZE - 1 {
             neighbors.push(Neighbor {
                 pos: [x + 1, y, z],
-                block: chunk.blocks[[x + 1, y, z]],
+                block: *chunk_blocks.get_unchecked(x + 1, y, z),
                 other_shared_face: Face::Right,
                 this_shared_face: Face::Left,
             });
@@ -268,7 +272,7 @@ impl WorldState {
         if x > 0 {
             neighbors.push(Neighbor {
                 pos: [x - 1, y, z],
-                block: chunk.blocks[[x - 1, y, z]],
+                block: *chunk_blocks.get_unchecked(x - 1, y, z),
                 other_shared_face: Face::Left,
                 this_shared_face: Face::Right,
             });
@@ -276,7 +280,7 @@ impl WorldState {
         if z < CHUNK_XZ_SIZE - 1 {
             neighbors.push(Neighbor {
                 pos: [x, y, z + 1],
-                block: chunk.blocks[[x, y, z + 1]],
+                block: *chunk_blocks.get_unchecked(x, y, z + 1),
                 other_shared_face: Face::Back,
                 this_shared_face: Face::Front,
             });
@@ -284,7 +288,7 @@ impl WorldState {
         if z > 0 {
             neighbors.push(Neighbor {
                 pos: [x, y, z - 1],
-                block: chunk.blocks[[x, y, z - 1]],
+                block: *chunk_blocks.get_unchecked(x, y, z - 1),
                 other_shared_face: Face::Front,
                 this_shared_face: Face::Back,
             });
@@ -304,28 +308,43 @@ impl WorldState {
             println!(
                 "Setting block @ {:?} from {:?} to {:?}",
                 [x, y, z],
-                chunk.blocks[[x, y, z]].block_type,
+                chunk_blocks.get(x, y, z).unwrap().block_type,
                 block_type
             );
         }
 
-        chunk.blocks[[x, y, z]].block_type = block_type;
+        chunk_blocks.set_unchecked(
+            x,
+            y,
+            z,
+            Block {
+                block_type,
+                neighbors: chunk_blocks.get_unchecked(x, y, z).neighbors,
+            },
+        );
+
         for neighbor in neighbors.into_iter() {
-            let neighbor_block = chunk.blocks[neighbor.pos];
+            let (nx, ny, nz) = (neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
+
+            let mut this_block = *chunk_blocks.get_unchecked(x, y, z);
+            let mut neighbor_block = *chunk_blocks.get_unchecked(nx, ny, nz);
 
             match (block_type, neighbor_block.block_type) {
                 (BlockType::Water, BlockType::Water) => {
-                    chunk.blocks[[x, y, z]]
-                        .neighbors
-                        .set(neighbor.this_shared_face, true);
-                    chunk.blocks[neighbor.pos]
+                    this_block.neighbors.set(neighbor.this_shared_face, true);
+                    neighbor_block
                         .neighbors
                         .set(neighbor.other_shared_face, true);
+
+                    chunk_blocks.set_unchecked(x, y, z, this_block);
+                    chunk_blocks.set_unchecked(nx, ny, nz, neighbor_block);
                 }
                 (_, _) => {
-                    chunk.blocks[neighbor.pos]
+                    neighbor_block
                         .neighbors
                         .set(neighbor.other_shared_face, !block_type.is_transluscent());
+
+                    chunk_blocks.set_unchecked(nx, ny, nz, neighbor_block);
                 }
             }
         }
@@ -360,14 +379,13 @@ impl WorldState {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
                     position: inner_chunk_idx,
-                    blocks: Vec3d::new(
-                        vec![
-                            Block {
-                                ..Default::default()
-                            };
-                            CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
-                        ],
-                        [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
+                    blocks: ZArray3D::new(
+                        CHUNK_XZ_SIZE,
+                        CHUNK_Y_SIZE,
+                        CHUNK_XZ_SIZE,
+                        Block {
+                            ..Default::default()
+                        },
                     ),
                     render_descriptor_idx: NO_RENDER_DESCRIPTOR_INDEX,
                 });

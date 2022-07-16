@@ -18,6 +18,7 @@ bitmaps = "3.2.0"
 noise = "0.7.0"
 bmp = "0.5.0"
 rand = "0.8.5"
+zarray = "1.1.0"
 firestorm = { version = "0.4", features = ["enable_system_time"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
