@@ -8,6 +8,7 @@ use itertools::Itertools;
 use super::instance::{Instance, InstanceRaw};
 use cgmath::{prelude::*, MetricSpace, Point2, Point3};
 use collision::Continuous;
+use std::collections::HashSet;
 use std::convert::Into;
 use std::default;
 #[cfg(not(target_arch = "wasm32"))]
@@ -283,14 +284,14 @@ impl WorldState {
                 }
                 // HACK: let's me spawn water on the edge of the world when generating on the horizon
                 // This will come back to bite me if I implement waterfalls
-                (BlockType::Water, BlockType::Empty)=> {
-                    if neighbor.this_shared_face == Face::Top {
-                        continue;
-                    }
-                    self.get_block_mut(x, y, z)
-                        .neighbors
-                        .set(neighbor.this_shared_face, true);
-                }
+                // (BlockType::Water, BlockType::Empty)=> {
+                //     if neighbor.this_shared_face == Face::Top {
+                //         continue;
+                //     }
+                //     self.get_block_mut(x, y, z)
+                //         .neighbors
+                //         .set(neighbor.this_shared_face, true);
+                // }
                 (_, _) => {
                     neighbor_block
                         .neighbors
@@ -300,7 +301,27 @@ impl WorldState {
         }
     }
 
-    fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
+    pub fn find_chunk_neighbors(
+        &self,
+        chunks: &Vec<[usize; 2]>,
+        neighbor_candidates: &Vec<[usize; 2]>,
+    ) -> Vec<[usize; 2]> {
+        let mut possible_neighbors: HashSet<[usize; 2]> = HashSet::new();
+        for [chunk_x, chunk_z] in chunks.iter() {
+            possible_neighbors.insert([*chunk_x + 1, *chunk_z]);
+            possible_neighbors.insert([*chunk_x - 1, *chunk_z]);
+            possible_neighbors.insert([*chunk_x, *chunk_z + 1]);
+            possible_neighbors.insert([*chunk_x, *chunk_z - 1]);
+        }
+
+        neighbor_candidates
+            .iter()
+            .cloned()
+            .filter(|chunk_idx| possible_neighbors.contains(chunk_idx))
+            .collect::<Vec<_>>()
+    }
+
+    pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
         let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
@@ -326,15 +347,11 @@ impl WorldState {
         let [chunk_x, chunk_z] = outer_chunk_idx;
         // Allocate neighbors to avoid out-of-bounds array accessing when modifying blocks
         let did_allocate = [
-            allocate_inner([chunk_x - 1, chunk_z - 1]),
             allocate_inner([chunk_x - 1, chunk_z]),
-            allocate_inner([chunk_x - 1, chunk_z + 1]),
             allocate_inner([chunk_x, chunk_z - 1]),
             allocate_inner([chunk_x, chunk_z]),
             allocate_inner([chunk_x, chunk_z + 1]),
-            allocate_inner([chunk_x + 1, chunk_z - 1]),
             allocate_inner([chunk_x + 1, chunk_z]),
-            allocate_inner([chunk_x + 1, chunk_z + 1]),
         ]
         .into_iter()
         .reduce(|accum, item| accum || item)

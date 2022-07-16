@@ -24,7 +24,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-use crate::world::{ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
+use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
 
 fn main() {
     let s = block_on(setup());
@@ -334,7 +334,15 @@ fn start(
                         .iter()
                         .cloned()
                         .collect::<Vec<_>>();
+                    let neighbors_to_new_chunks =
+                        world_state.find_chunk_neighbors(&new_chunks, &scene.chunk_order);
 
+                    for chunk in neighbors_to_new_chunks {
+                        chunk_mods.push(ChunkModification {
+                            new_chunk: chunk,
+                            old_chunk: chunk,
+                        })
+                    }
                     for (new_chunk, old_chunk) in izip!(new_chunks, old_chunks) {
                         chunk_mods.push(ChunkModification {
                             new_chunk,
@@ -346,23 +354,34 @@ fn start(
                 }
 
                 if !chunk_mods.is_empty() {
-                    for chunk_mod in chunk_mods.into_iter() {
-                        let new_chunk_data =
-                            world_state.generate_chunk_data(chunk_mod.new_chunk, &camera);
+                    for chunk_mod in chunk_mods.iter() {
+                        world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
+                    }
 
-                        let render_descriptor_idx =
-                            world_state.get_render_descriptor_idx(chunk_mod.old_chunk);
-                        if chunk_mod.new_chunk != chunk_mod.old_chunk {
-                            world_state.set_render_descriptor_idx(
-                                chunk_mod.old_chunk,
-                                world::NO_RENDER_DESCRIPTOR_INDEX,
-                            );
-                            world_state.set_render_descriptor_idx(
-                                chunk_mod.new_chunk,
-                                render_descriptor_idx,
-                            );
-                        }
+                    let new_chunk_datas = chunk_mods
+                        .iter()
+                        .map(|chunk_mod| {
+                            let new_chunk_data =
+                                world_state.generate_chunk_data(chunk_mod.new_chunk, &camera);
 
+                            let render_descriptor_idx =
+                                world_state.get_render_descriptor_idx(chunk_mod.old_chunk);
+                            if chunk_mod.new_chunk != chunk_mod.old_chunk {
+                                world_state.set_render_descriptor_idx(
+                                    chunk_mod.old_chunk,
+                                    world::NO_RENDER_DESCRIPTOR_INDEX,
+                                );
+                                world_state.set_render_descriptor_idx(
+                                    chunk_mod.new_chunk,
+                                    render_descriptor_idx,
+                                );
+                            }
+
+                            (new_chunk_data, render_descriptor_idx)
+                        })
+                        .collect::<Vec<_>>();
+
+                    for (new_chunk_data, render_descriptor_idx) in new_chunk_datas.into_iter() {
                         let chunk_render_descriptor =
                             &mut scene.chunk_render_descriptors[render_descriptor_idx];
 
@@ -372,7 +391,7 @@ fn start(
                                 .iter_mut()
                                 .find(|ib| ib.data_type == typed_instances.data_type);
 
-                            if let Some(mut instance_buffer) = maybe_instance_buffer {
+                            if let Some(instance_buffer) = maybe_instance_buffer {
                                 queue.write_buffer(
                                     &instance_buffer.buffer,
                                     0,
@@ -828,7 +847,7 @@ fn render_scene(
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
         for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
-        // for data_type in [ChunkDataType::Transluscent] {
+            // for data_type in [ChunkDataType::Transluscent] {
             for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
                 let render_descriptor_idx =
                     world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);
