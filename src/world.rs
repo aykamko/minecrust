@@ -6,6 +6,9 @@ use crate::vec_extra::{Vec2d, Vec3d};
 use crate::ChunkRenderDescriptor;
 use bitmaps::Bitmap;
 use itertools::Itertools;
+
+#[path = "zarray.rs"]
+mod zarray;
 use zarray::z3d::ZArray3D;
 
 use super::instance::{Instance, InstanceRaw};
@@ -231,7 +234,7 @@ impl WorldState {
         mut block_type: BlockType,
         verbose: bool,
     ) {
-        let mut chunk_blocks = &mut self
+        let chunk_blocks = &mut self
             .get_chunk_mut([world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE])
             .blocks;
         let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
@@ -313,38 +316,26 @@ impl WorldState {
             );
         }
 
-        chunk_blocks.set_unchecked(
-            x,
-            y,
-            z,
-            Block {
-                block_type,
-                neighbors: chunk_blocks.get_unchecked(x, y, z).neighbors,
-            },
-        );
-
+        chunk_blocks.get_unchecked_mut(x, y, z).block_type = block_type;
         for neighbor in neighbors.into_iter() {
             let (nx, ny, nz) = (neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
 
-            let mut this_block = *chunk_blocks.get_unchecked(x, y, z);
-            let mut neighbor_block = *chunk_blocks.get_unchecked(nx, ny, nz);
-
-            match (block_type, neighbor_block.block_type) {
+            match (block_type, neighbor.block.block_type) {
                 (BlockType::Water, BlockType::Water) => {
-                    this_block.neighbors.set(neighbor.this_shared_face, true);
-                    neighbor_block
+                    chunk_blocks
+                        .get_unchecked_mut(x, y, z)
+                        .neighbors
+                        .set(neighbor.this_shared_face, true);
+                    chunk_blocks
+                        .get_unchecked_mut(nx, ny, nz)
                         .neighbors
                         .set(neighbor.other_shared_face, true);
-
-                    chunk_blocks.set_unchecked(x, y, z, this_block);
-                    chunk_blocks.set_unchecked(nx, ny, nz, neighbor_block);
                 }
                 (_, _) => {
-                    neighbor_block
+                    chunk_blocks
+                        .get_unchecked_mut(nx, ny, nz)
                         .neighbors
                         .set(neighbor.other_shared_face, !block_type.is_transluscent());
-
-                    chunk_blocks.set_unchecked(nx, ny, nz, neighbor_block);
                 }
             }
         }
