@@ -720,10 +720,6 @@ impl WorldState {
         permutation::sort(&transluscent_instance_distances)
             .apply_slice_in_place(&mut transluscent_instances);
 
-        permutation::sort(&opaque_instance_distances)
-            .apply_slice_in_place(&mut opaque_instances);
-        opaque_instances.reverse();
-
         ChunkData {
             position: chunk_idx,
             camera_relative_position: self
