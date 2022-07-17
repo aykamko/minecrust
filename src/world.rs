@@ -170,7 +170,7 @@ pub struct ChunkData {
 
 pub struct Chunk {
     position: [usize; 2],
-    blocks: vec_extra::Vec3d<Block, vec_extra::YXZ>,
+    blocks: vec_extra::Vec3d<Block, vec_extra::YXZ<CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE>>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
 }
@@ -391,14 +391,6 @@ impl WorldState {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
                     position: inner_chunk_idx,
-                    // blocks: ZArray3D::new(
-                    //     CHUNK_XZ_SIZE,
-                    //     CHUNK_Y_SIZE,
-                    //     CHUNK_XZ_SIZE,
-                    //     Block {
-                    //         ..Default::default()
-                    //     },
-                    // ),
                     blocks: vec_extra::Vec3d::new(
                         vec![
                             Block {
@@ -406,7 +398,6 @@ impl WorldState {
                             };
                             CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
                         ],
-                        [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
                     ),
                     render_descriptor_idx: NO_RENDER_DESCRIPTOR_INDEX,
                 });
