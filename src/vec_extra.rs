@@ -1,33 +1,43 @@
 use std::ops::{Index, IndexMut};
 
+pub struct YXZ {}
+pub struct XYZ {}
+pub trait DimOrder: Sized {
+    fn new() -> Self;
+    fn array_index(&self, x: usize, y: usize, z: usize, dims: &[usize; 3]) -> usize;
+}
+impl DimOrder for YXZ {
+    fn new() -> Self {
+        Self {}
+    }
+    fn array_index(&self, x: usize, y: usize, z: usize, dims: &[usize; 3]) -> usize {
+        y + (x * dims[1]) + (z * dims[1] * dims[0])
+    }
+}
+impl DimOrder for XYZ {
+    fn new() -> Self {
+        Self {}
+    }
+    fn array_index(&self, x: usize, y: usize, z: usize, dims: &[usize; 3]) -> usize {
+        x + (y * dims[0]) + (z * dims[0] * dims[1])
+    }
+}
+
 #[derive(Debug)]
-pub struct Vec3d<T> {
+pub struct Vec3d<T, DO: DimOrder> {
     vec: Vec<T>,
     dims: [usize; 3],
+    dim_order: DO,
 }
 
-impl<T> Index<[usize; 3]> for Vec3d<T> {
-    type Output = T;
-
-    fn index(&self, index: [usize; 3]) -> &T {
-        let [x, y, z] = index;
-        &self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
-        // &self.vec[(x * self.dims[1] * self.dims[2]) + (y * self.dims[2]) + z]
-    }
-}
-
-impl<T> IndexMut<[usize; 3]> for Vec3d<T> {
-    fn index_mut<'a>(&'a mut self, index: [usize; 3]) -> &'a mut T {
-        let [x, y, z] = index;
-        &mut self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
-        // &mut self.vec[(x * self.dims[1] * self.dims[2]) + (y * self.dims[2]) + z]
-    }
-}
-
-impl<T> Vec3d<T> {
+impl<T, DO: DimOrder> Vec3d<T, DO> {
     pub fn new(vec: Vec<T>, dims: [usize; 3]) -> Self {
         assert!(vec.len() == dims[0] * dims[1] * dims[2]);
-        Self { vec, dims }
+        Self {
+            vec,
+            dims,
+            dim_order: DO::new(),
+        }
     }
 
     pub fn get_unchecked(&self, x: usize, y: usize, z: usize) -> &T {
@@ -38,8 +48,24 @@ impl<T> Vec3d<T> {
         &mut self[[x, y, z]]
     }
 
-    pub fn dims(&self) -> [usize; 3] {
-        self.dims
+    pub fn dims(&self) -> &[usize; 3] {
+        &self.dims
+    }
+}
+
+impl<T, DO: DimOrder> Index<[usize; 3]> for Vec3d<T, DO> {
+    type Output = T;
+
+    fn index(&self, index: [usize; 3]) -> &T {
+        let [x, y, z] = index;
+        &self.vec[self.dim_order.array_index(x, y, z, &self.dims)]
+    }
+}
+
+impl<T, DO: DimOrder> IndexMut<[usize; 3]> for Vec3d<T, DO> {
+    fn index_mut<'a>(&'a mut self, index: [usize; 3]) -> &'a mut T {
+        let [x, y, z] = index;
+        &mut self.vec[self.dim_order.array_index(x, y, z, &self.dims)]
     }
 }
 

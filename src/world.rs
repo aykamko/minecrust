@@ -170,7 +170,7 @@ pub struct ChunkData {
 
 pub struct Chunk {
     position: [usize; 2],
-    blocks: vec_extra::Vec3d<Block>,
+    blocks: vec_extra::Vec3d<Block, vec_extra::YXZ>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
 }
@@ -452,7 +452,7 @@ impl WorldState {
             }
             // save_elevation_to_file(map_elevation, "map.bmp");
 
-            for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+            for (z, x) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
                 let ground_elevation = elevation_map[x][z] as usize;
                 let (world_x, world_z) = (base_x + x, base_z + z);
                 let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
@@ -640,8 +640,8 @@ impl WorldState {
         let chunk = self.get_chunk(chunk_idx);
 
         let [chunk_x, chunk_z] = chunk_idx;
-        for (chunk_rel_x, y, chunk_rel_z) in
-            iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
+        for (chunk_rel_z, chunk_rel_x, y) in
+            iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE)
         {
             let world_x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
             let world_z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
