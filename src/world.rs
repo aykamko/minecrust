@@ -161,7 +161,7 @@ pub struct ChunkData {
 }
 
 pub struct Chunk {
-    position: [usize; 2],
+    is_generated: bool,
     blocks: Vec3d<Block, vec_extra::XYZ<CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE>>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
@@ -380,13 +380,14 @@ impl WorldState {
             .collect::<Vec<_>>()
     }
 
-    pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
+    pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) {
         let func_start = Instant::now();
 
-        let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool {
-            if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
-                self.chunks.push(Chunk {
-                    position: inner_chunk_idx,
+        let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool /* is_generated */ {
+            let flat_chunk_idx = self.chunk_indices[inner_chunk_idx];
+            if flat_chunk_idx == CHUNK_DOES_NOT_EXIST_VALUE {
+                let new_chunk = Chunk {
+                    is_generated: false,
                     blocks: Vec3d::new(vec![
                         Block {
                             ..Default::default()
@@ -394,33 +395,29 @@ impl WorldState {
                         CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
                     ]),
                     render_descriptor_idx: NO_RENDER_DESCRIPTOR_INDEX,
-                });
+                };
+                self.chunks.push(new_chunk);
                 self.chunk_indices[inner_chunk_idx] = self.chunks.len() as u32 - 1;
-                true
-            } else {
                 false
+            } else {
+                self.chunks[flat_chunk_idx as usize].is_generated
             }
         };
 
         let [chunk_x, chunk_z] = outer_chunk_idx;
         // Allocate neighbors to avoid out-of-bounds array accessing when modifying blocks
-        let did_allocate = [
-            allocate_inner([chunk_x - 1, chunk_z]),
-            allocate_inner([chunk_x, chunk_z - 1]),
-            allocate_inner([chunk_x, chunk_z]),
-            allocate_inner([chunk_x, chunk_z + 1]),
-            allocate_inner([chunk_x + 1, chunk_z]),
-        ]
-        .into_iter()
-        .reduce(|accum, item| accum || item)
-        .unwrap();
+        allocate_inner([chunk_x - 1, chunk_z]);
+        allocate_inner([chunk_x, chunk_z - 1]);
+        let this_chunk_is_generated = allocate_inner([chunk_x, chunk_z]);
+        allocate_inner([chunk_x, chunk_z + 1]);
+        allocate_inner([chunk_x + 1, chunk_z]);
 
         vprintln!(
             "Took {}ms to allocate memory",
             func_start.elapsed().as_millis()
         );
 
-        if did_allocate {
+        if !this_chunk_is_generated {
             let elevation_map = map_generation::generate_chunk_elevation_map(
                 [chunk_x, chunk_z],
                 MIN_HEIGHT,
@@ -461,8 +458,6 @@ impl WorldState {
             "Took {}ms to process elevation map",
             func_start.elapsed().as_millis()
         );
-
-        did_allocate
     }
 
     pub fn initial_setup(&mut self) {
