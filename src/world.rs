@@ -2,7 +2,7 @@ pub(crate) use firestorm::{profile_fn, profile_method, profile_section};
 
 use crate::camera::Camera;
 use crate::map_generation::{self, save_elevation_to_file};
-use crate::vec_extra::{Vec2d, Vec3d};
+use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::ChunkRenderDescriptor;
 use bitmaps::Bitmap;
 use itertools::Itertools;
@@ -170,7 +170,7 @@ pub struct ChunkData {
 
 pub struct Chunk {
     position: [usize; 2],
-    blocks: ZArray3D<Block>,
+    blocks: vec_extra::Vec3d<Block>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
 }
@@ -328,7 +328,7 @@ impl WorldState {
             println!(
                 "Setting block @ {:?} from {:?} to {:?}",
                 [x, y, z],
-                chunk_blocks.get(x, y, z).unwrap().block_type,
+                chunk_blocks.get_unchecked(x, y, z).block_type,
                 block_type
             );
         }
@@ -391,13 +391,22 @@ impl WorldState {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
                     position: inner_chunk_idx,
-                    blocks: ZArray3D::new(
-                        CHUNK_XZ_SIZE,
-                        CHUNK_Y_SIZE,
-                        CHUNK_XZ_SIZE,
-                        Block {
-                            ..Default::default()
-                        },
+                    // blocks: ZArray3D::new(
+                    //     CHUNK_XZ_SIZE,
+                    //     CHUNK_Y_SIZE,
+                    //     CHUNK_XZ_SIZE,
+                    //     Block {
+                    //         ..Default::default()
+                    //     },
+                    // ),
+                    blocks: vec_extra::Vec3d::new(
+                        vec![
+                            Block {
+                                ..Default::default()
+                            };
+                            CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
+                        ],
+                        [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
                     ),
                     render_descriptor_idx: NO_RENDER_DESCRIPTOR_INDEX,
                 });
