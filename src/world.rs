@@ -228,125 +228,116 @@ impl WorldState {
 
     fn set_block(
         &mut self,
-        x: usize,
+        world_x: usize,
         y: usize,
-        z: usize,
+        world_z: usize,
         mut block_type: BlockType,
         verbose: bool,
     ) {
-        // let chunk_blocks = &mut self
-        //     .get_chunk_mut([world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE])
-        //     .blocks;
-        // let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
+        unsafe {
+            let chunk_idx = [world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE];
+            let chunk_blocks = &mut self.get_chunk_mut(chunk_idx).blocks;
+            let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
 
-        #[derive(Clone, Copy)]
-        struct Neighbor {
-            exists: bool,
-            pos: [usize; 3],
-            block: Block,
-            this_shared_face: Face,
-            other_shared_face: Face,
-        }
+            let this_block = chunk_blocks.get_raw_ptr_mut(x, y, z);
 
-        let mut neighbors = [Neighbor {
-            exists: false,
-            pos: [0, 0, 0],
-            block: Block {
-                ..Default::default()
-            },
-            this_shared_face: Face::Top,
-            other_shared_face: Face::Bottom,
-        }; 6];
+            #[derive(Clone, Copy)]
+            struct Neighbor {
+                pos: [usize; 3],
+                block: *mut Block,
+                this_shared_face: Face,
+                other_shared_face: Face,
+            }
 
-        if y < CHUNK_Y_SIZE - 1 {
-            neighbors[0] = Neighbor {
-                exists: true,
-                pos: [x, y + 1, z],
-                block: *self.get_block(x, y + 1, z),
-                this_shared_face: Face::Top,
-                other_shared_face: Face::Bottom,
-            };
-        }
-        if y > 0 {
-            neighbors[1] = Neighbor {
-                exists: true,
-                pos: [x, y - 1, z],
-                block: *self.get_block(x, y - 1, z),
-                other_shared_face: Face::Top,
-                this_shared_face: Face::Bottom,
-            };
-        }
+            let mut neighbors: [Option<Neighbor>; 6] = [None; 6];
 
-        neighbors[2] = Neighbor {
-            exists: true,
-            pos: [x + 1, y, z],
-            block: *self.get_block(x + 1, y, z),
-            other_shared_face: Face::Right,
-            this_shared_face: Face::Left,
-        };
-        neighbors[3] = Neighbor {
-            exists: true,
-            pos: [x - 1, y, z],
-            block: *self.get_block(x - 1, y, z),
-            other_shared_face: Face::Left,
-            this_shared_face: Face::Right,
-        };
-        neighbors[4] = Neighbor {
-            exists: true,
-            pos: [x, y, z + 1],
-            block: *self.get_block(x, y, z + 1),
-            other_shared_face: Face::Back,
-            this_shared_face: Face::Front,
-        };
-        neighbors[5] = Neighbor {
-            exists: true,
-            pos: [x, y, z - 1],
-            block: *self.get_block(x, y, z - 1),
-            other_shared_face: Face::Front,
-            this_shared_face: Face::Back,
-        };
+            if y < CHUNK_Y_SIZE - 1 {
+                neighbors[0] = Some(Neighbor {
+                    pos: [x, y + 1, z],
+                    block: chunk_blocks.get_raw_ptr_mut(x, y + 1, z),
+                    this_shared_face: Face::Top,
+                    other_shared_face: Face::Bottom,
+                });
+            }
+            if y > 0 {
+                neighbors[1] = Some(Neighbor {
+                    pos: [x, y - 1, z],
+                    block: chunk_blocks.get_raw_ptr_mut(x, y - 1, z),
+                    other_shared_face: Face::Top,
+                    this_shared_face: Face::Bottom,
+                });
+            }
 
-        // If we're breaking a block next to water, fill this block with water instead
-        if block_type == BlockType::Empty {
+            if x < CHUNK_XZ_SIZE - 1 {
+                neighbors[2] = Some(Neighbor {
+                    pos: [x + 1, y, z],
+                    block: chunk_blocks.get_raw_ptr_mut(x + 1, y, z),
+                    other_shared_face: Face::Right,
+                    this_shared_face: Face::Left,
+                });
+            }
+            if x > 0 {
+                neighbors[3] = Some(Neighbor {
+                    pos: [x - 1, y, z],
+                    block: chunk_blocks.get_raw_ptr_mut(x - 1, y, z),
+                    other_shared_face: Face::Left,
+                    this_shared_face: Face::Right,
+                });
+            }
+            if z < CHUNK_XZ_SIZE - 1 {
+                neighbors[4] = Some(Neighbor {
+                    pos: [x, y, z + 1],
+                    block: chunk_blocks.get_raw_ptr_mut(x, y, z + 1),
+                    other_shared_face: Face::Back,
+                    this_shared_face: Face::Front,
+                });
+            }
+            if z > 0 {
+                neighbors[5] = Some(Neighbor {
+                    pos: [x, y, z - 1],
+                    block: chunk_blocks.get_raw_ptr_mut(x, y, z - 1),
+                    other_shared_face: Face::Front,
+                    this_shared_face: Face::Back,
+                });
+            }
+
+            // If we're breaking a block next to water, fill this block with water instead
+            if block_type == BlockType::Empty {
+                for i in 0..6 {
+                    if let Some(neighbor) = neighbors[i] {
+                        if (*neighbor.block).block_type == BlockType::Water
+                            && neighbor.this_shared_face != Face::Bottom
+                        {
+                            block_type = BlockType::Water;
+                        }
+                    }
+                }
+            }
+            if verbose {
+                println!(
+                    "Setting block @ {:?} from {:?} to {:?}",
+                    [x, y, z],
+                    self.get_block(x, y, z).block_type,
+                    block_type
+                );
+            }
+
+            (*this_block).block_type = block_type;
             for i in 0..6 {
-                let neighbor = neighbors[i];
-                if neighbor.block.block_type == BlockType::Water
-                    && neighbor.this_shared_face != Face::Bottom
-                {
-                    block_type = BlockType::Water;
-                }
-            }
-        }
-        if verbose {
-            println!(
-                "Setting block @ {:?} from {:?} to {:?}",
-                [x, y, z],
-                self.get_block(x, y, z).block_type,
-                block_type
-            );
-        }
-
-        self.get_block_mut(x, y, z).block_type = block_type;
-        for i in 0..6 {
-            let neighbor = neighbors[i];
-            if !neighbor.exists {
-                continue;
-            }
-            let (nx, ny, nz) = (neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
-
-            match (block_type, neighbor.block.block_type) {
-                (BlockType::Water, BlockType::Water) => {
-                    self.get_block_mut(x, y, z)
-                        .neighbors
-                        .set(neighbor.this_shared_face, true);
-                    self.get_block_mut(nx, ny, nz)
-                        .neighbors
-                        .set(neighbor.other_shared_face, true);
-                }
-                (_, _) => {
-                    self.get_block_mut(nx, ny, nz)
-                        .neighbors
-                        .set(neighbor.other_shared_face, !block_type.is_transluscent());
+                if let Some(neighbor) = neighbors[i] {
+                    match (block_type, (*neighbor.block).block_type) {
+                        (BlockType::Water, BlockType::Water) => {
+                            (*this_block).neighbors.set(neighbor.this_shared_face, true);
+                            (*neighbor.block)
+                                .neighbors
+                                .set(neighbor.other_shared_face, true);
+                        }
+                        (_, _) => {
+                            (*neighbor.block)
+                                .neighbors
+                                .set(neighbor.other_shared_face, !block_type.is_transluscent());
+                        }
+                    }
                 }
             }
         }

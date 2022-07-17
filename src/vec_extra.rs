@@ -60,6 +60,10 @@ impl<T, DO: DimOrder> Vec3d<T, DO> {
         &mut self[[x, y, z]]
     }
 
+    pub unsafe fn get_raw_ptr_mut(&mut self, x: usize, y: usize, z: usize) -> *mut T {
+        self.vec.as_mut_ptr().add(self.dim_order.array_index(x, y, z))
+    }
+
     pub fn dims(&self) -> &[usize; 3] {
         DO::dims()
     }
