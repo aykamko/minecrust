@@ -17,10 +17,8 @@ struct CameraUniform {
 }
 
 struct InstanceInput {
-    @location(5) model_matrix_0: vec4<f32>,
-    @location(6) model_matrix_1: vec4<f32>,
-    @location(7) model_matrix_2: vec4<f32>,
-    @location(8) model_matrix_3: vec4<f32>,
+    @location(4) instance_position: vec4<f32>,
+    @location(5) rotation_quaternion: vec4<f32>,
     @location(9) texture_atlas_offset: vec2<f32>,
     @location(10) color_adjust: vec4<f32>,
 }
@@ -28,18 +26,47 @@ struct InstanceInput {
 @group(1) @binding(0)
 var<uniform> camera_position: CameraUniform;
 
+fn mat4_from_quaternion(quat: vec4<f32>) -> mat4x4<f32> {
+    let x2 = quat.x + quat.x;
+    let y2 = quat.y + quat.y;
+    let z2 = quat.z + quat.z;
+
+    let xx2 = x2 * quat.x;
+    let xy2 = x2 * quat.y;
+    let xz2 = x2 * quat.z;
+
+    let yy2 = y2 * quat.y;
+    let yz2 = y2 * quat.z;
+    let zz2 = z2 * quat.z;
+
+    let sy2 = y2 * quat.w;
+    let sz2 = z2 * quat.w;
+    let sx2 = x2 * quat.w;
+
+    return mat4x4<f32>(
+        1.0 - yy2 - zz2, xy2 + sz2, xz2 - sy2, 0.0,
+        xy2 - sz2, 1.0 - xx2 - zz2, yz2 + sx2, 0.0,
+        xz2 + sy2, yz2 - sx2, 1.0 - xx2 - yy2, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    );
+}
+
+fn mat4_from_position(pos: vec4<f32>) -> mat4x4<f32> {
+    return mat4x4<f32>(
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        pos,
+    );
+}
+
 @vertex
 fn vs_main(
     model: VertexInput,
     instance: InstanceInput,
     @builtin(vertex_index) vertex_idx: u32,
 ) -> VertexOutput {
-    var model_matrix = mat4x4<f32>(
-        instance.model_matrix_0,
-        instance.model_matrix_1,
-        instance.model_matrix_2,
-        instance.model_matrix_3,
-    );
+    var model_matrix = mat4_from_position(instance.instance_position) * mat4_from_quaternion(instance.rotation_quaternion);
 
     var out: VertexOutput;
     out.tex_coord = model.tex_coord;

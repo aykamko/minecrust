@@ -1,12 +1,10 @@
 use crate::camera::Camera;
-use crate::map_generation::{self, save_elevation_to_file};
-use crate::vec_extra::{Vec2d, Vec3d};
-use crate::ChunkRenderDescriptor;
+use crate::map_generation::{self};
+use crate::vec_extra::{self, Vec2d, Vec3d};
 use bitmaps::Bitmap;
-use itertools::Itertools;
 
-use super::instance::{Instance, InstanceRaw};
-use cgmath::{prelude::*, MetricSpace, Point2, Point3};
+use super::instance::InstanceRaw;
+use cgmath::{prelude::*, MetricSpace, Point3};
 use collision::Continuous;
 use std::collections::HashSet;
 use std::convert::Into;
@@ -41,7 +39,7 @@ impl BlockType {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(usize)]
 enum Face {
     Top = 0,
@@ -164,7 +162,7 @@ pub struct ChunkData {
 
 pub struct Chunk {
     position: [usize; 2],
-    blocks: Vec3d<Block>,
+    blocks: Vec3d<Block, vec_extra::XYZ<CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE>>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
 }
@@ -206,128 +204,157 @@ impl WorldState {
 
     fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
         let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
-        let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
         let chunk = &mut self.chunks[chunk_idx as usize];
-        &mut chunk.blocks[block_idx]
+        chunk
+            .blocks
+            .get_unchecked_mut(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
     }
 
     fn get_block(&self, x: usize, y: usize, z: usize) -> &Block {
         let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
-        // println!("fetched chunk {:?}", [x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]);
-        let block_idx = [x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE];
         let chunk = &self.chunks[chunk_idx as usize];
-        &chunk.blocks[block_idx]
+        chunk
+            .blocks
+            .get_unchecked(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
     }
 
     fn set_block(
         &mut self,
-        x: usize,
+        world_x: usize,
         y: usize,
-        z: usize,
+        world_z: usize,
         mut block_type: BlockType,
         verbose: bool,
     ) {
-        struct Neighbor {
-            pos: [usize; 3],
-            block: Block,
-            this_shared_face: Face,
-            other_shared_face: Face,
-        }
+        unsafe {
+            let [chunk_x, chunk_z] = [world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE];
+            let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
 
-        let mut neighbors: Vec<Neighbor> = vec![];
+            let this_block = self
+                .get_chunk_mut([chunk_x, chunk_z])
+                .blocks
+                .get_raw_ptr_mut(x, y, z);
 
-        if y < CHUNK_Y_SIZE {
-            neighbors.push(Neighbor {
-                pos: [x, y + 1, z],
-                block: *self.get_block(x, y + 1, z),
-                this_shared_face: Face::Top,
-                other_shared_face: Face::Bottom,
+            #[derive(Clone, Copy)]
+            struct Neighbor {
+                block: *mut Block,
+                this_shared_face: Face,
+                other_shared_face: Face,
+            }
+
+            let mut neighbors: [Option<Neighbor>; 6] = [None; 6];
+
+            if y < CHUNK_Y_SIZE - 1 {
+                neighbors[0] = Some(Neighbor {
+                    block: self
+                        .get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y + 1, z),
+                    this_shared_face: Face::Top,
+                    other_shared_face: Face::Bottom,
+                });
+            }
+            if y > 0 {
+                neighbors[1] = Some(Neighbor {
+                    block: self
+                        .get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y - 1, z),
+                    other_shared_face: Face::Top,
+                    this_shared_face: Face::Bottom,
+                });
+            }
+
+            neighbors[2] = Some(Neighbor {
+                block: if x < CHUNK_XZ_SIZE - 1 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x + 1, y, z)
+                } else {
+                    self.get_chunk_mut([chunk_x + 1, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(0, y, z)
+                },
+                other_shared_face: Face::Right,
+                this_shared_face: Face::Left,
             });
-        }
-        if y > 0 {
-            neighbors.push(Neighbor {
-                pos: [x, y - 1, z],
-                block: *self.get_block(x, y - 1, z),
-                other_shared_face: Face::Top,
-                this_shared_face: Face::Bottom,
+            neighbors[3] = Some(Neighbor {
+                block: if x > 0 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x - 1, y, z)
+                } else {
+                    self.get_chunk_mut([chunk_x - 1, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(CHUNK_XZ_SIZE - 1, y, z)
+                },
+                other_shared_face: Face::Left,
+                this_shared_face: Face::Right,
             });
-        }
+            neighbors[4] = Some(Neighbor {
+                block: if z < CHUNK_XZ_SIZE - 1 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, z + 1)
+                } else {
+                    self.get_chunk_mut([chunk_x, chunk_z + 1])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, 0)
+                },
+                other_shared_face: Face::Back,
+                this_shared_face: Face::Front,
+            });
+            neighbors[5] = Some(Neighbor {
+                block: if z > 0 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, z - 1)
+                } else {
+                    self.get_chunk_mut([chunk_x, chunk_z - 1])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, CHUNK_XZ_SIZE - 1)
+                },
+                other_shared_face: Face::Front,
+                this_shared_face: Face::Back,
+            });
 
-        // TODO: bounds checks for edge of world?
-        neighbors.push(Neighbor {
-            pos: [x + 1, y, z],
-            block: *self.get_block(x + 1, y, z),
-            other_shared_face: Face::Right,
-            this_shared_face: Face::Left,
-        });
-        neighbors.push(Neighbor {
-            pos: [x - 1, y, z],
-            block: *self.get_block(x - 1, y, z),
-            other_shared_face: Face::Left,
-            this_shared_face: Face::Right,
-        });
-        neighbors.push(Neighbor {
-            pos: [x, y, z + 1],
-            block: *self.get_block(x, y, z + 1),
-            other_shared_face: Face::Back,
-            this_shared_face: Face::Front,
-        });
-        neighbors.push(Neighbor {
-            pos: [x, y, z - 1],
-            block: *self.get_block(x, y, z - 1),
-            other_shared_face: Face::Front,
-            this_shared_face: Face::Back,
-        });
-
-        let curr_block = self.get_block_mut(x, y, z);
-
-        // If we're breaking a block next to water, fill this block with water instead
-        if block_type == BlockType::Empty {
-            for neighbor in neighbors.iter() {
-                if neighbor.block.block_type == BlockType::Water
-                    && neighbor.this_shared_face != Face::Bottom
-                {
-                    block_type = BlockType::Water;
+            // If we're breaking a block next to water, fill this block with water instead
+            if block_type == BlockType::Empty {
+                for i in 0..6 {
+                    if let Some(neighbor) = neighbors[i] {
+                        if (*neighbor.block).block_type == BlockType::Water
+                            && neighbor.this_shared_face != Face::Bottom
+                        {
+                            block_type = BlockType::Water;
+                        }
+                    }
                 }
             }
-        }
-        if verbose {
-            println!(
-                "Setting block @ {:?} from {:?} to {:?}",
-                [x, y, z],
-                curr_block.block_type,
-                block_type
-            );
-        }
-        curr_block.block_type = block_type;
+            if verbose {
+                println!(
+                    "Setting block @ {:?} from {:?} to {:?}",
+                    [x, y, z],
+                    self.get_block(x, y, z).block_type,
+                    block_type
+                );
+            }
 
-        for neighbor in neighbors.into_iter() {
-            let neighbor_block =
-                self.get_block_mut(neighbor.pos[0], neighbor.pos[1], neighbor.pos[2]);
-
-            match (block_type, neighbor_block.block_type) {
-                (BlockType::Water, BlockType::Water) => {
-                    neighbor_block
-                        .neighbors
-                        .set(neighbor.other_shared_face, true);
-                    self.get_block_mut(x, y, z)
-                        .neighbors
-                        .set(neighbor.this_shared_face, true);
-                }
-                // HACK: let's me spawn water on the edge of the world when generating on the horizon
-                // This will come back to bite me if I implement waterfalls
-                // (BlockType::Water, BlockType::Empty)=> {
-                //     if neighbor.this_shared_face == Face::Top {
-                //         continue;
-                //     }
-                //     self.get_block_mut(x, y, z)
-                //         .neighbors
-                //         .set(neighbor.this_shared_face, true);
-                // }
-                (_, _) => {
-                    neighbor_block
-                        .neighbors
-                        .set(neighbor.other_shared_face, !block_type.is_transluscent());
+            (*this_block).block_type = block_type;
+            for i in 0..6 {
+                if let Some(neighbor) = neighbors[i] {
+                    match (block_type, (*neighbor.block).block_type) {
+                        (BlockType::Water, BlockType::Water) => {
+                            (*this_block).neighbors.set(neighbor.this_shared_face, true);
+                            (*neighbor.block)
+                                .neighbors
+                                .set(neighbor.other_shared_face, true);
+                        }
+                        (_, _) => {
+                            (*neighbor.block)
+                                .neighbors
+                                .set(neighbor.other_shared_face, !block_type.is_transluscent());
+                        }
+                    }
                 }
             }
         }
@@ -354,19 +381,18 @@ impl WorldState {
     }
 
     pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
+        let func_start = Instant::now();
+
         let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
                     position: inner_chunk_idx,
-                    blocks: Vec3d::new(
-                        vec![
-                            Block {
-                                ..Default::default()
-                            };
-                            CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
-                        ],
-                        [CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE],
-                    ),
+                    blocks: Vec3d::new(vec![
+                        Block {
+                            ..Default::default()
+                        };
+                        CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
+                    ]),
                     render_descriptor_idx: NO_RENDER_DESCRIPTOR_INDEX,
                 });
                 self.chunk_indices[inner_chunk_idx] = self.chunks.len() as u32 - 1;
@@ -389,6 +415,11 @@ impl WorldState {
         .reduce(|accum, item| accum || item)
         .unwrap();
 
+        vprintln!(
+            "Took {}ms to allocate memory",
+            func_start.elapsed().as_millis()
+        );
+
         if did_allocate {
             let elevation_map = map_generation::generate_chunk_elevation_map(
                 [chunk_x, chunk_z],
@@ -396,9 +427,12 @@ impl WorldState {
                 MAX_HEIGHT,
             );
             let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
-            // save_elevation_to_file(map_elevation, "map.bmp");
+            vprintln!(
+                "Took {}ms to generate elevation map",
+                func_start.elapsed().as_millis()
+            );
 
-            for (x, z) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+            for (z, x) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
                 let ground_elevation = elevation_map[x][z] as usize;
                 let (world_x, world_z) = (base_x + x, base_z + z);
                 let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
@@ -422,6 +456,11 @@ impl WorldState {
                 }
             }
         }
+
+        vprintln!(
+            "Took {}ms to process elevation map",
+            func_start.elapsed().as_millis()
+        );
 
         did_allocate
     }
@@ -549,8 +588,6 @@ impl WorldState {
     }
 
     pub fn generate_chunk_data(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
-        let func_start = Instant::now();
-
         self.maybe_allocate_chunk(chunk_idx);
 
         use cgmath::{Deg, Quaternion, Vector3};
@@ -570,126 +607,118 @@ impl WorldState {
             Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
                 * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
 
-        let mut opaque_instances: Vec<Instance> = vec![];
-        let mut transluscent_instances: Vec<Instance> = vec![];
+        let mut opaque_instances = Vec::<InstanceRaw>::with_capacity(4096);
+        let mut opaque_instance_distances = Vec::<i32>::with_capacity(4096);
+
+        let mut transluscent_instances = Vec::<InstanceRaw>::with_capacity(4096);
+        let mut transluscent_instance_distances = Vec::<i32>::with_capacity(4096);
+
+        let chunk = self.get_chunk(chunk_idx);
 
         let [chunk_x, chunk_z] = chunk_idx;
-        for (chunk_rel_x, y, chunk_rel_z) in
-            iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE, 0..CHUNK_XZ_SIZE)
-        {
-            let x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
-            let z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
 
-            let position = cgmath::Vector3::new(x as f32, y as f32, z as f32);
-            let block = self.get_block(x, y, z);
-            if block.block_type == BlockType::Empty {
-                continue;
-            }
+        // Don't use !iproduct here to squeeze out a tiny bit of perf
+        for chunk_rel_z in 0..CHUNK_XZ_SIZE {
+            for chunk_rel_x in 0..CHUNK_XZ_SIZE {
+                for y in 0..CHUNK_Y_SIZE {
+                    let world_x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
+                    let world_z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
 
-            let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
-                .distance((x as f32, y as f32, z as f32).into());
+                    let position = cgmath::Vector3::new(world_x as f32, y as f32, world_z as f32);
+                    let block = chunk.blocks.get_unchecked(chunk_rel_x, y, chunk_rel_z);
+                    if block.block_type == BlockType::Empty {
+                        continue;
+                    }
 
-            let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
-            let alpha_adjust = if block.block_type == BlockType::Water {
-                0.7
-            } else {
-                1.0
-            };
+                    let [top_offset, bottom_offset, side_offset] =
+                        block.block_type.texture_atlas_offsets();
+                    let alpha_adjust = if block.block_type == BlockType::Water {
+                        0.7
+                    } else {
+                        1.0
+                    };
 
-            let instance_vec = if block.block_type.is_transluscent() {
-                &mut transluscent_instances
-            } else {
-                &mut opaque_instances
-            };
+                    let (instance_vec, distance_vec) = if block.block_type.is_transluscent() {
+                        (
+                            &mut transluscent_instances,
+                            &mut transluscent_instance_distances,
+                        )
+                    } else {
+                        (&mut opaque_instances, &mut opaque_instance_distances)
+                    };
 
-            if !block.neighbors.get(Face::Top) {
-                let y_offset = if block.block_type == BlockType::Water {
-                    0.8
-                } else {
-                    1.0
-                };
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, y_offset, 1.0),
-                    rotation: flip_to_top,
-                    texture_atlas_offset: top_offset,
-                    color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
-                    distance_from_camera,
-                });
-            }
-            if !block.neighbors.get(Face::Bottom) {
-                instance_vec.push(Instance {
-                    position,
-                    rotation: no_rotation,
-                    texture_atlas_offset: bottom_offset,
-                    color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
-                    distance_from_camera,
-                });
-            }
-            if !block.neighbors.get(Face::Left) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
-                    rotation: flip_to_left,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
-                    distance_from_camera,
-                });
-            }
-            if !block.neighbors.get(Face::Right) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
-                    rotation: flip_to_right,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
-                    distance_from_camera,
-                });
-            }
-            if !block.neighbors.get(Face::Front) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
-                    rotation: flip_to_back,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
-                    distance_from_camera,
-                });
-            }
-            if !block.neighbors.get(Face::Back) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                    rotation: flip_to_front,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
-                    distance_from_camera,
-                });
+                    let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
+                        .distance((world_x as f32, y as f32, world_z as f32).into());
+
+                    if !block.neighbors.get(Face::Top) {
+                        let y_offset = if block.block_type == BlockType::Water {
+                            0.8
+                        } else {
+                            1.0
+                        };
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(0.0, y_offset, 1.0),
+                            flip_to_top,
+                            top_offset,
+                            [1.0, 1.0, 1.0, alpha_adjust],
+                        ));
+
+                        // N.B.
+                        // - store negative value because we want further instances to be drawn first
+                        // - lose float precision to gain speed in sorting (I did not benchmark this, could be useless)
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Bottom) {
+                        instance_vec.push(InstanceRaw::new(
+                            position,
+                            no_rotation,
+                            bottom_offset,
+                            [1.0, 1.0, 1.0, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Left) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(1.0, 1.0, 0.0),
+                            flip_to_left,
+                            side_offset,
+                            [0.7, 0.7, 0.7, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Right) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                            flip_to_right,
+                            side_offset,
+                            [0.7, 0.7, 0.7, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Front) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(1.0, 1.0, 1.0),
+                            flip_to_back,
+                            side_offset,
+                            [0.8, 0.8, 0.8, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Back) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                            flip_to_front,
+                            side_offset,
+                            [0.8, 0.8, 0.8, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                }
             }
         }
 
-        let raw_opaque_instances = opaque_instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-
-        let raw_transluscent_instances = transluscent_instances
-            .into_iter()
-            .sorted_by(|a, b| {
-                a.distance_from_camera
-                    .partial_cmp(&b.distance_from_camera)
-                    .unwrap()
-            })
-            .iter()
-            .rev() // reverse -- we want far blocks drawn first
-            // .map(|i| {
-            //     let mut adjusted_i = i.clone();
-            //     adjusted_i.color_adjust[0] *= 1.0 / i.distance_from_camera.log(2.0);
-            //     adjusted_i.color_adjust[1] *= 1.0 / i.distance_from_camera.log(2.0);
-            //     adjusted_i.color_adjust[2] *= 1.0 / i.distance_from_camera.log(2.0);
-            //     // adjusted_i.color_adjust[3] *= 1.0 / i.distance_from_camera;
-            //     Instance::to_raw(&adjusted_i)
-            // })
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-
-        let elapsed_time = func_start.elapsed().as_millis();
-        // println!("Took {}ms to generate chunk vertex data", elapsed_time);
+        permutation::sort(&transluscent_instance_distances)
+            .apply_slice_in_place(&mut transluscent_instances);
 
         ChunkData {
             position: chunk_idx,
@@ -698,11 +727,11 @@ impl WorldState {
             typed_instances_vec: vec![
                 TypedInstances {
                     data_type: ChunkDataType::Opaque,
-                    instance_data: raw_opaque_instances,
+                    instance_data: opaque_instances,
                 },
                 TypedInstances {
                     data_type: ChunkDataType::Transluscent,
-                    instance_data: raw_transluscent_instances,
+                    instance_data: transluscent_instances,
                 },
             ],
         }

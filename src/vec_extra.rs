@@ -1,35 +1,87 @@
 use std::ops::{Index, IndexMut};
 
+pub struct YXZ<const XSIZE: usize, const YSIZE: usize, const ZSIZE: usize> {}
+pub struct XYZ<const XSIZE: usize, const YSIZE: usize, const ZSIZE: usize> {}
+pub trait DimOrder: Sized {
+    fn new() -> Self;
+    fn array_index(&self, x: usize, y: usize, z: usize) -> usize;
+    fn dims() -> &'static [usize; 3];
+}
+
+impl<const XSIZE: usize, const YSIZE: usize, const ZSIZE: usize> DimOrder
+    for YXZ<XSIZE, YSIZE, ZSIZE>
+{
+    fn new() -> Self {
+        Self {}
+    }
+    fn array_index(&self, x: usize, y: usize, z: usize) -> usize {
+        y + (x * YSIZE) + (z * YSIZE * XSIZE)
+    }
+    fn dims() -> &'static [usize; 3] {
+        &[YSIZE, XSIZE, ZSIZE]
+    }
+}
+impl<const XSIZE: usize, const YSIZE: usize, const ZSIZE: usize> DimOrder
+    for XYZ<XSIZE, YSIZE, ZSIZE>
+{
+    fn new() -> Self {
+        Self {}
+    }
+    fn array_index(&self, x: usize, y: usize, z: usize) -> usize {
+        x + (y * XSIZE) + (z * XSIZE * YSIZE)
+    }
+    fn dims() -> &'static [usize; 3] {
+        &[XSIZE, YSIZE, ZSIZE]
+    }
+}
+
 #[derive(Debug)]
-pub struct Vec3d<T> {
+pub struct Vec3d<T, DO: DimOrder> {
     vec: Vec<T>,
-    dims: [usize; 3],
+    dim_order: DO,
 }
 
-impl<T> Vec3d<T> {
-    pub fn new(vec: Vec<T>, dims: [usize; 3]) -> Self {
+impl<T, DO: DimOrder> Vec3d<T, DO> {
+    pub fn new(vec: Vec<T>) -> Self {
+        let dims = DO::dims();
         assert!(vec.len() == dims[0] * dims[1] * dims[2]);
-        Self { vec, dims }
+
+        Self {
+            vec,
+            dim_order: DO::new(),
+        }
     }
 
-    pub fn dims(&self) -> [usize; 3] {
-        self.dims
+    pub fn get_unchecked(&self, x: usize, y: usize, z: usize) -> &T {
+        &self[[x, y, z]]
+    }
+
+    pub fn get_unchecked_mut(&mut self, x: usize, y: usize, z: usize) -> &mut T {
+        &mut self[[x, y, z]]
+    }
+
+    pub unsafe fn get_raw_ptr_mut(&mut self, x: usize, y: usize, z: usize) -> *mut T {
+        self.vec.as_mut_ptr().add(self.dim_order.array_index(x, y, z))
+    }
+
+    pub fn dims(&self) -> &[usize; 3] {
+        DO::dims()
     }
 }
 
-impl<T> Index<[usize; 3]> for Vec3d<T> {
+impl<T, DO: DimOrder> Index<[usize; 3]> for Vec3d<T, DO> {
     type Output = T;
 
     fn index(&self, index: [usize; 3]) -> &T {
         let [x, y, z] = index;
-        &self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
+        &self.vec[self.dim_order.array_index(x, y, z)]
     }
 }
 
-impl<T> IndexMut<[usize; 3]> for Vec3d<T> {
+impl<T, DO: DimOrder> IndexMut<[usize; 3]> for Vec3d<T, DO> {
     fn index_mut<'a>(&'a mut self, index: [usize; 3]) -> &'a mut T {
         let [x, y, z] = index;
-        &mut self.vec[x + (y * self.dims[0]) + (z * self.dims[0] * self.dims[1])]
+        &mut self.vec[self.dim_order.array_index(x, y, z)]
     }
 }
 
