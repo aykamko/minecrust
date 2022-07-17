@@ -20,6 +20,7 @@ bmp = "0.5.0"
 rand = "0.8.5"
 firestorm = { version = "0.4", features = ["enable_system_time"] }
 pathfinding = "3.0.11"
+permutation = "0.4.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-executor = "1.0"

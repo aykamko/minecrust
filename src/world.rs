@@ -11,7 +11,7 @@ use itertools::Itertools;
 mod zarray;
 use zarray::z3d::ZArray3D;
 
-use super::instance::{Instance, InstanceRaw};
+use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point2, Point3};
 use collision::Continuous;
 use std::collections::HashSet;
@@ -622,8 +622,11 @@ impl WorldState {
             Quaternion::from_axis_angle(Vector3::unit_z(), Deg(-90.0))
                 * Quaternion::from_axis_angle(Vector3::unit_y(), Deg(90.0));
 
-        let mut opaque_instances: Vec<Instance> = vec![];
-        let mut transluscent_instances: Vec<Instance> = vec![];
+        let mut opaque_instances = Vec::<InstanceRaw>::with_capacity(4096);
+        let mut opaque_instance_distances = Vec::<i32>::with_capacity(4096);
+
+        let mut transluscent_instances = Vec::<InstanceRaw>::with_capacity(4096);
+        let mut transluscent_instance_distances = Vec::<i32>::with_capacity(4096);
 
         let chunk = self.get_chunk(chunk_idx);
 
@@ -640,9 +643,6 @@ impl WorldState {
                 continue;
             }
 
-            let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
-                .distance((world_x as f32, y as f32, world_z as f32).into());
-
             let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
             let alpha_adjust = if block.block_type == BlockType::Water {
                 0.7
@@ -650,11 +650,17 @@ impl WorldState {
                 1.0
             };
 
-            let instance_vec = if block.block_type.is_transluscent() {
-                &mut transluscent_instances
+            let (instance_vec, distance_vec) = if block.block_type.is_transluscent() {
+                (
+                    &mut transluscent_instances,
+                    &mut transluscent_instance_distances,
+                )
             } else {
-                &mut opaque_instances
+                (&mut opaque_instances, &mut opaque_instance_distances)
             };
+
+            let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
+                .distance((world_x as f32, y as f32, world_z as f32).into());
 
             if !block.neighbors.get(Face::Top) {
                 let y_offset = if block.block_type == BlockType::Water {
@@ -662,87 +668,67 @@ impl WorldState {
                 } else {
                     1.0
                 };
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, y_offset, 1.0),
-                    rotation: flip_to_top,
-                    texture_atlas_offset: top_offset,
-                    color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
-                    distance_from_camera,
-                });
+                instance_vec.push(InstanceRaw::new(
+                    position + cgmath::Vector3::new(0.0, y_offset, 1.0),
+                    flip_to_top,
+                    top_offset,
+                    [1.0, 1.0, 1.0, alpha_adjust],
+                ));
+
+                // N.B.
+                // - store negative value because we want further instances to be drawn first
+                // - lose float precision to gain speed in sorting (I did not benchmark this, could be useless)
+                distance_vec.push(-distance_from_camera as i32);
             }
             if !block.neighbors.get(Face::Bottom) {
-                instance_vec.push(Instance {
+                instance_vec.push(InstanceRaw::new(
                     position,
-                    rotation: no_rotation,
-                    texture_atlas_offset: bottom_offset,
-                    color_adjust: [1.0, 1.0, 1.0, alpha_adjust],
-                    distance_from_camera,
-                });
+                    no_rotation,
+                    bottom_offset,
+                    [1.0, 1.0, 1.0, alpha_adjust],
+                ));
+                distance_vec.push(-distance_from_camera as i32);
             }
             if !block.neighbors.get(Face::Left) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(1.0, 1.0, 0.0),
-                    rotation: flip_to_left,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
-                    distance_from_camera,
-                });
+                instance_vec.push(InstanceRaw::new(
+                    position + cgmath::Vector3::new(1.0, 1.0, 0.0),
+                    flip_to_left,
+                    side_offset,
+                    [0.7, 0.7, 0.7, alpha_adjust],
+                ));
+                distance_vec.push(-distance_from_camera as i32);
             }
             if !block.neighbors.get(Face::Right) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, 1.0, 1.0),
-                    rotation: flip_to_right,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.7, 0.7, 0.7, alpha_adjust],
-                    distance_from_camera,
-                });
+                instance_vec.push(InstanceRaw::new(
+                    position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                    flip_to_right,
+                    side_offset,
+                    [0.7, 0.7, 0.7, alpha_adjust],
+                ));
+                distance_vec.push(-distance_from_camera as i32);
             }
             if !block.neighbors.get(Face::Front) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(1.0, 1.0, 1.0),
-                    rotation: flip_to_back,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
-                    distance_from_camera,
-                });
+                instance_vec.push(InstanceRaw::new(
+                    position + cgmath::Vector3::new(1.0, 1.0, 1.0),
+                    flip_to_back,
+                    side_offset,
+                    [0.8, 0.8, 0.8, alpha_adjust],
+                ));
+                distance_vec.push(-distance_from_camera as i32);
             }
             if !block.neighbors.get(Face::Back) {
-                instance_vec.push(Instance {
-                    position: position + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                    rotation: flip_to_front,
-                    texture_atlas_offset: side_offset,
-                    color_adjust: [0.8, 0.8, 0.8, alpha_adjust],
-                    distance_from_camera,
-                });
+                instance_vec.push(InstanceRaw::new(
+                    position + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                    flip_to_front,
+                    side_offset,
+                    [0.8, 0.8, 0.8, alpha_adjust],
+                ));
+                distance_vec.push(-distance_from_camera as i32);
             }
         }
 
-        let raw_opaque_instances = opaque_instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-
-        let raw_transluscent_instances = transluscent_instances
-            .into_iter()
-            .sorted_by(|a, b| {
-                a.distance_from_camera
-                    .partial_cmp(&b.distance_from_camera)
-                    .unwrap()
-            })
-            .iter()
-            .rev() // reverse -- we want far blocks drawn first
-            // .map(|i| {
-            //     let mut adjusted_i = i.clone();
-            //     adjusted_i.color_adjust[0] *= 1.0 / i.distance_from_camera.log(2.0);
-            //     adjusted_i.color_adjust[1] *= 1.0 / i.distance_from_camera.log(2.0);
-            //     adjusted_i.color_adjust[2] *= 1.0 / i.distance_from_camera.log(2.0);
-            //     // adjusted_i.color_adjust[3] *= 1.0 / i.distance_from_camera;
-            //     Instance::to_raw(&adjusted_i)
-            // })
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>();
-
-        // println!("Took {:?}ms to generate chunk vertex data", func_start.elapsed().as_micros());
+        let mut transluscent_permutation = permutation::sort(&transluscent_instance_distances);
+        transluscent_permutation.apply_slice_in_place(&mut transluscent_instances);
 
         ChunkData {
             position: chunk_idx,
@@ -751,11 +737,11 @@ impl WorldState {
             typed_instances_vec: vec![
                 TypedInstances {
                     data_type: ChunkDataType::Opaque,
-                    instance_data: raw_opaque_instances,
+                    instance_data: opaque_instances,
                 },
                 TypedInstances {
                     data_type: ChunkDataType::Transluscent,
-                    instance_data: raw_transluscent_instances,
+                    instance_data: transluscent_instances,
                 },
             ],
         }

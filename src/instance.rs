@@ -1,12 +1,3 @@
-#[derive(Clone)]
-pub struct Instance {
-    pub position: cgmath::Vector3<f32>,
-    pub rotation: cgmath::Quaternion<f32>,
-    pub texture_atlas_offset: [f32; 2],
-    pub color_adjust: [f32; 4],
-    pub distance_from_camera: f32,
-}
-
 // WARNING this might be inefficient. A note from the guide: Using these values directly in the
 // shader would be a pain as quaternions don't have a WGSL analog. I don't feel like writing the
 // math in the shader, so we'll convert the Instance data into a matrix and store it into a struct
@@ -19,19 +10,21 @@ pub struct InstanceRaw {
     color_adjust: [f32; 4],
 }
 
-impl Instance {
-    pub fn to_raw(&self) -> InstanceRaw {
+impl InstanceRaw {
+    pub fn new(
+        position: cgmath::Vector3<f32>,
+        rotation: cgmath::Quaternion<f32>,
+        texture_atlas_offset: [f32; 2],
+        color_adjust: [f32; 4],
+    ) -> Self {
         InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation))
-            .into(),
-            texture_atlas_offset: self.texture_atlas_offset,
-            color_adjust: self.color_adjust,
+            model: (cgmath::Matrix4::from_translation(position) * cgmath::Matrix4::from(rotation))
+                .into(),
+            texture_atlas_offset: texture_atlas_offset,
+            color_adjust: color_adjust,
         }
     }
-}
 
-impl InstanceRaw {
     pub fn size() -> usize {
         use std::mem;
         mem::size_of::<InstanceRaw>()

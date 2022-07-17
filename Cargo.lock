@@ -1213,6 +1213,7 @@ dependencies = [
  "itertools 0.5.10",
  "noise",
  "pathfinding",
+ "permutation",
  "rand 0.8.5",
  "wgpu",
  "winit",
@@ -1615,6 +1616,12 @@ name = "percent-encoding"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
+
+[[package]]
+name = "permutation"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3f4a387a9ad6165bb590820827ef047d8e2921dfb9821891ed0ef2b7cf82774"
 
 [[package]]
 name = "pin-project-lite"
