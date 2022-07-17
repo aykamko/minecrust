@@ -465,16 +465,9 @@ impl WorldState {
         did_allocate
     }
 
-    pub fn initial_setup(&mut self) {
-        // HACK: we're assuming the camera is at the center of the world
-
-        // Generate initial chunks in the center of the world
-        let first_chunk_xz_index = (MAX_CHUNK_WORLD_WIDTH / 2) - (VISIBLE_CHUNK_WIDTH / 2);
-        let last_chunk_xz_index = first_chunk_xz_index + VISIBLE_CHUNK_WIDTH;
-        for (chunk_x, chunk_z) in iproduct!(
-            first_chunk_xz_index..last_chunk_xz_index,
-            first_chunk_xz_index..last_chunk_xz_index
-        ) {
+    pub fn initial_setup(&mut self, camera: &Camera) {
+        // Generate initial chunks from initial camera position
+        for [chunk_x, chunk_z] in self.iter_visible_chunks(camera) {
             self.maybe_allocate_chunk([chunk_x, chunk_z]);
         }
     }
@@ -522,10 +515,12 @@ impl WorldState {
             (camera.eye.x / CHUNK_XZ_SIZE as f32) as usize,
             (camera.eye.z / CHUNK_XZ_SIZE as f32) as usize,
         );
+        println!("Camera eye at {:?} {:?}", [camera_chunk_x, camera_chunk_z], VISIBLE_CHUNK_WIDTH);
         let first_chunk_x_index = camera_chunk_x - (VISIBLE_CHUNK_WIDTH / 2);
         let first_chunk_z_index = camera_chunk_z - (VISIBLE_CHUNK_WIDTH / 2);
 
-        let mut chunk_idxs: Vec<[usize; 2]> = vec![];
+        let mut chunk_idxs =
+            Vec::<[usize; 2]>::with_capacity(VISIBLE_CHUNK_WIDTH * VISIBLE_CHUNK_WIDTH);
         for (chunk_x, chunk_z) in iproduct!(
             first_chunk_x_index..first_chunk_x_index + VISIBLE_CHUNK_WIDTH,
             first_chunk_z_index..first_chunk_z_index + VISIBLE_CHUNK_WIDTH

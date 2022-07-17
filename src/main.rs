@@ -24,7 +24,9 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
+use crate::world::{
+    Chunk, ChunkDataType, CHUNK_XZ_SIZE, MAX_CHUNK_WORLD_WIDTH, VISIBLE_CHUNK_WIDTH,
+};
 
 const VERBOSE_LOGS: bool = false;
 
@@ -155,7 +157,12 @@ fn start(
     let center = world::get_world_center();
     let zfar = 250.0;
     let mut camera = camera::Camera::new(
-        Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
+        Point3::<f32>::new(
+            ((VISIBLE_CHUNK_WIDTH / 2) * CHUNK_XZ_SIZE) as f32 * 3.0,
+            center.y as f32,
+            ((VISIBLE_CHUNK_WIDTH / 2) * CHUNK_XZ_SIZE) as f32 * 3.0,
+        ),
+        // Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
         // have it look at the origin
         (0.0, 0.0, 0.0).into(),
         // which way is "up"
@@ -171,7 +178,7 @@ fn start(
     camera_uniform.update_view_proj(&camera);
 
     let mut world_state = world::WorldState::new();
-    world_state.initial_setup();
+    world_state.initial_setup(&camera);
 
     let mut scene = setup_scene(
         &config,
@@ -744,10 +751,9 @@ fn setup_scene(
         multiview: None,
     });
 
-    let pipeline_wire = if false
-        && device
-            .features()
-            .contains(wgpu::Features::POLYGON_MODE_LINE)
+    let pipeline_wire = if device
+        .features()
+        .contains(wgpu::Features::POLYGON_MODE_LINE)
     {
         let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
