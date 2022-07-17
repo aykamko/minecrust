@@ -341,19 +341,31 @@ impl WorldState {
 
             (*this_block).block_type = block_type;
             for i in 0..6 {
-                if let Some(neighbor) = neighbors[i] {
-                    match (block_type, (*neighbor.block).block_type) {
-                        (BlockType::Water, BlockType::Water) => {
-                            (*this_block).neighbors.set(neighbor.this_shared_face, true);
-                            (*neighbor.block)
-                                .neighbors
-                                .set(neighbor.other_shared_face, true);
-                        }
-                        (_, _) => {
-                            (*neighbor.block)
-                                .neighbors
-                                .set(neighbor.other_shared_face, !block_type.is_transluscent());
-                        }
+                let neighbor = match neighbors[i] {
+                    Some(neighbor) => neighbor,
+                    None => {
+                        continue;
+                    }
+                };
+                match (block_type, (*neighbor.block).block_type) {
+                    (BlockType::Water, BlockType::Water) => {
+                        (*this_block).neighbors.set(neighbor.this_shared_face, true);
+                        (*neighbor.block)
+                            .neighbors
+                            .set(neighbor.other_shared_face, true);
+                    }
+                    (x, BlockType::Water) if !x.is_transluscent() => {
+                        (*this_block)
+                            .neighbors
+                            .set(neighbor.this_shared_face, false);
+                        (*neighbor.block)
+                            .neighbors
+                            .set(neighbor.other_shared_face, true);
+                    }
+                    (_, _) => {
+                        (*neighbor.block)
+                            .neighbors
+                            .set(neighbor.other_shared_face, !block_type.is_transluscent());
                     }
                 }
             }
