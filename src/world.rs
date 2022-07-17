@@ -1,18 +1,10 @@
-pub(crate) use firestorm::{profile_fn, profile_method, profile_section};
-
 use crate::camera::Camera;
-use crate::map_generation::{self, save_elevation_to_file};
+use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
-use crate::ChunkRenderDescriptor;
 use bitmaps::Bitmap;
-use itertools::Itertools;
-
-#[path = "zarray.rs"]
-mod zarray;
-use zarray::z3d::ZArray3D;
 
 use super::instance::InstanceRaw;
-use cgmath::{prelude::*, MetricSpace, Point2, Point3};
+use cgmath::{prelude::*, MetricSpace, Point3};
 use collision::Continuous;
 use std::collections::HashSet;
 use std::convert::Into;
@@ -170,7 +162,7 @@ pub struct ChunkData {
 
 pub struct Chunk {
     position: [usize; 2],
-    blocks: vec_extra::Vec3d<Block, vec_extra::XYZ<CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE>>,
+    blocks: Vec3d<Block, vec_extra::XYZ<CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE>>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
 }
@@ -389,15 +381,13 @@ impl WorldState {
     }
 
     pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) -> bool {
-        profile_method!(maybe_allocate_chunk);
-
         let func_start = Instant::now();
 
         let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
                     position: inner_chunk_idx,
-                    blocks: vec_extra::Vec3d::new(vec![
+                    blocks: Vec3d::new(vec![
                         Block {
                             ..Default::default()
                         };
@@ -605,8 +595,6 @@ impl WorldState {
     }
 
     pub fn generate_chunk_data(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
-        let func_start = Instant::now();
-
         self.maybe_allocate_chunk(chunk_idx);
 
         use cgmath::{Deg, Quaternion, Vector3};
