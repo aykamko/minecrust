@@ -415,12 +415,10 @@ impl WorldState {
         .reduce(|accum, item| accum || item)
         .unwrap();
 
-        if did_allocate {
-            println!(
-                "Took {}ms to allocate memory",
-                func_start.elapsed().as_millis()
-            );
-        }
+        vprintln!(
+            "Took {}ms to allocate memory",
+            func_start.elapsed().as_millis()
+        );
 
         if did_allocate {
             let elevation_map = map_generation::generate_chunk_elevation_map(
@@ -429,13 +427,10 @@ impl WorldState {
                 MAX_HEIGHT,
             );
             let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
-            if did_allocate {
-                println!(
-                    "Took {}ms to generate elevation map",
-                    func_start.elapsed().as_millis()
-                );
-            }
-            // save_elevation_to_file(map_elevation, "map.bmp");
+            vprintln!(
+                "Took {}ms to generate elevation map",
+                func_start.elapsed().as_millis()
+            );
 
             for (z, x) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
                 let ground_elevation = elevation_map[x][z] as usize;
@@ -462,12 +457,10 @@ impl WorldState {
             }
         }
 
-        if did_allocate {
-            println!(
-                "Took {}ms to process elevation map",
-                func_start.elapsed().as_millis()
-            );
-        }
+        vprintln!(
+            "Took {}ms to process elevation map",
+            func_start.elapsed().as_millis()
+        );
 
         did_allocate
     }

@@ -26,6 +26,8 @@ use winit::{
 
 use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
 
+const VERBOSE_LOGS: bool = false;
+
 fn main() {
     let s = block_on(setup());
     start(s);
@@ -359,7 +361,7 @@ fn start(
                     for chunk_mod in chunk_mods.iter() {
                         world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
                     }
-                    if update_result.did_move_chunks {
+                    if VERBOSE_LOGS && update_result.did_move_chunks {
                         println!(
                             "Took {}ms to allocate chunks",
                             chunk_mod_time.elapsed().as_millis()
@@ -389,7 +391,7 @@ fn start(
                         })
                         .collect::<Vec<_>>();
 
-                    if update_result.did_move_chunks {
+                    if VERBOSE_LOGS && update_result.did_move_chunks {
                         println!(
                             "Took {}ms to update chunks",
                             chunk_mod_time.elapsed().as_millis()
