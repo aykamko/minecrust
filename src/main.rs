@@ -153,6 +153,7 @@ fn start(
 
     // Start in the center
     let center = world::get_world_center();
+    let znear = 1.0;
     let zfar = 250.0;
     let mut camera = camera::Camera::new(
         Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
@@ -163,7 +164,7 @@ fn start(
         cgmath::Vector3::unit_y(),
         config.width as f32 / config.height as f32,
         70.0,
-        0.1,
+        znear,
         zfar,
     );
 
@@ -644,8 +645,7 @@ fn setup_scene(
 
     let mut chunk_render_descriptors: Vec<ChunkRenderDescriptor> = vec![];
 
-    // HACK(aleks): the order of (x, z) needs to be reversed here for collisions to work later -- that's confusing
-    for (chunk_z, chunk_x) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
+    for (chunk_x, chunk_z) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
         let chunk_data = &all_chunk_data[[chunk_x, chunk_z]];
 
         let mut annotated_instance_buffers: Vec<AnnotatedInstanceBuffer> = vec![];
@@ -863,48 +863,51 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
-        for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
-            // for data_type in [ChunkDataType::Transluscent] {
-            for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
-                let render_descriptor_idx =
-                    world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);
-                let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
+        let mut render_chunk = |chunk_x: usize, chunk_z: usize, data_type: ChunkDataType| {
+            let render_descriptor_idx = world_state.get_render_descriptor_idx([chunk_x, chunk_z]);
+            let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
 
-                let maybe_instance_buffer = chunk_render_datum
-                    .annotated_instance_buffers
-                    .iter()
-                    .find(|&ib| ib.data_type == data_type);
+            let maybe_instance_buffer = chunk_render_datum
+                .annotated_instance_buffers
+                .iter()
+                .find(|&ib| ib.data_type == data_type);
 
-                if let Some(ref instance_buffer) = maybe_instance_buffer {
-                    rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-                    rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+            if let Some(ref instance_buffer) = maybe_instance_buffer {
+                rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+                rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
 
-                    if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
-                        if let Some(ref pipe) = &scene.pipeline_wire {
-                            rpass.set_pipeline(pipe);
-                            if RENDER_WIREFRAME {
-                                rpass.draw_indexed(
-                                    0..scene.index_count as u32,
-                                    0,
-                                    0..instance_buffer.len as _,
-                                );
-                            }
-
-                            // Draw camera line
-                            if RENDER_CAMERA_RAY {
-                                rpass.set_index_buffer(
-                                    scene.line_index_buf.slice(..),
-                                    wgpu::IndexFormat::Uint16,
-                                );
-                                rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
-                                rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
-                            }
-
-                            rpass.set_pipeline(&scene.pipeline);
+                if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
+                    if let Some(ref pipe) = &scene.pipeline_wire {
+                        rpass.set_pipeline(pipe);
+                        if RENDER_WIREFRAME {
+                            rpass.draw_indexed(
+                                0..scene.index_count as u32,
+                                0,
+                                0..instance_buffer.len as _,
+                            );
                         }
+
+                        // Draw camera line
+                        if RENDER_CAMERA_RAY {
+                            rpass.set_index_buffer(
+                                scene.line_index_buf.slice(..),
+                                wgpu::IndexFormat::Uint16,
+                            );
+                            rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+                            rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
+                        }
+
+                        rpass.set_pipeline(&scene.pipeline);
                     }
                 }
             }
+        };
+
+        for [chunk_x, chunk_z] in scene.chunk_order.iter() {
+            render_chunk(*chunk_x, *chunk_z, ChunkDataType::Opaque);
+        }
+        for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
+            render_chunk(*chunk_x, *chunk_z, ChunkDataType::Transluscent);
         }
     }
 
