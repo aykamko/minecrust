@@ -383,9 +383,8 @@ impl WorldState {
     pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) {
         let func_start = Instant::now();
 
-        let mut allocate_inner = |inner_chunk_idx: [usize; 2]| -> bool /* is_generated */ {
-            let flat_chunk_idx = self.chunk_indices[inner_chunk_idx];
-            if flat_chunk_idx == CHUNK_DOES_NOT_EXIST_VALUE {
+        let mut allocate_inner = |inner_chunk_idx: [usize; 2]| {
+            if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 let new_chunk = Chunk {
                     is_generated: false,
                     blocks: Vec3d::new(vec![
@@ -398,9 +397,6 @@ impl WorldState {
                 };
                 self.chunks.push(new_chunk);
                 self.chunk_indices[inner_chunk_idx] = self.chunks.len() as u32 - 1;
-                false
-            } else {
-                self.chunks[flat_chunk_idx as usize].is_generated
             }
         };
 
@@ -408,7 +404,7 @@ impl WorldState {
         // Allocate neighbors to avoid out-of-bounds array accessing when modifying blocks
         allocate_inner([chunk_x - 1, chunk_z]);
         allocate_inner([chunk_x, chunk_z - 1]);
-        let this_chunk_is_generated = allocate_inner([chunk_x, chunk_z]);
+        allocate_inner([chunk_x, chunk_z]);
         allocate_inner([chunk_x, chunk_z + 1]);
         allocate_inner([chunk_x + 1, chunk_z]);
 
@@ -417,7 +413,7 @@ impl WorldState {
             func_start.elapsed().as_millis()
         );
 
-        if !this_chunk_is_generated {
+        if !self.get_chunk(outer_chunk_idx).is_generated {
             let elevation_map = map_generation::generate_chunk_elevation_map(
                 [chunk_x, chunk_z],
                 MIN_HEIGHT,
@@ -452,6 +448,8 @@ impl WorldState {
                     }
                 }
             }
+
+            self.get_chunk_mut(outer_chunk_idx).is_generated = true;
         }
 
         vprintln!(
