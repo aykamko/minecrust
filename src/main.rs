@@ -171,7 +171,7 @@ fn start(
     camera_uniform.update_view_proj(&camera);
 
     let mut world_state = world::WorldState::new();
-    world_state.initial_setup();
+    world_state.initial_setup(&camera);
 
     let mut scene = setup_scene(
         &config,
@@ -644,8 +644,7 @@ fn setup_scene(
 
     let mut chunk_render_descriptors: Vec<ChunkRenderDescriptor> = vec![];
 
-    // HACK(aleks): the order of (x, z) needs to be reversed here for collisions to work later -- that's confusing
-    for (chunk_z, chunk_x) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
+    for (chunk_x, chunk_z) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
         let chunk_data = &all_chunk_data[[chunk_x, chunk_z]];
 
         let mut annotated_instance_buffers: Vec<AnnotatedInstanceBuffer> = vec![];

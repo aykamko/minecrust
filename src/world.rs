@@ -470,17 +470,10 @@ impl WorldState {
         );
     }
 
-    pub fn initial_setup(&mut self) {
-        // HACK: we're assuming the camera is at the center of the world
-
-        // Generate initial chunks in the center of the world
-        let first_chunk_xz_index = (MAX_CHUNK_WORLD_WIDTH / 2) - (VISIBLE_CHUNK_WIDTH / 2);
-        let last_chunk_xz_index = first_chunk_xz_index + VISIBLE_CHUNK_WIDTH;
-        for (chunk_x, chunk_z) in iproduct!(
-            first_chunk_xz_index..last_chunk_xz_index,
-            first_chunk_xz_index..last_chunk_xz_index
-        ) {
-            self.maybe_allocate_chunk([chunk_x, chunk_z]);
+    pub fn initial_setup(&mut self, camera: &Camera) {
+        // Generate initial chunks around initial camera position
+        for chunk_idx in self.iter_visible_chunks(camera) {
+            self.maybe_allocate_chunk(chunk_idx);
         }
     }
 
