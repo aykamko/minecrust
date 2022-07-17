@@ -235,15 +235,16 @@ impl WorldState {
         verbose: bool,
     ) {
         unsafe {
-            let chunk_idx = [world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE];
-            let chunk_blocks = &mut self.get_chunk_mut(chunk_idx).blocks;
+            let [chunk_x, chunk_z] = [world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE];
             let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
 
-            let this_block = chunk_blocks.get_raw_ptr_mut(x, y, z);
+            let this_block = self
+                .get_chunk_mut([chunk_x, chunk_z])
+                .blocks
+                .get_raw_ptr_mut(x, y, z);
 
             #[derive(Clone, Copy)]
             struct Neighbor {
-                pos: [usize; 3],
                 block: *mut Block,
                 this_shared_face: Face,
                 other_shared_face: Face,
@@ -253,53 +254,77 @@ impl WorldState {
 
             if y < CHUNK_Y_SIZE - 1 {
                 neighbors[0] = Some(Neighbor {
-                    pos: [x, y + 1, z],
-                    block: chunk_blocks.get_raw_ptr_mut(x, y + 1, z),
+                    block: self
+                        .get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y + 1, z),
                     this_shared_face: Face::Top,
                     other_shared_face: Face::Bottom,
                 });
             }
             if y > 0 {
                 neighbors[1] = Some(Neighbor {
-                    pos: [x, y - 1, z],
-                    block: chunk_blocks.get_raw_ptr_mut(x, y - 1, z),
+                    block: self
+                        .get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y - 1, z),
                     other_shared_face: Face::Top,
                     this_shared_face: Face::Bottom,
                 });
             }
 
-            if x < CHUNK_XZ_SIZE - 1 {
-                neighbors[2] = Some(Neighbor {
-                    pos: [x + 1, y, z],
-                    block: chunk_blocks.get_raw_ptr_mut(x + 1, y, z),
-                    other_shared_face: Face::Right,
-                    this_shared_face: Face::Left,
-                });
-            }
-            if x > 0 {
-                neighbors[3] = Some(Neighbor {
-                    pos: [x - 1, y, z],
-                    block: chunk_blocks.get_raw_ptr_mut(x - 1, y, z),
-                    other_shared_face: Face::Left,
-                    this_shared_face: Face::Right,
-                });
-            }
-            if z < CHUNK_XZ_SIZE - 1 {
-                neighbors[4] = Some(Neighbor {
-                    pos: [x, y, z + 1],
-                    block: chunk_blocks.get_raw_ptr_mut(x, y, z + 1),
-                    other_shared_face: Face::Back,
-                    this_shared_face: Face::Front,
-                });
-            }
-            if z > 0 {
-                neighbors[5] = Some(Neighbor {
-                    pos: [x, y, z - 1],
-                    block: chunk_blocks.get_raw_ptr_mut(x, y, z - 1),
-                    other_shared_face: Face::Front,
-                    this_shared_face: Face::Back,
-                });
-            }
+            neighbors[2] = Some(Neighbor {
+                block: if x < CHUNK_XZ_SIZE - 1 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x + 1, y, z)
+                } else {
+                    self.get_chunk_mut([chunk_x + 1, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(0, y, z)
+                },
+                other_shared_face: Face::Right,
+                this_shared_face: Face::Left,
+            });
+            neighbors[3] = Some(Neighbor {
+                block: if x > 0 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x - 1, y, z)
+                } else {
+                    self.get_chunk_mut([chunk_x - 1, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(CHUNK_XZ_SIZE - 1, y, z)
+                },
+                other_shared_face: Face::Left,
+                this_shared_face: Face::Right,
+            });
+            neighbors[4] = Some(Neighbor {
+                block: if z < CHUNK_XZ_SIZE - 1 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, z + 1)
+                } else {
+                    self.get_chunk_mut([chunk_x, chunk_z + 1])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, 0)
+                },
+                other_shared_face: Face::Back,
+                this_shared_face: Face::Front,
+            });
+            neighbors[5] = Some(Neighbor {
+                block: if z > 0 {
+                    self.get_chunk_mut([chunk_x, chunk_z])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, z - 1)
+                } else {
+                    self.get_chunk_mut([chunk_x, chunk_z - 1])
+                        .blocks
+                        .get_raw_ptr_mut(x, y, CHUNK_XZ_SIZE - 1)
+                },
+                other_shared_face: Face::Front,
+                this_shared_face: Face::Back,
+            });
 
             // If we're breaking a block next to water, fill this block with water instead
             if block_type == BlockType::Empty {
