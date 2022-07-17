@@ -1,3 +1,5 @@
+use core::num;
+
 use crate::world::CHUNK_XZ_SIZE;
 #[cfg(not(target_arch = "wasm32"))]
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
@@ -171,7 +173,7 @@ impl CameraUniform {
 }
 
 pub struct CameraController {
-    speed: f32,
+    _speed: f32,
     mouse_sensitivity: f64,
     is_forward_pressed: bool,
     is_backward_pressed: bool,
@@ -179,7 +181,9 @@ pub struct CameraController {
     is_right_pressed: bool,
     is_space_pressed: bool,
     is_shift_pressed: bool,
+    is_sprint_pressed: bool,
     last_mouse_delta: (f64, f64),
+    num_updates: u64,
 }
 
 pub struct CameraUpdateResult {
@@ -193,7 +197,7 @@ pub struct CameraUpdateResult {
 impl CameraController {
     pub fn new(speed: f32, mouse_sensitivity: f64) -> Self {
         Self {
-            speed,
+            _speed: speed,
             mouse_sensitivity,
             is_forward_pressed: false,
             is_backward_pressed: false,
@@ -201,7 +205,17 @@ impl CameraController {
             is_right_pressed: false,
             is_space_pressed: false,
             is_shift_pressed: false,
+            is_sprint_pressed: false,
             last_mouse_delta: (0.0, 0.0),
+            num_updates: 0,
+        }
+    }
+
+    fn speed(&self) -> f32 {
+        if self.is_sprint_pressed {
+            self._speed * 4.0
+        } else {
+            self._speed
         }
     }
 
@@ -238,8 +252,12 @@ impl CameraController {
                         self.is_space_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::LShift | VirtualKeyCode::RShift  => {
+                    VirtualKeyCode::LShift | VirtualKeyCode::RShift => {
                         self.is_shift_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::LControl | VirtualKeyCode::RControl  => {
+                        self.is_sprint_pressed = is_pressed;
                         true
                     }
                     _ => false,
@@ -263,7 +281,7 @@ impl CameraController {
         self.last_mouse_delta = (0.0, 0.0);
     }
 
-    pub fn update_camera(&self, camera: &mut Camera) -> CameraUpdateResult {
+    pub fn update_camera(&mut self, camera: &mut Camera) -> CameraUpdateResult {
         let pre_update_block_location = cgmath::Point3::<usize>::new(
             camera.eye.x as usize,
             camera.eye.y as usize,
@@ -283,33 +301,33 @@ impl CameraController {
         // center of the scene.
         //if self.is_forward_pressed && forward_mag > self.speed {
         if self.is_forward_pressed {
-            camera.eye += forward_norm * self.speed;
-            camera.target += forward_norm * self.speed;
+            camera.eye += forward_norm * self.speed();
+            camera.target += forward_norm * self.speed();
         }
         if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed;
-            camera.target -= forward_norm * self.speed;
+            camera.eye -= forward_norm * self.speed();
+            camera.target -= forward_norm * self.speed();
         }
 
         // Strafing vector
         let right_norm = forward_norm.cross(camera.up);
 
         if self.is_right_pressed {
-            camera.eye += right_norm * self.speed;
-            camera.target += right_norm * self.speed;
+            camera.eye += right_norm * self.speed();
+            camera.target += right_norm * self.speed();
         }
         if self.is_left_pressed {
-            camera.eye -= right_norm * self.speed;
-            camera.target -= right_norm * self.speed;
+            camera.eye -= right_norm * self.speed();
+            camera.target -= right_norm * self.speed();
         }
 
         if self.is_space_pressed {
-            camera.eye += camera.world_up * self.speed;
-            camera.target += camera.world_up * self.speed;
+            camera.eye += camera.world_up * self.speed();
+            camera.target += camera.world_up * self.speed();
         }
         if self.is_shift_pressed {
-            camera.eye -= camera.world_up * self.speed;
-            camera.target -= camera.world_up * self.speed;
+            camera.eye -= camera.world_up * self.speed();
+            camera.target -= camera.world_up * self.speed();
         }
 
         // "Vertical" strafing vector
@@ -345,6 +363,11 @@ impl CameraController {
             post_update_block_location.x / CHUNK_XZ_SIZE,
             post_update_block_location.z / CHUNK_XZ_SIZE,
         ];
+
+        if self.num_updates % 200 == 0 {
+            println!("Camera position at {:?}", camera.eye);
+        }
+        self.num_updates += 1;
 
         CameraUpdateResult {
             did_move_blocks: pre_update_block_location != post_update_block_location,
