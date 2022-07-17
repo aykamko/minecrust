@@ -91,7 +91,12 @@ impl Camera {
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         // 1. The view matrix moves the world to be at the position and rotation of the camera. It's
         // essentially an inverse of whatever the transform matrix of the camera would be.
-        let view = look_at_rh(self.eye, self.target, self.up);
+
+        let eye_vec = self.eye.to_vec();
+        let target_shifted_by_origin = self.target - eye_vec;
+
+        let view = look_at_rh(cgmath::Point3::origin(), target_shifted_by_origin, self.up);
+
         // 2. The proj matrix wraps the scene to give the effect of depth. Without this, objects up
         // close would be the same size as objects far away.
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);

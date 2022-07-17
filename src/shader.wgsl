@@ -62,18 +62,21 @@ fn mat4_from_position(pos: vec4<f32>) -> mat4x4<f32> {
 
 @vertex
 fn vs_main(
-    model: VertexInput,
+    vertex: VertexInput,
     instance: InstanceInput,
     @builtin(vertex_index) vertex_idx: u32,
 ) -> VertexOutput {
-    var model_matrix = mat4_from_position(instance.instance_position) * mat4_from_quaternion(instance.rotation_quaternion);
+    var translated_instance_pos = instance.instance_position - camera_position.eye_position;
+    translated_instance_pos[3] = 1.0; // HACK: this feels ugly but oh well
+
+    var translate_matrix = mat4_from_position(translated_instance_pos) * mat4_from_quaternion(instance.rotation_quaternion);
 
     var out: VertexOutput;
-    out.tex_coord = model.tex_coord;
-    out.position = camera_position.view_proj * model_matrix * model.position;
+    out.tex_coord = vertex.tex_coord;
+    out.position = camera_position.view_proj * translate_matrix * vertex.position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
-    out.world_position = model_matrix * model.position;
+    out.world_position = translate_matrix * vertex.position;
     return out;
 }
 
@@ -89,7 +92,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var atlas_scaled_coords = vertex.tex_coord / 32.0;
     var offset_coords = atlas_scaled_coords + (unit_offset * vertex.texture_atlas_offset);
 
-    var distance_from_camera = distance(vertex.world_position, camera_position.eye_position);
+    var distance_from_camera = length(vertex.world_position);
 
     var zfar: f32 = 250.0;
     var z_fade_start: f32 = 230.0;
