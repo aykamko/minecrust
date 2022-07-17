@@ -210,34 +210,34 @@ impl WorldState {
         &self.chunks[chunk_idx as usize]
     }
 
-    // fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
-    //     let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
-    //     let chunk = &mut self.chunks[chunk_idx as usize];
-    //     &mut chunk
-    //         .blocks
-    //         .get_unchecked(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
-    // }
+    fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
+        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
+        let chunk = &mut self.chunks[chunk_idx as usize];
+        chunk
+            .blocks
+            .get_unchecked_mut(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
+    }
 
     fn get_block(&self, x: usize, y: usize, z: usize) -> &Block {
         let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
         let chunk = &self.chunks[chunk_idx as usize];
-        &chunk
+        chunk
             .blocks
             .get_unchecked(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
     }
 
     fn set_block(
         &mut self,
-        world_x: usize,
+        x: usize,
         y: usize,
-        world_z: usize,
+        z: usize,
         mut block_type: BlockType,
         verbose: bool,
     ) {
-        let chunk_blocks = &mut self
-            .get_chunk_mut([world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE])
-            .blocks;
-        let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
+        // let chunk_blocks = &mut self
+        //     .get_chunk_mut([world_x / CHUNK_XZ_SIZE, world_z / CHUNK_XZ_SIZE])
+        //     .blocks;
+        // let (x, z) = (world_x % CHUNK_XZ_SIZE, world_z % CHUNK_XZ_SIZE);
 
         #[derive(Clone, Copy)]
         struct Neighbor {
@@ -262,7 +262,7 @@ impl WorldState {
             neighbors[0] = Neighbor {
                 exists: true,
                 pos: [x, y + 1, z],
-                block: *chunk_blocks.get_unchecked(x, y + 1, z),
+                block: *self.get_block(x, y + 1, z),
                 this_shared_face: Face::Top,
                 other_shared_face: Face::Bottom,
             };
@@ -271,47 +271,40 @@ impl WorldState {
             neighbors[1] = Neighbor {
                 exists: true,
                 pos: [x, y - 1, z],
-                block: *chunk_blocks.get_unchecked(x, y - 1, z),
+                block: *self.get_block(x, y - 1, z),
                 other_shared_face: Face::Top,
                 this_shared_face: Face::Bottom,
             };
         }
-        if x < CHUNK_XZ_SIZE - 1 {
-            neighbors[2] = Neighbor {
-                exists: true,
-                pos: [x + 1, y, z],
-                block: *chunk_blocks.get_unchecked(x + 1, y, z),
-                other_shared_face: Face::Right,
-                this_shared_face: Face::Left,
-            };
-        }
-        if x > 0 {
-            neighbors[3] = Neighbor {
-                exists: true,
-                pos: [x - 1, y, z],
-                block: *chunk_blocks.get_unchecked(x - 1, y, z),
-                other_shared_face: Face::Left,
-                this_shared_face: Face::Right,
-            };
-        }
-        if z < CHUNK_XZ_SIZE - 1 {
-            neighbors[4] = Neighbor {
-                exists: true,
-                pos: [x, y, z + 1],
-                block: *chunk_blocks.get_unchecked(x, y, z + 1),
-                other_shared_face: Face::Back,
-                this_shared_face: Face::Front,
-            };
-        }
-        if z > 0 {
-            neighbors[5] = Neighbor {
-                exists: true,
-                pos: [x, y, z - 1],
-                block: *chunk_blocks.get_unchecked(x, y, z - 1),
-                other_shared_face: Face::Front,
-                this_shared_face: Face::Back,
-            };
-        }
+
+        neighbors[2] = Neighbor {
+            exists: true,
+            pos: [x + 1, y, z],
+            block: *self.get_block(x + 1, y, z),
+            other_shared_face: Face::Right,
+            this_shared_face: Face::Left,
+        };
+        neighbors[3] = Neighbor {
+            exists: true,
+            pos: [x - 1, y, z],
+            block: *self.get_block(x - 1, y, z),
+            other_shared_face: Face::Left,
+            this_shared_face: Face::Right,
+        };
+        neighbors[4] = Neighbor {
+            exists: true,
+            pos: [x, y, z + 1],
+            block: *self.get_block(x, y, z + 1),
+            other_shared_face: Face::Back,
+            this_shared_face: Face::Front,
+        };
+        neighbors[5] = Neighbor {
+            exists: true,
+            pos: [x, y, z - 1],
+            block: *self.get_block(x, y, z - 1),
+            other_shared_face: Face::Front,
+            this_shared_face: Face::Back,
+        };
 
         // If we're breaking a block next to water, fill this block with water instead
         if block_type == BlockType::Empty {
@@ -328,12 +321,12 @@ impl WorldState {
             println!(
                 "Setting block @ {:?} from {:?} to {:?}",
                 [x, y, z],
-                chunk_blocks.get_unchecked(x, y, z).block_type,
+                self.get_block(x, y, z).block_type,
                 block_type
             );
         }
 
-        chunk_blocks.get_unchecked_mut(x, y, z).block_type = block_type;
+        self.get_block_mut(x, y, z).block_type = block_type;
         for i in 0..6 {
             let neighbor = neighbors[i];
             if !neighbor.exists {
@@ -343,18 +336,15 @@ impl WorldState {
 
             match (block_type, neighbor.block.block_type) {
                 (BlockType::Water, BlockType::Water) => {
-                    chunk_blocks
-                        .get_unchecked_mut(x, y, z)
+                    self.get_block_mut(x, y, z)
                         .neighbors
                         .set(neighbor.this_shared_face, true);
-                    chunk_blocks
-                        .get_unchecked_mut(nx, ny, nz)
+                    self.get_block_mut(nx, ny, nz)
                         .neighbors
                         .set(neighbor.other_shared_face, true);
                 }
                 (_, _) => {
-                    chunk_blocks
-                        .get_unchecked_mut(nx, ny, nz)
+                    self.get_block_mut(nx, ny, nz)
                         .neighbors
                         .set(neighbor.other_shared_face, !block_type.is_transluscent());
                 }
@@ -630,6 +620,7 @@ impl WorldState {
 
         let [chunk_x, chunk_z] = chunk_idx;
 
+        // Don't use !iproduct here to squeeze out a tiny bit of perf
         for chunk_rel_z in 0..CHUNK_XZ_SIZE {
             for chunk_rel_x in 0..CHUNK_XZ_SIZE {
                 for y in 0..CHUNK_Y_SIZE {
@@ -729,8 +720,8 @@ impl WorldState {
             }
         }
 
-        let mut transluscent_permutation = permutation::sort(&transluscent_instance_distances);
-        transluscent_permutation.apply_slice_in_place(&mut transluscent_instances);
+        permutation::sort(&transluscent_instance_distances)
+            .apply_slice_in_place(&mut transluscent_instances);
 
         ChunkData {
             position: chunk_idx,
