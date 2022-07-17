@@ -170,7 +170,7 @@ pub struct ChunkData {
 
 pub struct Chunk {
     position: [usize; 2],
-    blocks: vec_extra::Vec3d<Block, vec_extra::YXZ<CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE>>,
+    blocks: vec_extra::Vec3d<Block, vec_extra::XYZ<CHUNK_XZ_SIZE, CHUNK_Y_SIZE, CHUNK_XZ_SIZE>>,
     // Index into RenderDescriptor array for rendering this chunk
     pub render_descriptor_idx: usize,
 }
@@ -391,14 +391,12 @@ impl WorldState {
             if self.chunk_indices[inner_chunk_idx] == CHUNK_DOES_NOT_EXIST_VALUE {
                 self.chunks.push(Chunk {
                     position: inner_chunk_idx,
-                    blocks: vec_extra::Vec3d::new(
-                        vec![
-                            Block {
-                                ..Default::default()
-                            };
-                            CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
-                        ],
-                    ),
+                    blocks: vec_extra::Vec3d::new(vec![
+                        Block {
+                            ..Default::default()
+                        };
+                        CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE
+                    ]),
                     render_descriptor_idx: NO_RENDER_DESCRIPTOR_INDEX,
                 });
                 self.chunk_indices[inner_chunk_idx] = self.chunks.len() as u32 - 1;
@@ -631,99 +629,103 @@ impl WorldState {
         let chunk = self.get_chunk(chunk_idx);
 
         let [chunk_x, chunk_z] = chunk_idx;
-        for (chunk_rel_z, chunk_rel_x, y) in
-            iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE, 0..CHUNK_Y_SIZE)
-        {
-            let world_x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
-            let world_z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
 
-            let position = cgmath::Vector3::new(world_x as f32, y as f32, world_z as f32);
-            let block = chunk.blocks.get_unchecked(chunk_rel_x, y, chunk_rel_z);
-            if block.block_type == BlockType::Empty {
-                continue;
-            }
+        for chunk_rel_z in 0..CHUNK_XZ_SIZE {
+            for chunk_rel_x in 0..CHUNK_XZ_SIZE {
+                for y in 0..CHUNK_Y_SIZE {
+                    let world_x = (chunk_x * CHUNK_XZ_SIZE) + chunk_rel_x;
+                    let world_z = (chunk_z * CHUNK_XZ_SIZE) + chunk_rel_z;
 
-            let [top_offset, bottom_offset, side_offset] = block.block_type.texture_atlas_offsets();
-            let alpha_adjust = if block.block_type == BlockType::Water {
-                0.7
-            } else {
-                1.0
-            };
+                    let position = cgmath::Vector3::new(world_x as f32, y as f32, world_z as f32);
+                    let block = chunk.blocks.get_unchecked(chunk_rel_x, y, chunk_rel_z);
+                    if block.block_type == BlockType::Empty {
+                        continue;
+                    }
 
-            let (instance_vec, distance_vec) = if block.block_type.is_transluscent() {
-                (
-                    &mut transluscent_instances,
-                    &mut transluscent_instance_distances,
-                )
-            } else {
-                (&mut opaque_instances, &mut opaque_instance_distances)
-            };
+                    let [top_offset, bottom_offset, side_offset] =
+                        block.block_type.texture_atlas_offsets();
+                    let alpha_adjust = if block.block_type == BlockType::Water {
+                        0.7
+                    } else {
+                        1.0
+                    };
 
-            let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
-                .distance((world_x as f32, y as f32, world_z as f32).into());
+                    let (instance_vec, distance_vec) = if block.block_type.is_transluscent() {
+                        (
+                            &mut transluscent_instances,
+                            &mut transluscent_instance_distances,
+                        )
+                    } else {
+                        (&mut opaque_instances, &mut opaque_instance_distances)
+                    };
 
-            if !block.neighbors.get(Face::Top) {
-                let y_offset = if block.block_type == BlockType::Water {
-                    0.8
-                } else {
-                    1.0
-                };
-                instance_vec.push(InstanceRaw::new(
-                    position + cgmath::Vector3::new(0.0, y_offset, 1.0),
-                    flip_to_top,
-                    top_offset,
-                    [1.0, 1.0, 1.0, alpha_adjust],
-                ));
+                    let distance_from_camera = (camera.eye - cgmath::Vector3::new(0.5, 0.5, 0.5))
+                        .distance((world_x as f32, y as f32, world_z as f32).into());
 
-                // N.B.
-                // - store negative value because we want further instances to be drawn first
-                // - lose float precision to gain speed in sorting (I did not benchmark this, could be useless)
-                distance_vec.push(-distance_from_camera as i32);
-            }
-            if !block.neighbors.get(Face::Bottom) {
-                instance_vec.push(InstanceRaw::new(
-                    position,
-                    no_rotation,
-                    bottom_offset,
-                    [1.0, 1.0, 1.0, alpha_adjust],
-                ));
-                distance_vec.push(-distance_from_camera as i32);
-            }
-            if !block.neighbors.get(Face::Left) {
-                instance_vec.push(InstanceRaw::new(
-                    position + cgmath::Vector3::new(1.0, 1.0, 0.0),
-                    flip_to_left,
-                    side_offset,
-                    [0.7, 0.7, 0.7, alpha_adjust],
-                ));
-                distance_vec.push(-distance_from_camera as i32);
-            }
-            if !block.neighbors.get(Face::Right) {
-                instance_vec.push(InstanceRaw::new(
-                    position + cgmath::Vector3::new(0.0, 1.0, 1.0),
-                    flip_to_right,
-                    side_offset,
-                    [0.7, 0.7, 0.7, alpha_adjust],
-                ));
-                distance_vec.push(-distance_from_camera as i32);
-            }
-            if !block.neighbors.get(Face::Front) {
-                instance_vec.push(InstanceRaw::new(
-                    position + cgmath::Vector3::new(1.0, 1.0, 1.0),
-                    flip_to_back,
-                    side_offset,
-                    [0.8, 0.8, 0.8, alpha_adjust],
-                ));
-                distance_vec.push(-distance_from_camera as i32);
-            }
-            if !block.neighbors.get(Face::Back) {
-                instance_vec.push(InstanceRaw::new(
-                    position + cgmath::Vector3::new(0.0, 1.0, 0.0),
-                    flip_to_front,
-                    side_offset,
-                    [0.8, 0.8, 0.8, alpha_adjust],
-                ));
-                distance_vec.push(-distance_from_camera as i32);
+                    if !block.neighbors.get(Face::Top) {
+                        let y_offset = if block.block_type == BlockType::Water {
+                            0.8
+                        } else {
+                            1.0
+                        };
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(0.0, y_offset, 1.0),
+                            flip_to_top,
+                            top_offset,
+                            [1.0, 1.0, 1.0, alpha_adjust],
+                        ));
+
+                        // N.B.
+                        // - store negative value because we want further instances to be drawn first
+                        // - lose float precision to gain speed in sorting (I did not benchmark this, could be useless)
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Bottom) {
+                        instance_vec.push(InstanceRaw::new(
+                            position,
+                            no_rotation,
+                            bottom_offset,
+                            [1.0, 1.0, 1.0, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Left) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(1.0, 1.0, 0.0),
+                            flip_to_left,
+                            side_offset,
+                            [0.7, 0.7, 0.7, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Right) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(0.0, 1.0, 1.0),
+                            flip_to_right,
+                            side_offset,
+                            [0.7, 0.7, 0.7, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Front) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(1.0, 1.0, 1.0),
+                            flip_to_back,
+                            side_offset,
+                            [0.8, 0.8, 0.8, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                    if !block.neighbors.get(Face::Back) {
+                        instance_vec.push(InstanceRaw::new(
+                            position + cgmath::Vector3::new(0.0, 1.0, 0.0),
+                            flip_to_front,
+                            side_offset,
+                            [0.8, 0.8, 0.8, alpha_adjust],
+                        ));
+                        distance_vec.push(-distance_from_camera as i32);
+                    }
+                }
             }
         }
 
