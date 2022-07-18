@@ -6,8 +6,10 @@ use bitmaps::Bitmap;
 use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point3};
 use collision::Continuous;
+use std::char::MAX;
 use std::collections::HashSet;
 use std::convert::Into;
+use std::ops::Mul;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
@@ -65,7 +67,7 @@ impl BlockType {
     }
 }
 
-struct BlockCollision {
+pub struct BlockCollision {
     distance: f32,
     block_pos: cgmath::Point3<usize>,
     collision_point: cgmath::Point3<f32>,
@@ -113,6 +115,8 @@ pub const NO_RENDER_DESCRIPTOR_INDEX: usize = usize::max_value();
 const MIN_HEIGHT: u16 = 2;
 const MAX_HEIGHT: u16 = 80;
 const WATER_HEIGHT: u16 = 26;
+
+const MAX_BREAK_DISTANCE: usize = 6;
 
 // Goal: infinite world generation
 
@@ -170,6 +174,8 @@ pub struct Chunk {
 pub struct WorldState {
     pub chunk_indices: Vec2d<u32>,
     chunks: Vec<Chunk>,
+    highlighted_chunk: Option<[usize; 2]>,
+    highlighted_block: Option<[usize; 3]>,
 }
 
 macro_rules! set_block {
@@ -189,6 +195,8 @@ impl WorldState {
                 [MAX_CHUNK_WORLD_WIDTH, MAX_CHUNK_WORLD_WIDTH],
             ),
             chunks: vec![],
+            highlighted_chunk: None,
+            highlighted_block: None,
         }
     }
 
@@ -628,6 +636,13 @@ impl WorldState {
                         continue;
                     }
 
+                    let mut highlight_adjust = 1.0;
+                    if let Some(highlighted_block) = self.highlighted_block {
+                        if highlighted_block == [world_x, y, world_z] {
+                            highlight_adjust = 1.3;
+                        }
+                    }
+
                     let [top_offset, bottom_offset, side_offset] =
                         block.block_type.texture_atlas_offsets();
                     let alpha_adjust = if block.block_type == BlockType::Water {
@@ -658,7 +673,8 @@ impl WorldState {
                             position + cgmath::Vector3::new(0.0, y_offset, 1.0),
                             flip_to_top,
                             top_offset,
-                            [1.0, 1.0, 1.0, alpha_adjust],
+                            (cgmath::Vector4::new(1.0, 1.0, 1.0, alpha_adjust) * highlight_adjust)
+                                .into(),
                         ));
 
                         // N.B.
@@ -671,7 +687,8 @@ impl WorldState {
                             position,
                             no_rotation,
                             bottom_offset,
-                            [1.0, 1.0, 1.0, alpha_adjust],
+                            (cgmath::Vector4::new(1.0, 1.0, 1.0, alpha_adjust) * highlight_adjust)
+                                .into(),
                         ));
                         distance_vec.push(-distance_from_camera as i32);
                     }
@@ -680,7 +697,8 @@ impl WorldState {
                             position + cgmath::Vector3::new(1.0, 1.0, 0.0),
                             flip_to_left,
                             side_offset,
-                            [0.7, 0.7, 0.7, alpha_adjust],
+                            (cgmath::Vector4::new(0.7, 0.7, 0.7, alpha_adjust) * highlight_adjust)
+                                .into(),
                         ));
                         distance_vec.push(-distance_from_camera as i32);
                     }
@@ -689,7 +707,8 @@ impl WorldState {
                             position + cgmath::Vector3::new(0.0, 1.0, 1.0),
                             flip_to_right,
                             side_offset,
-                            [0.7, 0.7, 0.7, alpha_adjust],
+                            (cgmath::Vector4::new(0.7, 0.7, 0.7, alpha_adjust) * highlight_adjust)
+                                .into(),
                         ));
                         distance_vec.push(-distance_from_camera as i32);
                     }
@@ -698,7 +717,8 @@ impl WorldState {
                             position + cgmath::Vector3::new(1.0, 1.0, 1.0),
                             flip_to_back,
                             side_offset,
-                            [0.8, 0.8, 0.8, alpha_adjust],
+                            (cgmath::Vector4::new(0.8, 0.8, 0.8, alpha_adjust) * highlight_adjust)
+                                .into(),
                         ));
                         distance_vec.push(-distance_from_camera as i32);
                     }
@@ -707,7 +727,8 @@ impl WorldState {
                             position + cgmath::Vector3::new(0.0, 1.0, 0.0),
                             flip_to_front,
                             side_offset,
-                            [0.8, 0.8, 0.8, alpha_adjust],
+                            (cgmath::Vector4::new(0.8, 0.8, 0.8, alpha_adjust) * highlight_adjust)
+                                .into(),
                         ));
                         distance_vec.push(-distance_from_camera as i32);
                     }
@@ -735,6 +756,39 @@ impl WorldState {
         }
     }
 
+    pub fn highlight_colliding_block(&mut self, camera: &Camera) -> Vec<[usize; 2]> {
+        let mut modified_chunks: Vec<[usize; 2]> = vec![];
+
+        let prev_highlighted_chunk = self.highlighted_chunk;
+        if let Some(chunk_idx) = prev_highlighted_chunk {
+            modified_chunks.push(chunk_idx);
+        }
+
+        let collision = match self.get_colliding_block(camera, MAX_BREAK_DISTANCE) {
+            Some(collision) => collision,
+            None => {
+                self.highlighted_chunk = None;
+                self.highlighted_block = None;
+
+                return modified_chunks;
+            }
+        };
+
+        let colliding_chunk = [
+            (collision.block_pos.x / CHUNK_XZ_SIZE) as usize,
+            (collision.block_pos.z / CHUNK_XZ_SIZE) as usize,
+        ];
+        modified_chunks.push(colliding_chunk);
+        self.highlighted_chunk = Some(colliding_chunk);
+        self.highlighted_block = Some([
+            collision.block_pos.x,
+            collision.block_pos.y,
+            collision.block_pos.z,
+        ]);
+
+        modified_chunks
+    }
+
     // Ray intersection algo pseudocode:
     //   start at eye e
     //   all_candidate_cubes = []
@@ -753,7 +807,7 @@ impl WorldState {
     //   pick closest colliding cube to camera eye
     //
     // Returns colliding cube and colliding point
-    fn get_colliding_block(&self, camera: &Camera) -> Option<BlockCollision> {
+    fn get_colliding_block(&self, camera: &Camera, max_distance: usize) -> Option<BlockCollision> {
         let mut all_candidate_cubes: Vec<Point3<f32>> = vec![];
 
         let camera_eye_cgmath17 = Point3::new(camera.eye.x, camera.eye.y, camera.eye.z);
@@ -773,8 +827,7 @@ impl WorldState {
 
         let mut curr_pos = camera_eye_cgmath17;
 
-        const MAX_ITER: usize = 20;
-        for _ in 0..MAX_ITER {
+        for _ in 0..max_distance {
             curr_pos += forward_unit;
             let cube = Point3::new(curr_pos.x.floor(), curr_pos.y.floor(), curr_pos.z.floor());
 
@@ -894,7 +947,7 @@ impl WorldState {
 
     // Returns which chunks were modified
     pub fn break_block(&mut self, camera: &Camera) -> Vec<[usize; 2]> {
-        let maybe_collision = self.get_colliding_block(camera);
+        let maybe_collision = self.get_colliding_block(camera, MAX_BREAK_DISTANCE);
         if let Some(ref collision) = maybe_collision {
             let (collider_x, collider_y, collider_z) = (
                 collision.block_pos.x,
@@ -917,7 +970,7 @@ impl WorldState {
 
     // Returns which chunks were modified
     pub fn place_block(&mut self, camera: &Camera, block_type: BlockType) -> Vec<[usize; 2]> {
-        let maybe_collision = self.get_colliding_block(camera);
+        let maybe_collision = self.get_colliding_block(camera, MAX_BREAK_DISTANCE + 1);
         if let Some(ref collision) = maybe_collision {
             vprintln!(
                 "place_block collision point is {:?}",

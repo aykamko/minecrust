@@ -275,11 +275,22 @@ fn start(
                     bytemuck::cast_slice(&[camera_uniform]),
                 );
 
+                #[derive(PartialEq)]
                 struct ChunkModification {
                     new_chunk: [usize; 2],
                     old_chunk: [usize; 2],
                 }
                 let mut chunk_mods: Vec<ChunkModification> = vec![];
+
+                if update_result.did_move {
+                    let chunks_modified = world_state.highlight_colliding_block(&camera);
+                    for chunk_idx in chunks_modified {
+                        chunk_mods.push(ChunkModification {
+                            new_chunk: chunk_idx,
+                            old_chunk: chunk_idx,
+                        });
+                    }
+                }
 
                 if update_result.did_move_blocks {
                     let chunk_idx = update_result.new_chunk_location;
@@ -304,6 +315,16 @@ fn start(
                             new_chunk: chunk_idx,
                             old_chunk: chunk_idx,
                         });
+                    }
+
+                    if !update_result.did_move {
+                        let chunks_modified = world_state.highlight_colliding_block(&camera);
+                        for chunk_idx in chunks_modified {
+                            chunk_mods.push(ChunkModification {
+                                new_chunk: chunk_idx,
+                                old_chunk: chunk_idx,
+                            });
+                        }
                     }
 
                     // Draw camera ray
@@ -357,6 +378,8 @@ fn start(
 
                 if !chunk_mods.is_empty() {
                     let chunk_mod_time = std::time::Instant::now();
+
+                    chunk_mods.dedup();
 
                     for chunk_mod in chunk_mods.iter() {
                         world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
@@ -743,10 +766,9 @@ fn setup_scene(
         multiview: None,
     });
 
-    let pipeline_wire = if false
-        && device
-            .features()
-            .contains(wgpu::Features::POLYGON_MODE_LINE)
+    let pipeline_wire = if device
+        .features()
+        .contains(wgpu::Features::POLYGON_MODE_LINE)
     {
         let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
@@ -863,7 +885,6 @@ fn render_scene(
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
         for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
-            // for data_type in [ChunkDataType::Transluscent] {
             for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
                 let render_descriptor_idx =
                     world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);

@@ -192,6 +192,7 @@ pub struct CameraController {
 }
 
 pub struct CameraUpdateResult {
+    pub did_move: bool,
     pub did_move_blocks: bool,
     pub did_move_chunks: bool,
     pub new_block_location: cgmath::Point3<usize>,
@@ -296,6 +297,7 @@ impl CameraController {
             pre_update_block_location.x / CHUNK_XZ_SIZE,
             pre_update_block_location.z / CHUNK_XZ_SIZE,
         ];
+        let mut did_move = false;
 
         // Vector pointing out of the camera's eye towards the target
         let forward = camera.target - camera.eye;
@@ -306,10 +308,12 @@ impl CameraController {
         // center of the scene.
         //if self.is_forward_pressed && forward_mag > self.speed {
         if self.is_forward_pressed {
+            did_move = true;
             camera.eye += forward_norm * self.speed();
             camera.target += forward_norm * self.speed();
         }
         if self.is_backward_pressed {
+            did_move = true;
             camera.eye -= forward_norm * self.speed();
             camera.target -= forward_norm * self.speed();
         }
@@ -318,19 +322,23 @@ impl CameraController {
         let right_norm = forward_norm.cross(camera.up);
 
         if self.is_right_pressed {
+            did_move = true;
             camera.eye += right_norm * self.speed();
             camera.target += right_norm * self.speed();
         }
         if self.is_left_pressed {
+            did_move = true;
             camera.eye -= right_norm * self.speed();
             camera.target -= right_norm * self.speed();
         }
 
         if self.is_space_pressed {
+            did_move = true;
             camera.eye += camera.world_up * self.speed();
             camera.target += camera.world_up * self.speed();
         }
         if self.is_shift_pressed {
+            did_move = true;
             camera.eye -= camera.world_up * self.speed();
             camera.target -= camera.world_up * self.speed();
         }
@@ -340,6 +348,7 @@ impl CameraController {
 
         let (x_delta, y_delta) = self.last_mouse_delta;
         if y_delta != 0.0 {
+            did_move = true;
             let theta = cgmath::Rad((-y_delta * self.mouse_sensitivity) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(right_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
@@ -348,6 +357,7 @@ impl CameraController {
             camera.target = new_target;
         }
         if x_delta != 0.0 {
+            did_move = true;
             let theta = cgmath::Rad((-x_delta * self.mouse_sensitivity) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(up_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
@@ -375,6 +385,7 @@ impl CameraController {
         self.num_updates += 1;
 
         CameraUpdateResult {
+            did_move,
             did_move_blocks: pre_update_block_location != post_update_block_location,
             did_move_chunks: pre_update_chunk_location != post_update_chunk_location,
             new_block_location: post_update_block_location,
