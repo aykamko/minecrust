@@ -6,6 +6,7 @@ extern crate bmp;
 mod camera;
 mod face;
 mod instance;
+mod lib;
 mod map_generation;
 mod spawner;
 mod texture;
@@ -64,8 +65,10 @@ struct Scene {
     index_count: usize,
     texture_bind_group: wgpu::BindGroup,
     camera_bind_group: wgpu::BindGroup,
+    light_bind_group: wgpu::BindGroup,
     camera_buf: wgpu::Buffer,
     camera_staging_buf: wgpu::Buffer,
+    light_buf: wgpu::Buffer,
     chunk_render_descriptors: Vec<ChunkRenderDescriptor>,
     chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
@@ -594,9 +597,25 @@ fn setup_scene(
                 count: None,
             }],
         });
+    let light_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: wgpu::BufferSize::new(
+                        mem::size_of::<lib::LightUniform>() as u64,
+                    ),
+                },
+                count: None,
+            }],
+        });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+        bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout, &light_bind_group_layout],
         push_constant_ranges: &[],
     });
 
@@ -612,6 +631,14 @@ fn setup_scene(
         usage: wgpu::BufferUsages::UNIFORM
             | wgpu::BufferUsages::COPY_SRC
             | wgpu::BufferUsages::COPY_DST,
+    });
+
+    // Light
+    let light_uniform = lib::LightUniform::new([0.0, 80.0, 0.0], [1.0, 1.0, 1.0]);
+    let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Light VB"),
+        contents: bytemuck::cast_slice(&[light_uniform]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
     // Create bind groups
@@ -634,6 +661,14 @@ fn setup_scene(
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: camera_buf.as_entire_binding(),
+        }],
+        label: None,
+    });
+    let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &light_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: light_buf.as_entire_binding(),
         }],
         label: None,
     });
@@ -822,8 +857,10 @@ fn setup_scene(
         index_count: face.index_data.len(),
         texture_bind_group,
         camera_bind_group,
+        light_bind_group,
         camera_buf,
         camera_staging_buf,
+        light_buf,
         chunk_render_descriptors,
         chunk_order,
         depth_texture,
@@ -881,6 +918,7 @@ fn render_scene(
         rpass.set_pipeline(&scene.pipeline);
         rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
+        rpass.set_bind_group(2, &scene.light_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
