@@ -634,7 +634,7 @@ fn setup_scene(
     });
 
     // Light
-    let light_uniform = lib::LightUniform::new([0.0, 80.0, 0.0], [1.0, 1.0, 1.0]);
+    let light_uniform = lib::LightUniform::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
     let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Light VB"),
         contents: bytemuck::cast_slice(&[light_uniform]),

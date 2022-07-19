@@ -100,7 +100,7 @@ fn vs_main(
     @builtin(vertex_index) vertex_idx: u32,
 ) -> VertexOutput {
     // All faces are rotated from bottom face, so we can hardcode the normal
-    var bottom_face_normal = vec3<f32>(0.0, 1.0, 0.0);
+    var bottom_face_normal = vec3<f32>(0.0, -1.0, 0.0);
 
     var translated_instance_pos = instance.instance_position - camera_position.eye_position;
     translated_instance_pos[3] = 1.0; // HACK: this feels ugly but oh well
@@ -135,8 +135,9 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var z_fade_start: f32 = 230.0;
     var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
 
-    var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vertex.color_adjust;
-    color[3] -= distance_alpha_adjust; // fog effect: fade distant vertices
+    //var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vertex.color_adjust;
+    var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vec4(1.0, 1.0, 1.0, vertex.color_adjust.a);
+    color.a -= distance_alpha_adjust; // fog effect: fade distant vertices
 
     // We don't need (or want) much ambient light, so 0.1 is fine
     let ambient_strength = 0.1;
@@ -144,9 +145,14 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     let light_dir = normalize(light.position - vertex.world_position.xyz);
     let diffuse_strength = max(dot(vertex.world_normal, light_dir), 0.0);
-    let diffuse_color = light.color + diffuse_strength;
+    let diffuse_color = light.color * diffuse_strength;
 
-    let lighted_color = (ambient_color + diffuse_color) * color.xyz;
+    let view_dir = normalize(camera_position.eye_position.xyz - vertex.world_position.xyz);
+    let half_dir = normalize(view_dir + light_dir);
+    let specular_strength = pow(max(dot(vertex.world_normal, half_dir), 0.0), 32.0);
+    let specular_color = light.color * specular_strength;
+
+    let lighted_color = (ambient_color + diffuse_color + specular_color) * color.xyz;
     return vec4<f32>(lighted_color, color.a);
 }
 
