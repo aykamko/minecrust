@@ -110,7 +110,6 @@ fn vs_main(
     out.tex_coord = vertex.tex_coord;
     out.world_position = translate_matrix * vertex.position;
     out.clip_position = camera_position.view_proj * out.world_position;
-    // out.clip_position = light_space_matrix * out.world_position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
 
@@ -118,7 +117,7 @@ fn vs_main(
     var bottom_face_normal = vec3<f32>(0.0, -1.0, 0.0);
     out.world_normal = mat3_from_quaternion(instance.rotation_quaternion) * bottom_face_normal;
 
-    out.light_space_position = out.world_position * light_space_matrix;
+    out.light_space_position = light_space_matrix * out.world_position;
 
     return out;
 }
@@ -138,6 +137,7 @@ fn shadow_calculation(fragPosLightSpace: vec4<f32>) -> f32 {
     var projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     // transform to [0,1] range
     projCoords = projCoords * 0.5 + 0.5;
+    projCoords.y = 1.0 - projCoords.y;
     // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
     var closestDepth = textureSample(t_shadow_map, s_shadow_map, projCoords.xy).r; 
     // get depth of current fragment from light's perspective

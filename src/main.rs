@@ -709,8 +709,15 @@ fn setup_scene(
     });
 
     // Shadow Map
+    let shadow_map_surface_config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT, // unused
+        format: wgpu::TextureFormat::Depth32Float, // unused
+        width: 2048,
+        height: 2048,
+        present_mode: wgpu::PresentMode::Fifo, // unused
+    };
     let shadow_map_texture =
-        texture::Texture::create_depth_texture(&device, &config, "shadow_map_texture");
+        texture::Texture::create_depth_texture(&device, &shadow_map_surface_config, "shadow_map_texture");
     let shadow_map_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -917,8 +924,7 @@ fn setup_scene(
             targets: &[], // TODO: is none ok here?
         }),
         primitive: wgpu::PrimitiveState {
-            // Fixes peter panning
-            cull_mode: Some(wgpu::Face::Front),
+            cull_mode: Some(wgpu::Face::Back),
             ..Default::default()
         },
         depth_stencil: Some(wgpu::DepthStencilState {
