@@ -73,6 +73,11 @@ struct Scene {
     chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
+
+    light_space_matrix_bind_group: wgpu::BindGroup,
+    shadow_map_texture: texture::Texture,
+    shadow_map_pipeline: wgpu::RenderPipeline,
+
     pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
@@ -607,7 +612,7 @@ fn setup_scene(
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: wgpu::BufferSize::new(
-                        mem::size_of::<lib::LightUniform>() as u64,
+                        mem::size_of::<lib::LightUniform>() as u64
                     ),
                 },
                 count: None,
@@ -615,7 +620,11 @@ fn setup_scene(
         });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout, &light_bind_group_layout],
+        bind_group_layouts: &[
+            &texture_bind_group_layout,
+            &camera_bind_group_layout,
+            &light_bind_group_layout,
+        ],
         push_constant_ranges: &[],
     });
 
@@ -634,7 +643,7 @@ fn setup_scene(
     });
 
     // Light
-    let light_uniform = lib::LightUniform::new([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+    let light_uniform = lib::LightUniform::new([0.0, 5.0, 0.0], [1.0, 1.0, 1.0]);
     let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Light VB"),
         contents: bytemuck::cast_slice(&[light_uniform]),
@@ -801,6 +810,81 @@ fn setup_scene(
         multiview: None,
     });
 
+    let shadow_map_texture =
+        texture::Texture::create_depth_texture(&device, &config, "shadow_map_texture");
+    let shadow_map_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Shadow Map Shader"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shadow_map.wgsl"))),
+    });
+    let light_space_matrix: [[f32; 4]; 4] = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    let light_space_matrix_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Light Space Matrix"),
+        contents: bytemuck::cast_slice(&[light_space_matrix]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+    let light_space_matrix_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: wgpu::BufferSize::new(64),
+                },
+                count: None,
+            }],
+        });
+    let light_space_matrix_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &light_space_matrix_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: light_space_matrix_buf.as_entire_binding(),
+        }],
+        label: None,
+    });
+
+    let shadow_map_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(
+            &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&camera_bind_group_layout, &light_space_matrix_bind_group_layout],
+                push_constant_ranges: &[],
+            }),
+        ),
+        vertex: wgpu::VertexState {
+            module: &shadow_map_shader,
+            entry_point: "vs_main",
+            buffers,
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shadow_map_shader,
+            entry_point: "fs_main",
+            targets: &[], // TODO: is none ok here?
+        }),
+        primitive: wgpu::PrimitiveState {
+            // Fixes peter panning
+            cull_mode: Some(wgpu::Face::Front),
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: texture::Texture::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+    });
+
     let pipeline_wire = if device
         .features()
         .contains(wgpu::Features::POLYGON_MODE_LINE)
@@ -865,6 +949,11 @@ fn setup_scene(
         chunk_order,
         depth_texture,
         pipeline,
+
+        light_space_matrix_bind_group,
+        shadow_map_pipeline,
+        shadow_map_texture,
+
         pipeline_wire,
     }
 }
@@ -890,6 +979,32 @@ fn render_scene(
         0,
         mem::size_of::<camera::CameraUniform>().try_into().unwrap(),
     );
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &scene.shadow_map_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        });
+
+        rpass.set_pipeline(&scene.shadow_map_pipeline);
+        rpass.set_bind_group(0, &scene.camera_bind_group, &[]);
+        rpass.set_bind_group(1, &scene.light_space_matrix_bind_group, &[]);
+        rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
+        rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
+        // HACK(aleks)
+        let chunk_render_datum = &scene.chunk_render_descriptors[0];
+        let instance_buffer = &chunk_render_datum.annotated_instance_buffers[0];
+        rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+    }
+
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,

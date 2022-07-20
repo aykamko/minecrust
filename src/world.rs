@@ -738,6 +738,8 @@ impl WorldState {
 
         permutation::sort(&transluscent_instance_distances)
             .apply_slice_in_place(&mut transluscent_instances);
+        permutation::sort(&opaque_instance_distances)
+            .apply_slice_in_place(&mut opaque_instances);
 
         ChunkData {
             position: chunk_idx,

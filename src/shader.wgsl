@@ -97,13 +97,12 @@ fn mat4_from_position(pos: vec4<f32>) -> mat4x4<f32> {
 fn vs_main(
     vertex: VertexInput,
     instance: InstanceInput,
-    @builtin(vertex_index) vertex_idx: u32,
 ) -> VertexOutput {
     // All faces are rotated from bottom face, so we can hardcode the normal
     var bottom_face_normal = vec3<f32>(0.0, -1.0, 0.0);
 
     var translated_instance_pos = instance.instance_position - camera_position.eye_position;
-    translated_instance_pos[3] = 1.0; // HACK: this feels ugly but oh well
+    translated_instance_pos.w = 1.0; // HACK: this feels ugly but oh well
 
     var translate_matrix = mat4_from_position(translated_instance_pos) * mat4_from_quaternion(instance.rotation_quaternion);
 
@@ -140,19 +139,19 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     color.a -= distance_alpha_adjust; // fog effect: fade distant vertices
 
     // We don't need (or want) much ambient light, so 0.1 is fine
-    let ambient_strength = 0.1;
+    let ambient_strength = 0.3;
     let ambient_color = light.color * ambient_strength;
 
     let light_dir = normalize(light.position - vertex.world_position.xyz);
     let diffuse_strength = max(dot(vertex.world_normal, light_dir), 0.0);
     let diffuse_color = light.color * diffuse_strength;
 
-    let view_dir = normalize(camera_position.eye_position.xyz - vertex.world_position.xyz);
+    let view_dir = normalize(vec3<f32>(0.0, 0.0, 0.0) - vertex.world_position.xyz);
     let half_dir = normalize(view_dir + light_dir);
     let specular_strength = pow(max(dot(vertex.world_normal, half_dir), 0.0), 32.0);
     let specular_color = light.color * specular_strength;
 
-    let lighted_color = (ambient_color + diffuse_color + specular_color) * color.xyz;
+    let lighted_color = (ambient_color + diffuse_color) * color.xyz;
     return vec4<f32>(lighted_color, color.a);
 }
 
