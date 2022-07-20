@@ -636,8 +636,8 @@ fn setup_scene(
         });
 
     // BEGIN light space matrix
-    let znear = 10.0;
-    let zfar = 300.0;
+    let znear = -1000.0;
+    let zfar = 500.0;
     let light_projection = cgmath::ortho(-50.0, 50.0, -50.0, 50.0, znear, zfar);
     let light_view = camera::look_at_rh(
         [40.0, 10.0, 40.0].into(), /* light position */
