@@ -618,12 +618,54 @@ fn setup_scene(
                 count: None,
             }],
         });
+
+    // BEGIN light space matrix
+    let znear = 1.0;
+    let zfar = 250.0;
+    let light_projection = cgmath::ortho(-100.0, 100.0, -100.0, 100.0, znear, zfar);
+    let light_view = camera::look_at(
+        [10.0, 10.0, 10.0].into(), /* light position */
+        cgmath::Point3::origin() + ((camera.target - camera.eye).normalize() * 10.0) /* where light is pointing */,
+        camera.up,
+    );
+
+    let light_space_matrix: [[f32; 4]; 4] = (light_projection * light_view).into();
+    let light_space_matrix_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Light Space Matrix"),
+        contents: bytemuck::cast_slice(&[light_space_matrix]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+    let light_space_matrix_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: wgpu::BufferSize::new(64),
+                },
+                count: None,
+            }],
+        });
+    let light_space_matrix_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &light_space_matrix_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: light_space_matrix_buf.as_entire_binding(),
+        }],
+        label: None,
+    });
+    // END
+
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[
             &texture_bind_group_layout,
             &camera_bind_group_layout,
             &light_bind_group_layout,
+            &light_space_matrix_bind_group_layout,
         ],
         push_constant_ranges: &[],
     });
@@ -816,46 +858,16 @@ fn setup_scene(
         label: Some("Shadow Map Shader"),
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shadow_map.wgsl"))),
     });
-    let light_space_matrix: [[f32; 4]; 4] = [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ];
-    let light_space_matrix_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Light Space Matrix"),
-        contents: bytemuck::cast_slice(&[light_space_matrix]),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-    let light_space_matrix_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(64),
-                },
-                count: None,
-            }],
-        });
-    let light_space_matrix_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &light_space_matrix_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: light_space_matrix_buf.as_entire_binding(),
-        }],
-        label: None,
-    });
 
     let shadow_map_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(
             &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&camera_bind_group_layout, &light_space_matrix_bind_group_layout],
+                bind_group_layouts: &[
+                    &camera_bind_group_layout,
+                    &light_space_matrix_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             }),
         ),
@@ -1034,6 +1046,7 @@ fn render_scene(
         rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_bind_group(2, &scene.light_bind_group, &[]);
+        rpass.set_bind_group(3, &scene.light_space_matrix_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 

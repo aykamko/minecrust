@@ -51,6 +51,14 @@ pub fn look_at_rh<S: cgmath::BaseFloat>(
     look_to_rh(eye, center - eye, up)
 }
 
+pub fn look_at<S: cgmath::BaseFloat>(
+    eye: Point3<S>,
+    center: Point3<S>,
+    up: Vector3<S>,
+) -> Matrix4<S> {
+    look_to_rh(eye, center.to_vec(), up)
+}
+
 impl Camera {
     pub fn new(
         eye: cgmath::Point3<f32>,

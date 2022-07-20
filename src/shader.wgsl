@@ -10,6 +10,7 @@ struct VertexOutput {
     @location(2) color_adjust: vec4<f32>,
     @location(3) world_position: vec4<f32>,
     @location(6) world_normal: vec3<f32>,
+    @location(7) light_space_position: vec4<f32>,
 }
 
 struct CameraUniform {
@@ -92,6 +93,8 @@ fn mat4_from_position(pos: vec4<f32>) -> mat4x4<f32> {
     );
 }
 
+@group(3) @binding(0)
+var<uniform> light_space_matrix: mat4x4<f32>;
 
 @vertex
 fn vs_main(
@@ -113,6 +116,7 @@ fn vs_main(
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
     out.world_normal = mat3_from_quaternion(instance.rotation_quaternion) * bottom_face_normal;
+    out.light_space_position = out.world_position * light_space_matrix;
     return out;
 }
 
