@@ -101,9 +101,6 @@ fn vs_main(
     vertex: VertexInput,
     instance: InstanceInput,
 ) -> VertexOutput {
-    // All faces are rotated from bottom face, so we can hardcode the normal
-    var bottom_face_normal = vec3<f32>(0.0, -1.0, 0.0);
-
     var translated_instance_pos = instance.instance_position - camera_position.eye_position;
     translated_instance_pos.w = 1.0; // HACK: this feels ugly but oh well
 
@@ -112,11 +109,17 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coord = vertex.tex_coord;
     out.world_position = translate_matrix * vertex.position;
-    out.clip_position = camera_position.view_proj * out.world_position;
+    //out.clip_position = camera_position.view_proj * out.world_position;
+    out.clip_position = light_space_matrix * out.world_position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
+
+    // All faces are rotated from bottom face, so we can hardcode the normal
+    var bottom_face_normal = vec3<f32>(0.0, -1.0, 0.0);
     out.world_normal = mat3_from_quaternion(instance.rotation_quaternion) * bottom_face_normal;
+
     out.light_space_position = out.world_position * light_space_matrix;
+
     return out;
 }
 
@@ -124,39 +127,71 @@ fn vs_main(
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
 var s_diffuse: sampler;
+@group(0) @binding(2)
+var t_shadow_map: texture_2d<f32>;
+@group(0) @binding(3)
+var s_shadow_map: sampler;
 
+// https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
+fn shadow_calculation(fragPosLightSpace: vec4<f32>) -> f32 {
+    // perform perspective divide
+    // var projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    // transform to [0,1] range
+    // projCoords = projCoords * 0.5 + 0.5;
+
+    var projCoords = fragPosLightSpace;
+    // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+    var closestDepth = textureSample(t_shadow_map, s_shadow_map, projCoords.xy).r; 
+    // get depth of current fragment from light's perspective
+    var currentDepth = projCoords.z;
+    // check whether current frag pos is in shadow
+    var shadow: f32;
+    if (currentDepth > closestDepth) {
+        shadow = 1.0;
+    } else {
+        shadow = 0.0;
+    }
+
+    return shadow;
+}
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var unit_offset: f32 = 1.0 / 32.0;
     var atlas_scaled_coords = vertex.tex_coord / 32.0;
     var offset_coords = atlas_scaled_coords + (unit_offset * vertex.texture_atlas_offset);
+    var base_color = textureSample(t_diffuse, s_diffuse, offset_coords);
 
-    var distance_from_camera = length(vertex.world_position);
+    return base_color;
 
-    var zfar: f32 = 250.0;
-    var z_fade_start: f32 = 230.0;
-    var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
+    //var distance_from_camera = length(vertex.world_position);
+    //var zfar: f32 = 250.0;
+    //var z_fade_start: f32 = 230.0;
+    //var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
 
-    //var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vertex.color_adjust;
-    var color = textureSample(t_diffuse, s_diffuse, offset_coords) * vec4(1.0, 1.0, 1.0, vertex.color_adjust.a);
-    color.a -= distance_alpha_adjust; // fog effect: fade distant vertices
+    ////var color = base_color * vertex.color_adjust;
+    //var color = base_color * vec4(1.0, 1.0, 1.0, vertex.color_adjust.a);
+    //color.a -= distance_alpha_adjust; // fog effect: fade distant vertices
 
-    // We don't need (or want) much ambient light, so 0.1 is fine
-    let ambient_strength = 0.3;
-    let ambient_color = light.color * ambient_strength;
+    //// We don't need (or want) much ambient light, so 0.1 is fine
+    //let ambient_strength = 0.3;
+    //let ambient_color = light.color * ambient_strength;
 
-    let light_dir = normalize(light.position - vertex.world_position.xyz);
-    let diffuse_strength = max(dot(vertex.world_normal, light_dir), 0.0);
-    let diffuse_color = light.color * diffuse_strength;
+    //let light_dir = normalize(light.position - vertex.world_position.xyz);
+    //let diffuse_strength = max(dot(vertex.world_normal, light_dir), 0.0);
+    //let diffuse_color = light.color * diffuse_strength;
 
-    let view_dir = normalize(vec3<f32>(0.0, 0.0, 0.0) - vertex.world_position.xyz);
-    let half_dir = normalize(view_dir + light_dir);
-    let specular_strength = pow(max(dot(vertex.world_normal, half_dir), 0.0), 32.0);
-    let specular_color = light.color * specular_strength;
+    //let view_dir = normalize(vec3<f32>(0.0, 0.0, 0.0) - vertex.world_position.xyz);
+    //let half_dir = normalize(view_dir + light_dir);
+    //let specular_strength = pow(max(dot(vertex.world_normal, half_dir), 0.0), 32.0);
+    //let specular_color = light.color * specular_strength;
 
-    let lighted_color = (ambient_color + diffuse_color) * color.xyz;
-    return vec4<f32>(lighted_color, color.a);
+    //// let lighted_color = (ambient_color + diffuse_color) * color.xyz;
+
+    //let shadow = shadow_calculation(vertex.light_space_position);
+    //let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
+
+    //return vec4<f32>(lighted_color, color.a);
 }
 
 @fragment

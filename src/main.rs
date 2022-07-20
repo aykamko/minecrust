@@ -584,6 +584,22 @@ fn setup_scene(
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
     let camera_bind_group_layout =
@@ -620,13 +636,13 @@ fn setup_scene(
         });
 
     // BEGIN light space matrix
-    let znear = 1.0;
-    let zfar = 250.0;
-    let light_projection = cgmath::ortho(-100.0, 100.0, -100.0, 100.0, znear, zfar);
-    let light_view = camera::look_at(
-        [10.0, 10.0, 10.0].into(), /* light position */
-        cgmath::Point3::origin() + ((camera.target - camera.eye).normalize() * 10.0) /* where light is pointing */,
-        camera.up,
+    let znear = 10.0;
+    let zfar = 300.0;
+    let light_projection = cgmath::ortho(-50.0, 50.0, -50.0, 50.0, znear, zfar);
+    let light_view = camera::look_at_rh(
+        [40.0, 10.0, 40.0].into(), /* light position */
+        [0.0, -10.0, 0.0].into(), /* where light is pointing */
+        camera.world_up,
     );
 
     let light_space_matrix: [[f32; 4]; 4] = (light_projection * light_view).into();
@@ -692,6 +708,19 @@ fn setup_scene(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
+    // Shadow Map
+    let shadow_map_texture =
+        texture::Texture::create_depth_texture(&device, &config, "shadow_map_texture");
+    let shadow_map_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+
     // Create bind groups
     let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &texture_bind_group_layout,
@@ -703,6 +732,14 @@ fn setup_scene(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&shadow_map_texture.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(&shadow_map_sampler),
             },
         ],
         label: None,
@@ -852,8 +889,6 @@ fn setup_scene(
         multiview: None,
     });
 
-    let shadow_map_texture =
-        texture::Texture::create_depth_texture(&device, &config, "shadow_map_texture");
     let shadow_map_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Shadow Map Shader"),
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shadow_map.wgsl"))),
@@ -1010,29 +1045,69 @@ fn render_scene(
         rpass.set_bind_group(1, &scene.light_space_matrix_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-        // HACK(aleks)
-        let chunk_render_datum = &scene.chunk_render_descriptors[0];
-        let instance_buffer = &chunk_render_datum.annotated_instance_buffers[0];
-        rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-        rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+
+        for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
+            for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
+                let render_descriptor_idx =
+                    world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);
+                let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
+
+                let maybe_instance_buffer = chunk_render_datum
+                    .annotated_instance_buffers
+                    .iter()
+                    .find(|&ib| ib.data_type == data_type);
+
+                if let Some(ref instance_buffer) = maybe_instance_buffer {
+                    rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+                    rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+
+                    if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
+                        if let Some(ref pipe) = &scene.pipeline_wire {
+                            rpass.set_pipeline(pipe);
+                            if RENDER_WIREFRAME {
+                                rpass.draw_indexed(
+                                    0..scene.index_count as u32,
+                                    0,
+                                    0..instance_buffer.len as _,
+                                );
+                            }
+
+                            // Draw camera line
+                            if RENDER_CAMERA_RAY {
+                                rpass.set_index_buffer(
+                                    scene.line_index_buf.slice(..),
+                                    wgpu::IndexFormat::Uint16,
+                                );
+                                rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+                                rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
+                            }
+
+                            rpass.set_pipeline(&scene.pipeline);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 120.0 / 255.0,
-                        g: 167.0 / 255.0,
-                        b: 255.0 / 255.0,
-                        a: 1.0,
-                    }),
-                    store: true,
-                },
-            })],
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 120.0 / 255.0,
+                            g: 167.0 / 255.0,
+                            b: 255.0 / 255.0,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                }),
+            ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &scene.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
