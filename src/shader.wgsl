@@ -109,7 +109,6 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coord = vertex.tex_coord;
     out.world_position = translate_matrix * vertex.position;
-    // out.clip_position = light_space_matrix * out.world_position;
     out.clip_position = camera_position.view_proj * out.world_position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
@@ -144,9 +143,12 @@ fn shadow_calculation(fragPosLightSpace: vec4<f32>) -> f32 {
     // get depth of current fragment from light's perspective
     let currentDepth = projCoords.z;
 
+    // NOTE(aleks): smallest bias I can get before things get janky
+    let bias = 0.000031;
+
     // check whether current frag pos is in shadow
     var shadow: f32;
-    if (currentDepth > closestDepth) {
+    if (currentDepth - bias > closestDepth) {
         shadow = 1.0;
     } else {
         shadow = 0.0;
@@ -167,8 +169,8 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var z_fade_start: f32 = 230.0;
     var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
 
-    //var color = base_color * vertex.color_adjust;
-    var color = base_color * vec4(1.0, 1.0, 1.0, vertex.color_adjust.a);
+    var color = base_color * vertex.color_adjust;
+    // var color = base_color * vec4(1.0, 1.0, 1.0, vertex.color_adjust.a);
     color.a -= distance_alpha_adjust; // fog effect: fade distant vertices
 
     // We don't need (or want) much ambient light, so 0.1 is fine

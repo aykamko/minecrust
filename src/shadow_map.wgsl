@@ -69,6 +69,8 @@ fn vs_main(
     let world_position = translate_matrix * vertex.position;
     out.clip_position = light_space_matrix * world_position;
 
+    // From here:
+    // https://github.com/gfx-rs/wgpu/pull/71/files#diff-f91eefe904403aab76f6354857e063ff33ad277b5f046091ae1a92d9e18f8276R16-R17
     out.clip_position.z = 0.5 * (out.clip_position.z + out.clip_position.w);
 
     return out;
