@@ -109,6 +109,7 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coord = vertex.tex_coord;
     out.world_position = translate_matrix * vertex.position;
+    // out.clip_position = light_space_matrix * out.world_position;
     out.clip_position = camera_position.view_proj * out.world_position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
@@ -133,15 +134,16 @@ var s_shadow_map: sampler;
 
 // https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 fn shadow_calculation(fragPosLightSpace: vec4<f32>) -> f32 {
-    // perform perspective divide
+    // perform perspective divide ([-1, 1])
     var projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     // transform to [0,1] range
     projCoords = projCoords * 0.5 + 0.5;
     projCoords.y = 1.0 - projCoords.y;
     // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-    var closestDepth = textureSample(t_shadow_map, s_shadow_map, projCoords.xy).r; 
+    let closestDepth = textureSample(t_shadow_map, s_shadow_map, projCoords.xy).r; 
     // get depth of current fragment from light's perspective
-    var currentDepth = projCoords.z;
+    let currentDepth = projCoords.z;
+
     // check whether current frag pos is in shadow
     var shadow: f32;
     if (currentDepth > closestDepth) {
@@ -184,9 +186,9 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     // let lighted_color = (ambient_color + diffuse_color) * color.xyz;
 
-    let shadow = shadow_calculation(vertex.light_space_position);
-    let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
+    var shadow = shadow_calculation(vertex.light_space_position);
 
+    let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
     return vec4<f32>(lighted_color, color.a);
 }
 

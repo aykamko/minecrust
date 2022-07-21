@@ -68,6 +68,9 @@ fn vs_main(
     var out: VertexOutput;
     let world_position = translate_matrix * vertex.position;
     out.clip_position = light_space_matrix * world_position;
+
+    out.clip_position.z = 0.5 * (out.clip_position.z + out.clip_position.w);
+
     return out;
 }
 

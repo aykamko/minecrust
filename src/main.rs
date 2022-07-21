@@ -640,8 +640,8 @@ fn setup_scene(
     let zfar = 500.0;
     let light_projection = cgmath::ortho(-50.0, 50.0, -50.0, 50.0, znear, zfar);
     let light_view = camera::look_at_rh(
-        [40.0, 10.0, 40.0].into(), /* light position */
-        [0.0, -10.0, 0.0].into(), /* where light is pointing */
+        [40.0, 30.0, 40.0].into(), /* light position */
+        [0.0, 0.0, 0.0].into(), /* where light is pointing */
         camera.world_up,
     );
 
@@ -719,13 +719,18 @@ fn setup_scene(
     let shadow_map_texture =
         texture::Texture::create_depth_texture(&device, &shadow_map_surface_config, "shadow_map_texture");
     let shadow_map_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: None,
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
         mipmap_filter: wgpu::FilterMode::Nearest,
-        ..Default::default()
+        lod_min_clamp: -100.0,
+        lod_max_clamp: 100.0,
+        anisotropy_clamp: None,
+        compare: None,
+        border_color: Some(wgpu::SamplerBorderColor::TransparentBlack),
     });
 
     // Create bind groups
