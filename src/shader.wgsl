@@ -142,8 +142,13 @@ fn shadow_calculation(fragPosLightSpace: vec4<f32>) -> f32 {
     // get depth of current fragment from light's perspective
     let currentDepth = projCoords.z;
 
+    // Points outside of the sunlight volume should not be in shadow
+    if (currentDepth > 1.0) {
+        return 0.0;
+    }
+
     // NOTE(aleks): smallest bias I can get before things get janky
-    let bias = 0.000031;
+    let bias = 0.001;
 
     // check whether current frag pos is in shadow
     var shadow: f32;

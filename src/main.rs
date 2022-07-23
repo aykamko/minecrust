@@ -177,21 +177,24 @@ fn start(
         zfar,
     );
 
+    let sunlight_pos = glam::Vec3::new(40.0, 30.0, 40.0);
+
     let scale_factor = 1.0;
     let sunlight_ortho_proj_coords = vertex::CuboidCoords {
         left: -(CHUNK_XZ_SIZE as f32 * scale_factor),
         right: CHUNK_XZ_SIZE as f32 * scale_factor,
         bottom: -(CHUNK_XZ_SIZE as f32 * scale_factor),
         top: CHUNK_XZ_SIZE as f32 * scale_factor,
-        near: 0.0, // -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        far: CHUNK_XZ_SIZE as f32 * scale_factor * 8.0,
+        near: 0.0,
+        // Can't be too far or z-depth values won't have enough precision
+        far: 100.0,
     };
 
     // Light
     let mut light_uniform = light::LightUniform::new(
         [0.0, 5.0, 0.0].into(),
         [1.0, 1.0, 1.0].into(),
-        [40.0, 30.0, 40.0].into(),
+        sunlight_pos,
         sunlight_ortho_proj_coords,
     );
 
@@ -786,8 +789,24 @@ fn setup_scene(
     });
 
     // Shadow Map
-    let shadow_map_texture =
-        texture::Texture::create_depth_texture("shadow_map_texture", &device, [1024, 1024], None);
+    let shadow_map_texture = texture::Texture::create_depth_texture(
+        "shadow_map_texture",
+        &device,
+        [2048, 2048],
+        &wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToBorder,
+            address_mode_v: wgpu::AddressMode::ClampToBorder,
+            address_mode_w: wgpu::AddressMode::ClampToBorder,
+            border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: None,
+            lod_min_clamp: -100.0,
+            lod_max_clamp: 100.0,
+            ..Default::default()
+        },
+    );
 
     // Create bind groups
     let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -894,7 +913,18 @@ fn setup_scene(
         "depth_texture",
         &device,
         [config.width, config.height],
-        Some(wgpu::CompareFunction::LessEqual),
+        &wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            lod_min_clamp: -100.0,
+            lod_max_clamp: 100.0,
+            ..Default::default()
+        },
     );
 
     Scene {
@@ -929,6 +959,7 @@ fn render_scene(
     spawner: &Spawner,
 ) {
     static RENDER_WIREFRAME: bool = false;
+    static RENDER_LIGHT_DEBUG_DATA: bool = true;
 
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =
@@ -1063,14 +1094,16 @@ fn render_scene(
             }
         }
 
-        // Draw light volume wireframe
-        if let Some(ref pipe) = &scene.pipeline_wire_no_instancing {
-            rpass.set_pipeline(pipe);
-            rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
-            rpass.set_index_buffer(scene.index_buffers[1].slice(..), wgpu::IndexFormat::Uint16);
-            rpass.draw_indexed(0..scene.index_counts[1] as u32, 0, 0..1);
+        if RENDER_LIGHT_DEBUG_DATA {
+            // Draw light volume wireframe
+            if let Some(ref pipe) = &scene.pipeline_wire_no_instancing {
+                rpass.set_pipeline(pipe);
+                rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+                rpass.set_index_buffer(scene.index_buffers[1].slice(..), wgpu::IndexFormat::Uint16);
+                rpass.draw_indexed(0..scene.index_counts[1] as u32, 0, 0..1);
 
-            rpass.set_pipeline(&scene.pipeline);
+                rpass.set_pipeline(&scene.pipeline);
+            }
         }
     }
 
