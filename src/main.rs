@@ -6,7 +6,7 @@ extern crate bmp;
 mod camera;
 mod face;
 mod instance;
-mod lib;
+mod light;
 mod map_generation;
 // mod pipeline;
 mod spawner;
@@ -75,7 +75,6 @@ struct Scene {
     depth_texture: texture::Texture,
     pipeline: wgpu::RenderPipeline,
 
-    light_space_matrix_bind_group: wgpu::BindGroup,
     shadow_map_texture: texture::Texture,
     shadow_map_pipeline: wgpu::RenderPipeline,
 
@@ -534,22 +533,8 @@ fn setup_scene(
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: wgpu::BufferSize::new(
-                        mem::size_of::<lib::LightUniform>() as u64
+                        mem::size_of::<light::LightUniformRaw>() as u64
                     ),
-                },
-                count: None,
-            }],
-        });
-    let light_space_matrix_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(64),
                 },
                 count: None,
             }],
@@ -562,6 +547,11 @@ fn setup_scene(
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shadow_map.wgsl"))),
     });
 
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Main Shader"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+    });
+
     let shadow_map_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(
@@ -569,7 +559,7 @@ fn setup_scene(
                 label: None,
                 bind_group_layouts: &[
                     &camera_bind_group_layout,
-                    &light_space_matrix_bind_group_layout,
+                    &light_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             }),
@@ -605,14 +595,8 @@ fn setup_scene(
             &texture_bind_group_layout,
             &camera_bind_group_layout,
             &light_bind_group_layout,
-            &light_space_matrix_bind_group_layout,
         ],
         push_constant_ranges: &[],
-    });
-
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Main Shader"),
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -705,7 +689,7 @@ fn setup_scene(
 
     // BEGIN light space matrix
     let scale_factor = 2.0;
-    let light_projection = glam::Mat4::orthographic_rh(
+    let sunlight_ortho_proj = glam::Mat4::orthographic_rh(
         -(CHUNK_XZ_SIZE as f32 * scale_factor),
         CHUNK_XZ_SIZE as f32 * scale_factor,
         -(CHUNK_XZ_SIZE as f32 * scale_factor),
@@ -714,26 +698,17 @@ fn setup_scene(
         CHUNK_XZ_SIZE as f32 * scale_factor * 8.0,
     );
 
-    // TODO: y-position of light should always stay the same, only x/y should move with camera
-    let light_view = glam::Mat4::look_at_rh(
-        [40.0, 30.0, 40.0].into(), /* light position */
-        [0.0, 0.0, 0.0].into(),    /* where light is pointing */
-        [0.0, 1.0, 0.0].into(),
-    );
-
-    let light_space_matrix: [[f32; 4]; 4] = (light_projection * light_view).to_cols_array_2d();
-    let light_space_matrix_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Light Space Matrix"),
-        contents: bytemuck::cast_slice(&[light_space_matrix]),
+    // Light
+    let light_uniform = light::LightUniform {
+        position: [0.0, 5.0, 0.0].into(), 
+        color: [1.0, 1.0, 1.0].into(),
+        sun_position: [40.0, 30.0, 40.0].into(),
+        sunlight_ortho_proj,
+    };
+    let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Light VB"),
+        contents: bytemuck::cast_slice(&[light_uniform.to_raw()]),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-    });
-    let light_space_matrix_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &light_space_matrix_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: light_space_matrix_buf.as_entire_binding(),
-        }],
-        label: None,
     });
     // END light space matrix
 
@@ -761,7 +736,6 @@ fn setup_scene(
         "Texture Atlas",
     );
 
-
     // Camera
     let camera_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Camera Buffer"),
@@ -774,14 +748,6 @@ fn setup_scene(
         usage: wgpu::BufferUsages::UNIFORM
             | wgpu::BufferUsages::COPY_SRC
             | wgpu::BufferUsages::COPY_DST,
-    });
-
-    // Light
-    let light_uniform = lib::LightUniform::new([0.0, 5.0, 0.0], [1.0, 1.0, 1.0]);
-    let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Light VB"),
-        contents: bytemuck::cast_slice(&[light_uniform]),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
     // Shadow Map
@@ -896,7 +862,6 @@ fn setup_scene(
         Some(wgpu::CompareFunction::LessEqual),
     );
 
-
     Scene {
         vertex_buffers,
         index_buf,
@@ -912,7 +877,6 @@ fn setup_scene(
         depth_texture,
         pipeline,
 
-        light_space_matrix_bind_group,
         shadow_map_pipeline,
         shadow_map_texture,
 
@@ -956,7 +920,7 @@ fn render_scene(
 
         rpass.set_pipeline(&scene.shadow_map_pipeline);
         rpass.set_bind_group(0, &scene.camera_bind_group, &[]);
-        rpass.set_bind_group(1, &scene.light_space_matrix_bind_group, &[]);
+        rpass.set_bind_group(1, &scene.light_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 
@@ -1021,7 +985,6 @@ fn render_scene(
         rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_bind_group(2, &scene.light_bind_group, &[]);
-        rpass.set_bind_group(3, &scene.light_space_matrix_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
 

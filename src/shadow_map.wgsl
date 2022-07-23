@@ -52,8 +52,13 @@ struct CameraUniform {
 @group(0) @binding(0)
 var<uniform> camera_position: CameraUniform;
 
+struct Light {
+    position: vec3<f32>,
+    color: vec3<f32>,
+    light_space_matrix: mat4x4<f32>,
+}
 @group(1) @binding(0)
-var<uniform> light_space_matrix: mat4x4<f32>;
+var<uniform> light: Light;
 
 @vertex
 fn vs_main(
@@ -67,7 +72,7 @@ fn vs_main(
 
     var out: VertexOutput;
     let world_position = translate_matrix * vertex.position;
-    out.clip_position = light_space_matrix * world_position;
+    out.clip_position = light.light_space_matrix * world_position;
 
     // From here:
     // https://github.com/gfx-rs/wgpu/pull/71/files#diff-f91eefe904403aab76f6354857e063ff33ad277b5f046091ae1a92d9e18f8276R16-R17

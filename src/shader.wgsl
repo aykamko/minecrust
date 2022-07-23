@@ -31,6 +31,7 @@ var<uniform> camera_position: CameraUniform;
 struct Light {
     position: vec3<f32>,
     color: vec3<f32>,
+    light_space_matrix: mat4x4<f32>,
 }
 @group(2) @binding(0)
 var<uniform> light: Light;
@@ -93,9 +94,6 @@ fn mat4_from_position(pos: vec4<f32>) -> mat4x4<f32> {
     );
 }
 
-@group(3) @binding(0)
-var<uniform> light_space_matrix: mat4x4<f32>;
-
 @vertex
 fn vs_main(
     vertex: VertexInput,
@@ -110,7 +108,7 @@ fn vs_main(
     out.tex_coord = vertex.tex_coord;
     out.world_position = translate_matrix * vertex.position;
     out.clip_position = camera_position.view_proj * out.world_position;
-    // out.clip_position = light_space_matrix * out.world_position;
+    // out.clip_position = light.light_space_matrix * out.world_position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
 
@@ -118,7 +116,7 @@ fn vs_main(
     var bottom_face_normal = vec3<f32>(0.0, -1.0, 0.0);
     out.world_normal = mat3_from_quaternion(instance.rotation_quaternion) * bottom_face_normal;
 
-    out.light_space_position = light_space_matrix * out.world_position;
+    out.light_space_position = light.light_space_matrix * out.world_position;
 
     return out;
 }
