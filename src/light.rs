@@ -1,4 +1,6 @@
 use crate::camera::Camera;
+use crate::vertex::{self, QuadListRenderData, Vertex};
+use glam::Vec3;
 
 pub struct OrthoProjCoords {
     pub left: f32,
@@ -82,5 +84,63 @@ impl LightUniform {
         self.sun_target_camera_adjusted = self.sun_target;
         self.sun_position_camera_adjusted.y += sun_y_adjust;
         self.sun_target_camera_adjusted.y += sun_y_adjust;
+    }
+
+    pub fn vertex_data_for_sunlight_proj(&self) -> QuadListRenderData {
+        let oc = &self.sunlight_ortho_proj_coords;
+
+        let light_view = glam::Mat4::look_at_rh(
+            self.sun_position_camera_adjusted.into(),
+            self.sun_target_camera_adjusted.into(),
+            [0.0, 1.0, 0.0].into(),
+        );
+
+        vertex::Vertex::generate_quad_data(
+            &vec![
+                // left face
+                [
+                    Vec3::new(oc.left, oc.top, oc.far),
+                    Vec3::new(oc.left, oc.top, oc.near),
+                    Vec3::new(oc.left, oc.bottom, oc.near),
+                    Vec3::new(oc.left, oc.bottom, oc.far),
+                ],
+                // right face
+                [
+                    Vec3::new(oc.right, oc.top, oc.near),
+                    Vec3::new(oc.right, oc.top, oc.far),
+                    Vec3::new(oc.right, oc.bottom, oc.far),
+                    Vec3::new(oc.right, oc.bottom, oc.near),
+                ],
+                // bottom face
+                [
+                    Vec3::new(oc.left, oc.bottom, oc.far),
+                    Vec3::new(oc.left, oc.bottom, oc.near),
+                    Vec3::new(oc.right, oc.bottom, oc.near),
+                    Vec3::new(oc.right, oc.bottom, oc.far),
+                ],
+                // top face
+                [
+                    Vec3::new(oc.right, oc.top, oc.far),
+                    Vec3::new(oc.right, oc.top, oc.near),
+                    Vec3::new(oc.left, oc.top, oc.near),
+                    Vec3::new(oc.left, oc.top, oc.far),
+                ],
+                // near face
+                [
+                    Vec3::new(oc.left, oc.top, oc.near),
+                    Vec3::new(oc.right, oc.top, oc.near),
+                    Vec3::new(oc.right, oc.bottom, oc.near),
+                    Vec3::new(oc.left, oc.bottom, oc.near),
+                ],
+                // far face
+                [
+                    Vec3::new(oc.left, oc.top, oc.far),
+                    Vec3::new(oc.right, oc.top, oc.far),
+                    Vec3::new(oc.right, oc.bottom, oc.far),
+                    Vec3::new(oc.left, oc.bottom, oc.far),
+                ],
+            ],
+            Some(light_view),
+        )
     }
 }

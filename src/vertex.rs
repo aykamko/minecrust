@@ -5,11 +5,23 @@ pub struct Vertex {
     tex_coord: [f32; 2],
 }
 
+pub struct QuadListRenderData {
+    pub vertex_data: Vec<Vertex>,
+    pub index_data: Vec<u16>,
+}
+
 impl Vertex {
     pub fn new(pos: [i8; 3], tc: [i8; 2]) -> Self {
         Self {
             pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
             tex_coord: [tc[0] as f32, tc[1] as f32],
+        }
+    }
+
+    pub fn new_from_vec(pos: glam::Vec4) -> Self {
+        Self {
+            pos: pos.into(),
+            tex_coord: [0.0, 0.0],
         }
     }
 
@@ -35,6 +47,36 @@ impl Vertex {
                     shader_location: 1,
                 },
             ],
+        }
+    }
+
+    pub fn generate_quad_data(
+        quads: &Vec<[glam::Vec3; 4]>,
+        mut projection: Option<glam::Mat4>,
+    ) -> QuadListRenderData {
+        let mut vertex_data: Vec<Vertex> = vec![];
+        let mut index_data: Vec<u16> = vec![];
+
+        let proj = match projection {
+            Some(_) => projection.unwrap(),
+            None => glam::Mat4::IDENTITY,
+        };
+
+        for (i, quad) in quads.iter().enumerate() {
+            vertex_data.extend([
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[0].x, quad[0].y, quad[0].z, 1.0)),
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[1].x, quad[1].y, quad[1].z, 1.0)),
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[2].x, quad[2].y, quad[2].z, 1.0)),
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[3].x, quad[3].y, quad[3].z, 1.0)),
+            ]);
+
+            let offset = i * 6;
+            index_data.extend([0, 1, 2, 2, 3, 0].map(|i| (i + offset) as u16));
+        }
+
+        QuadListRenderData {
+            vertex_data,
+            index_data,
         }
     }
 }
