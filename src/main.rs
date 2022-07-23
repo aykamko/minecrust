@@ -8,6 +8,7 @@ mod face;
 mod instance;
 mod lib;
 mod map_generation;
+// mod pipeline;
 mod spawner;
 mod texture;
 mod vec_extra;
@@ -18,13 +19,13 @@ use cgmath::{prelude::*, Point3};
 use futures::executor::block_on;
 use itertools::Itertools;
 use spawner::Spawner;
-use world::{VISIBLE_CHUNK_WIDTH, CHUNK_XZ_SIZE, CHUNK_Y_SIZE};
 use std::{borrow::Cow, collections::HashSet, future::Future, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
+use world::{CHUNK_XZ_SIZE, CHUNK_Y_SIZE, VISIBLE_CHUNK_WIDTH};
 
 use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
 
@@ -60,9 +61,8 @@ struct ChunkRenderDescriptor {
 }
 
 struct Scene {
-    vertex_buffers: [wgpu::Buffer; 2],
+    vertex_buffers: [wgpu::Buffer; 1],
     index_buf: wgpu::Buffer,
-    line_index_buf: wgpu::Buffer,
     index_count: usize,
     texture_bind_group: wgpu::BindGroup,
     camera_bind_group: wgpu::BindGroup,
@@ -335,19 +335,6 @@ fn start(
                             });
                         }
                     }
-
-                    // Draw camera ray
-                    let forward = (camera.target - camera.eye).normalize();
-                    let horizon_target = camera.target + (forward * 100.0);
-                    queue.write_buffer(
-                        &scene.vertex_buffers[1],
-                        0,
-                        bytemuck::cast_slice(&[
-                            vertex::Vertex::new_from_pos(camera.eye.into()),
-                            vertex::Vertex::new_from_pos(horizon_target.into()),
-                            vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
-                        ]),
-                    );
                 }
 
                 if update_result.did_move_chunks {
@@ -491,15 +478,6 @@ fn setup_scene(
             contents: bytemuck::cast_slice(&face.vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         }),
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Line Buffer"),
-            contents: bytemuck::cast_slice(&[
-                vertex::Vertex::new_from_pos([0.0, 0.0, 0.0]),
-                vertex::Vertex::new_from_pos([10.0, 10.0, 10.0]),
-                vertex::Vertex::new_from_pos([10.0, 0.0, 10.0]),
-            ]),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        }),
     ];
 
     let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -508,59 +486,13 @@ fn setup_scene(
         usage: wgpu::BufferUsages::INDEX,
     });
 
-    let line_index_data: &[u16] = &[0, 1, 2, 2, 1, 0];
-    let line_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Line Index Buffer"),
-        contents: bytemuck::cast_slice(&line_index_data),
-        usage: wgpu::BufferUsages::INDEX,
-    });
-
-    // Create the texture
-    let texture_atlas_bytes = include_bytes!("../assets/minecruft_atlas.png");
-    let texture_atlas_bytes = image::load_from_memory(texture_atlas_bytes).unwrap();
-    let texture_atlas_rgba = texture_atlas_bytes.to_rgba8();
-    let dimensions = texture_atlas_rgba.dimensions();
-
-    let texture_extent = wgpu::Extent3d {
-        width: dimensions.0,
-        height: dimensions.1,
-        depth_or_array_layers: 1,
-    };
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: None,
-        size: texture_extent,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-    });
-    queue.write_texture(
-        wgpu::ImageCopyTexture {
-            texture: &texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        &texture_atlas_rgba,
-        wgpu::ImageDataLayout {
-            offset: 0,
-            bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-            rows_per_image: std::num::NonZeroU32::new(dimensions.1),
-        },
-        texture_extent,
+    let texture_atlas = texture::Texture::create_pixel_art_image_texture(
+        include_bytes!("../assets/minecruft_atlas.png"),
+        device,
+        queue,
+        config,
+        "Texture Atlas",
     );
-
-    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Nearest,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        ..Default::default()
-    });
 
     // Create pipeline layout
     let texture_bind_group_layout =
@@ -655,7 +587,7 @@ fn setup_scene(
     // TODO: y-position of light should always stay the same, only x/y should move with camera
     let light_view = glam::Mat4::look_at_rh(
         [40.0, 30.0, 40.0].into(), /* light position */
-        [0.0, 0.0, 0.0].into(), /* where light is pointing */
+        [0.0, 0.0, 0.0].into(),    /* where light is pointing */
         [0.0, 1.0, 0.0].into(),
     );
 
@@ -724,29 +656,8 @@ fn setup_scene(
     });
 
     // Shadow Map
-    let shadow_map_surface_config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT, // unused
-        format: wgpu::TextureFormat::Depth32Float, // unused
-        width: 2048,
-        height: 2048,
-        present_mode: wgpu::PresentMode::Fifo, // unused
-    };
     let shadow_map_texture =
-        texture::Texture::create_depth_texture(&device, &shadow_map_surface_config, "shadow_map_texture");
-    let shadow_map_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: None,
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Nearest,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        lod_min_clamp: -100.0,
-        lod_max_clamp: 100.0,
-        anisotropy_clamp: None,
-        compare: None,
-        border_color: Some(wgpu::SamplerBorderColor::TransparentBlack),
-    });
+        texture::Texture::create_depth_texture("shadow_map_texture", &device, [2048, 2048], None);
 
     // Create bind groups
     let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -754,11 +665,11 @@ fn setup_scene(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_view),
+                resource: wgpu::BindingResource::TextureView(&texture_atlas.view),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(&sampler),
+                resource: wgpu::BindingResource::Sampler(&texture_atlas.sampler),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
@@ -766,7 +677,7 @@ fn setup_scene(
             },
             wgpu::BindGroupEntry {
                 binding: 3,
-                resource: wgpu::BindingResource::Sampler(&shadow_map_sampler),
+                resource: wgpu::BindingResource::Sampler(&shadow_map_texture.sampler),
             },
         ],
         label: None,
@@ -873,17 +784,34 @@ fn setup_scene(
         world_state.set_render_descriptor_idx(chunk_data.position, render_descriptor_idx);
     }
 
-    let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
+    let depth_texture = texture::Texture::create_depth_texture(
+        "depth_texture",
+        &device,
+        [config.width, config.height],
+        Some(wgpu::CompareFunction::LessEqual),
+    );
 
-    let buffers = &[vertex_buffer_layout, instance::InstanceRaw::desc()];
+    let vertex_buffer_layouts = &[vertex_buffer_layout, instance::InstanceRaw::desc()];
 
+    // let pipeline = pipeline::create_render_pipeline(
+    //     None,
+    //     device,
+    //     &pipeline_layout,
+    //     &[vertex_buffer_layout, instance::InstanceRaw::desc()],
+    //     config.format,
+    //     Some(texture::Texture::DEPTH_FORMAT),
+    //     wgpu::ShaderModuleDescriptor {
+    //         label: Some("Main Shader"),
+    //         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+    //     },
+    // );
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers,
+            buffers: vertex_buffer_layouts,
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -936,7 +864,7 @@ fn setup_scene(
         vertex: wgpu::VertexState {
             module: &shadow_map_shader,
             entry_point: "vs_main",
-            buffers,
+            buffers: vertex_buffer_layouts,
         },
         fragment: Some(wgpu::FragmentState {
             module: &shadow_map_shader,
@@ -968,7 +896,7 @@ fn setup_scene(
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers,
+                buffers: vertex_buffer_layouts,
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -1010,7 +938,6 @@ fn setup_scene(
     Scene {
         vertex_buffers,
         index_buf,
-        line_index_buf,
         index_count: face.index_data.len(),
         texture_bind_group,
         camera_bind_group,
@@ -1040,7 +967,6 @@ fn render_scene(
     spawner: &Spawner,
 ) {
     static RENDER_WIREFRAME: bool = false;
-    static RENDER_CAMERA_RAY: bool = false;
 
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =
@@ -1087,26 +1013,14 @@ fn render_scene(
                     rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
                     rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
 
-                    if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
+                    if RENDER_WIREFRAME {
                         if let Some(ref pipe) = &scene.pipeline_wire {
                             rpass.set_pipeline(pipe);
-                            if RENDER_WIREFRAME {
-                                rpass.draw_indexed(
-                                    0..scene.index_count as u32,
-                                    0,
-                                    0..instance_buffer.len as _,
-                                );
-                            }
-
-                            // Draw camera line
-                            if RENDER_CAMERA_RAY {
-                                rpass.set_index_buffer(
-                                    scene.line_index_buf.slice(..),
-                                    wgpu::IndexFormat::Uint16,
-                                );
-                                rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
-                                rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
-                            }
+                            rpass.draw_indexed(
+                                0..scene.index_count as u32,
+                                0,
+                                0..instance_buffer.len as _,
+                            );
 
                             rpass.set_pipeline(&scene.pipeline);
                         }
@@ -1119,21 +1033,19 @@ fn render_scene(
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[
-                Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 120.0 / 255.0,
-                            g: 167.0 / 255.0,
-                            b: 255.0 / 255.0,
-                            a: 1.0,
-                        }),
-                        store: true,
-                    },
-                }),
-            ],
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 120.0 / 255.0,
+                        g: 167.0 / 255.0,
+                        b: 255.0 / 255.0,
+                        a: 1.0,
+                    }),
+                    store: true,
+                },
+            })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &scene.depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
@@ -1166,26 +1078,14 @@ fn render_scene(
                     rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
                     rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
 
-                    if RENDER_WIREFRAME || RENDER_CAMERA_RAY {
+                    if RENDER_WIREFRAME {
                         if let Some(ref pipe) = &scene.pipeline_wire {
                             rpass.set_pipeline(pipe);
-                            if RENDER_WIREFRAME {
-                                rpass.draw_indexed(
-                                    0..scene.index_count as u32,
-                                    0,
-                                    0..instance_buffer.len as _,
-                                );
-                            }
-
-                            // Draw camera line
-                            if RENDER_CAMERA_RAY {
-                                rpass.set_index_buffer(
-                                    scene.line_index_buf.slice(..),
-                                    wgpu::IndexFormat::Uint16,
-                                );
-                                rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
-                                rpass.draw_indexed(0..6 as u32, 0, 0..1 as _);
-                            }
+                            rpass.draw_indexed(
+                                0..scene.index_count as u32,
+                                0,
+                                0..instance_buffer.len as _,
+                            );
 
                             rpass.set_pipeline(&scene.pipeline);
                         }
