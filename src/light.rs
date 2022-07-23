@@ -1,5 +1,14 @@
 use crate::camera::Camera;
 
+pub struct OrthoProjCoords {
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
+    pub near: f32,
+    pub far: f32,
+}
+
 pub struct LightUniform {
     pub position: glam::Vec3,
     pub color: glam::Vec3,
@@ -7,6 +16,7 @@ pub struct LightUniform {
     pub sun_position_camera_adjusted: glam::Vec3,
     pub sun_target: glam::Vec3,
     pub sun_target_camera_adjusted: glam::Vec3,
+    pub sunlight_ortho_proj_coords: OrthoProjCoords,
     pub sunlight_ortho_proj: glam::Mat4,
 }
 
@@ -25,8 +35,16 @@ impl LightUniform {
         position: glam::Vec3,
         color: glam::Vec3,
         sun_position: glam::Vec3,
-        sunlight_ortho_proj: glam::Mat4,
+        sunlight_ortho_proj_coords: OrthoProjCoords,
     ) -> Self {
+        let sunlight_ortho_proj = glam::Mat4::orthographic_rh(
+            sunlight_ortho_proj_coords.left,
+            sunlight_ortho_proj_coords.right,
+            sunlight_ortho_proj_coords.bottom,
+            sunlight_ortho_proj_coords.top,
+            sunlight_ortho_proj_coords.near,
+            sunlight_ortho_proj_coords.far,
+        );
         Self {
             position,
             color,
@@ -34,6 +52,7 @@ impl LightUniform {
             sun_position_camera_adjusted: sun_position,
             sun_target: [0.0, 0.0, 0.0].into(),
             sun_target_camera_adjusted: [0.0, 0.0, 0.0].into(),
+            sunlight_ortho_proj_coords,
             sunlight_ortho_proj,
         }
     }

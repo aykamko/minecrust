@@ -86,8 +86,8 @@ async fn setup() -> Setup {
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title("Minecrust");
     builder = builder.with_inner_size(winit::dpi::LogicalSize {
-        width: 1200,
-        height: 800,
+        width: 1024,
+        height: 1024,
     });
     let window = builder.build(&event_loop).unwrap();
 
@@ -175,22 +175,22 @@ fn start(
         zfar,
     );
 
-    let scale_factor = 2.0;
-    let sunlight_ortho_proj = glam::Mat4::orthographic_rh(
-        -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        CHUNK_XZ_SIZE as f32 * scale_factor,
-        -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        CHUNK_XZ_SIZE as f32 * scale_factor,
-        0.0, // -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        CHUNK_XZ_SIZE as f32 * scale_factor * 8.0,
-    );
+    let scale_factor = 1.0;
+    let sunlight_ortho_proj_coords = light::OrthoProjCoords {
+        left: -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        right: CHUNK_XZ_SIZE as f32 * scale_factor,
+        bottom: -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        top: CHUNK_XZ_SIZE as f32 * scale_factor,
+        near: 0.0, // -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        far: CHUNK_XZ_SIZE as f32 * scale_factor * 8.0,
+    };
 
     // Light
     let mut light_uniform = light::LightUniform::new(
         [0.0, 5.0, 0.0].into(), 
         [1.0, 1.0, 1.0].into(),
         [40.0, 30.0, 40.0].into(),
-        sunlight_ortho_proj,
+        sunlight_ortho_proj_coords,
     );
 
     let mut camera_uniform = camera::CameraUniform::new();
@@ -760,7 +760,7 @@ fn setup_scene(
 
     // Shadow Map
     let shadow_map_texture =
-        texture::Texture::create_depth_texture("shadow_map_texture", &device, [2048, 2048], None);
+        texture::Texture::create_depth_texture("shadow_map_texture", &device, [1024, 1024], None);
 
     // Create bind groups
     let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {

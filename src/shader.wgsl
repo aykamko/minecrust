@@ -1,41 +1,3 @@
-struct VertexInput {
-    @location(0) position: vec4<f32>,
-    @location(1) tex_coord: vec2<f32>,
-}
-
-struct VertexOutput {
-    @location(0) tex_coord: vec2<f32>,
-    @builtin(position) clip_position: vec4<f32>,
-    @location(1) texture_atlas_offset: vec2<f32>,
-    @location(2) color_adjust: vec4<f32>,
-    @location(3) world_position: vec4<f32>,
-    @location(6) world_normal: vec3<f32>,
-    @location(7) light_space_position: vec4<f32>,
-}
-
-struct CameraUniform {
-    view_proj: mat4x4<f32>,
-    eye_position: vec4<f32>,
-}
-
-struct InstanceInput {
-    @location(4) instance_position: vec4<f32>,
-    @location(5) rotation_quaternion: vec4<f32>,
-    @location(9) texture_atlas_offset: vec2<f32>,
-    @location(10) color_adjust: vec4<f32>,
-}
-
-@group(1) @binding(0)
-var<uniform> camera_position: CameraUniform;
-
-struct Light {
-    position: vec3<f32>,
-    color: vec3<f32>,
-    light_space_matrix: mat4x4<f32>,
-}
-@group(2) @binding(0)
-var<uniform> light: Light;
-
 fn mat3_from_quaternion(quat: vec4<f32>) -> mat3x3<f32> {
     let x2 = quat.x + quat.x;
     let y2 = quat.y + quat.y;
@@ -79,6 +41,44 @@ fn mat4_from_position(pos: vec4<f32>) -> mat4x4<f32> {
         pos,
     );
 }
+
+struct VertexInput {
+    @location(0) position: vec4<f32>,
+    @location(1) tex_coord: vec2<f32>,
+}
+
+struct VertexOutput {
+    @location(0) tex_coord: vec2<f32>,
+    @builtin(position) clip_position: vec4<f32>,
+    @location(1) texture_atlas_offset: vec2<f32>,
+    @location(2) color_adjust: vec4<f32>,
+    @location(3) world_position: vec4<f32>,
+    @location(6) world_normal: vec3<f32>,
+    @location(7) light_space_position: vec4<f32>,
+}
+
+struct CameraUniform {
+    view_proj: mat4x4<f32>,
+    eye_position: vec4<f32>,
+}
+
+struct InstanceInput {
+    @location(4) instance_position: vec4<f32>,
+    @location(5) rotation_quaternion: vec4<f32>,
+    @location(9) texture_atlas_offset: vec2<f32>,
+    @location(10) color_adjust: vec4<f32>,
+}
+
+@group(1) @binding(0)
+var<uniform> camera_position: CameraUniform;
+
+struct Light {
+    position: vec3<f32>,
+    color: vec3<f32>,
+    light_space_matrix: mat4x4<f32>,
+}
+@group(2) @binding(0)
+var<uniform> light: Light;
 
 @vertex
 fn vs_main(
