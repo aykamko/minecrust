@@ -20,6 +20,7 @@ use futures::executor::block_on;
 use itertools::Itertools;
 use spawner::Spawner;
 use std::{borrow::Cow, collections::HashSet, future::Future, mem, pin::Pin, task};
+use vertex::QuadListRenderData;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
@@ -177,7 +178,7 @@ fn start(
     );
 
     let scale_factor = 1.0;
-    let sunlight_ortho_proj_coords = light::OrthoProjCoords {
+    let sunlight_ortho_proj_coords = vertex::CuboidCoords {
         left: -(CHUNK_XZ_SIZE as f32 * scale_factor),
         right: CHUNK_XZ_SIZE as f32 * scale_factor,
         bottom: -(CHUNK_XZ_SIZE as f32 * scale_factor),
@@ -326,11 +327,11 @@ fn start(
                         });
                     }
 
-                    let light_volume_vtx_data = light_uniform.vertex_data_for_sunlight_proj();
+                    let sunlight_vtx_data = light_uniform.vertex_data_for_sunlight();
                     queue.write_buffer(
                         &scene.vertex_buffers[1],
                         0,
-                        bytemuck::cast_slice(&light_volume_vtx_data.vertex_data),
+                        bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
                     );
                 }
 
@@ -732,7 +733,7 @@ fn setup_scene(
 
     let face = face::Face::new();
 
-    let light_volume_vtx_data = light_uniform.vertex_data_for_sunlight_proj();
+    let sunlight_vtx_data = light_uniform.vertex_data_for_sunlight();
 
     let vertex_buffers = [
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -742,7 +743,7 @@ fn setup_scene(
         }),
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Volume Vertex Buffer"),
-            contents: bytemuck::cast_slice(&light_volume_vtx_data.vertex_data),
+            contents: bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         }),
     ];
@@ -755,15 +756,12 @@ fn setup_scene(
         }),
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Volume Index Buffer"),
-            contents: bytemuck::cast_slice(&light_volume_vtx_data.index_data),
+            contents: bytemuck::cast_slice(&sunlight_vtx_data.index_data),
             usage: wgpu::BufferUsages::INDEX,
         }),
     ];
 
-    let index_counts = [
-        face.index_data.len(),
-        light_volume_vtx_data.index_data.len(),
-    ];
+    let index_counts = [face.index_data.len(), sunlight_vtx_data.index_data.len()];
 
     let texture_atlas = texture::Texture::create_pixel_art_image_texture(
         include_bytes!("../assets/minecruft_atlas.png"),

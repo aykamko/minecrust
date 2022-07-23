@@ -1,15 +1,6 @@
 use crate::camera::Camera;
-use crate::vertex::{self, QuadListRenderData, Vertex};
+use crate::vertex::{self, CuboidCoords, QuadListRenderData, Vertex};
 use glam::Vec3;
-
-pub struct OrthoProjCoords {
-    pub left: f32,
-    pub right: f32,
-    pub bottom: f32,
-    pub top: f32,
-    pub near: f32,
-    pub far: f32,
-}
 
 pub struct LightUniform {
     pub position: glam::Vec3,
@@ -18,7 +9,7 @@ pub struct LightUniform {
     pub sun_position_camera_adjusted: glam::Vec3,
     pub sun_target: glam::Vec3,
     pub sun_target_camera_adjusted: glam::Vec3,
-    pub sunlight_ortho_proj_coords: OrthoProjCoords,
+    pub sunlight_ortho_proj_coords: CuboidCoords,
     pub sunlight_ortho_proj: glam::Mat4,
 }
 
@@ -37,7 +28,7 @@ impl LightUniform {
         position: glam::Vec3,
         color: glam::Vec3,
         sun_position: glam::Vec3,
-        sunlight_ortho_proj_coords: OrthoProjCoords,
+        sunlight_ortho_proj_coords: CuboidCoords,
     ) -> Self {
         let sunlight_ortho_proj = glam::Mat4::orthographic_rh(
             sunlight_ortho_proj_coords.left,
@@ -86,61 +77,34 @@ impl LightUniform {
         self.sun_target_camera_adjusted.y += sun_y_adjust;
     }
 
-    pub fn vertex_data_for_sunlight_proj(&self) -> QuadListRenderData {
-        let oc = &self.sunlight_ortho_proj_coords;
-
+    pub fn vertex_data_for_sunlight(&self) -> QuadListRenderData {
         let light_view = glam::Mat4::look_at_rh(
             self.sun_position_camera_adjusted.into(),
             self.sun_target_camera_adjusted.into(),
             [0.0, 1.0, 0.0].into(),
         );
 
-        vertex::Vertex::generate_quad_data(
-            &vec![
-                // left face
-                [
-                    Vec3::new(oc.left, oc.top, oc.near),
-                    Vec3::new(oc.left, oc.top, oc.far),
-                    Vec3::new(oc.left, oc.bottom, oc.far),
-                    Vec3::new(oc.left, oc.bottom, oc.near),
-                ],
-                // right face
-                [
-                    Vec3::new(oc.right, oc.top, oc.far),
-                    Vec3::new(oc.right, oc.top, oc.near),
-                    Vec3::new(oc.right, oc.bottom, oc.near),
-                    Vec3::new(oc.right, oc.bottom, oc.far),
-                ],
-                // bottom face
-                [
-                    Vec3::new(oc.left, oc.bottom, oc.near),
-                    Vec3::new(oc.left, oc.bottom, oc.far),
-                    Vec3::new(oc.right, oc.bottom, oc.far),
-                    Vec3::new(oc.right, oc.bottom, oc.near),
-                ],
-                // top face
-                [
-                    Vec3::new(oc.right, oc.top, oc.near),
-                    Vec3::new(oc.right, oc.top, oc.far),
-                    Vec3::new(oc.left, oc.top, oc.far),
-                    Vec3::new(oc.left, oc.top, oc.near),
-                ],
-                // near face
-                [
-                    Vec3::new(oc.right, oc.top, oc.near),
-                    Vec3::new(oc.left, oc.top, oc.near),
-                    Vec3::new(oc.left, oc.bottom, oc.near),
-                    Vec3::new(oc.right, oc.bottom, oc.near),
-                ],
-                // far face
-                [
-                    Vec3::new(oc.right, oc.top, oc.far),
-                    Vec3::new(oc.left, oc.top, oc.far),
-                    Vec3::new(oc.left, oc.bottom, oc.far),
-                    Vec3::new(oc.right, oc.bottom, oc.far),
-                ],
-            ],
-            Some(light_view),
-        )
+        let mut sunlight_volume_data =
+            Vertex::generate_quad_data_for_cube(&self.sunlight_ortho_proj_coords, Some(light_view));
+
+        const sunlight_cube_size: f32 = 1.0;
+        let sunlight_cube = CuboidCoords {
+            left: self.sun_position_camera_adjusted.x - sunlight_cube_size,
+            right: self.sun_position_camera_adjusted.x + sunlight_cube_size,
+            bottom: self.sun_position_camera_adjusted.y - sunlight_cube_size,
+            top: self.sun_position_camera_adjusted.y + sunlight_cube_size,
+            near: self.sun_position_camera_adjusted.z - sunlight_cube_size,
+            far: self.sun_position_camera_adjusted.z + sunlight_cube_size,
+        };
+
+        let sunlight_point_data = Vertex::generate_quad_data_for_cube(&sunlight_cube, None);
+        sunlight_volume_data
+            .vertex_data
+            .extend(&sunlight_point_data.vertex_data);
+        sunlight_volume_data
+            .index_data
+            .extend(&sunlight_point_data.index_data);
+
+        sunlight_volume_data
     }
 }

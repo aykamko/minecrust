@@ -1,8 +1,19 @@
+use glam::Vec3;
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pos: [f32; 4],
     tex_coord: [f32; 2],
+}
+
+pub struct CuboidCoords {
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
+    pub near: f32,
+    pub far: f32,
 }
 
 pub struct QuadListRenderData {
@@ -78,5 +89,58 @@ impl Vertex {
             vertex_data,
             index_data,
         }
+    }
+
+    pub fn generate_quad_data_for_cube(
+        cc: &CuboidCoords,
+        maybe_projection: Option<glam::Mat4>,
+    ) -> QuadListRenderData {
+        Vertex::generate_quad_data(
+            &vec![
+                // left face
+                [
+                    Vec3::new(cc.left, cc.top, cc.near),
+                    Vec3::new(cc.left, cc.top, cc.far),
+                    Vec3::new(cc.left, cc.bottom, cc.far),
+                    Vec3::new(cc.left, cc.bottom, cc.near),
+                ],
+                // right face
+                [
+                    Vec3::new(cc.right, cc.top, cc.far),
+                    Vec3::new(cc.right, cc.top, cc.near),
+                    Vec3::new(cc.right, cc.bottom, cc.near),
+                    Vec3::new(cc.right, cc.bottom, cc.far),
+                ],
+                // bottom face
+                [
+                    Vec3::new(cc.left, cc.bottom, cc.near),
+                    Vec3::new(cc.left, cc.bottom, cc.far),
+                    Vec3::new(cc.right, cc.bottom, cc.far),
+                    Vec3::new(cc.right, cc.bottom, cc.near),
+                ],
+                // top face
+                [
+                    Vec3::new(cc.right, cc.top, cc.near),
+                    Vec3::new(cc.right, cc.top, cc.far),
+                    Vec3::new(cc.left, cc.top, cc.far),
+                    Vec3::new(cc.left, cc.top, cc.near),
+                ],
+                // near face
+                [
+                    Vec3::new(cc.right, cc.top, cc.near),
+                    Vec3::new(cc.left, cc.top, cc.near),
+                    Vec3::new(cc.left, cc.bottom, cc.near),
+                    Vec3::new(cc.right, cc.bottom, cc.near),
+                ],
+                // far face
+                [
+                    Vec3::new(cc.right, cc.top, cc.far),
+                    Vec3::new(cc.left, cc.top, cc.far),
+                    Vec3::new(cc.left, cc.bottom, cc.far),
+                    Vec3::new(cc.right, cc.bottom, cc.far),
+                ],
+            ],
+            maybe_projection,
+        )
     }
 }
