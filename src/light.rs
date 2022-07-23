@@ -99,45 +99,45 @@ impl LightUniform {
             &vec![
                 // left face
                 [
-                    Vec3::new(oc.left, oc.top, oc.far),
                     Vec3::new(oc.left, oc.top, oc.near),
-                    Vec3::new(oc.left, oc.bottom, oc.near),
+                    Vec3::new(oc.left, oc.top, oc.far),
                     Vec3::new(oc.left, oc.bottom, oc.far),
+                    Vec3::new(oc.left, oc.bottom, oc.near),
                 ],
                 // right face
                 [
-                    Vec3::new(oc.right, oc.top, oc.near),
                     Vec3::new(oc.right, oc.top, oc.far),
-                    Vec3::new(oc.right, oc.bottom, oc.far),
+                    Vec3::new(oc.right, oc.top, oc.near),
                     Vec3::new(oc.right, oc.bottom, oc.near),
+                    Vec3::new(oc.right, oc.bottom, oc.far),
                 ],
                 // bottom face
                 [
-                    Vec3::new(oc.left, oc.bottom, oc.far),
                     Vec3::new(oc.left, oc.bottom, oc.near),
-                    Vec3::new(oc.right, oc.bottom, oc.near),
+                    Vec3::new(oc.left, oc.bottom, oc.far),
                     Vec3::new(oc.right, oc.bottom, oc.far),
+                    Vec3::new(oc.right, oc.bottom, oc.near),
                 ],
                 // top face
                 [
-                    Vec3::new(oc.right, oc.top, oc.far),
                     Vec3::new(oc.right, oc.top, oc.near),
-                    Vec3::new(oc.left, oc.top, oc.near),
+                    Vec3::new(oc.right, oc.top, oc.far),
                     Vec3::new(oc.left, oc.top, oc.far),
+                    Vec3::new(oc.left, oc.top, oc.near),
                 ],
                 // near face
                 [
-                    Vec3::new(oc.left, oc.top, oc.near),
                     Vec3::new(oc.right, oc.top, oc.near),
-                    Vec3::new(oc.right, oc.bottom, oc.near),
+                    Vec3::new(oc.left, oc.top, oc.near),
                     Vec3::new(oc.left, oc.bottom, oc.near),
+                    Vec3::new(oc.right, oc.bottom, oc.near),
                 ],
                 // far face
                 [
-                    Vec3::new(oc.left, oc.top, oc.far),
                     Vec3::new(oc.right, oc.top, oc.far),
-                    Vec3::new(oc.right, oc.bottom, oc.far),
+                    Vec3::new(oc.left, oc.top, oc.far),
                     Vec3::new(oc.left, oc.bottom, oc.far),
+                    Vec3::new(oc.right, oc.bottom, oc.far),
                 ],
             ],
             Some(light_view),

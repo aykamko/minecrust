@@ -52,13 +52,13 @@ impl Vertex {
 
     pub fn generate_quad_data(
         quads: &Vec<[glam::Vec3; 4]>,
-        mut projection: Option<glam::Mat4>,
+        maybe_projection: Option<glam::Mat4>,
     ) -> QuadListRenderData {
         let mut vertex_data: Vec<Vertex> = vec![];
         let mut index_data: Vec<u16> = vec![];
 
-        let proj = match projection {
-            Some(_) => projection.unwrap(),
+        let proj = match maybe_projection {
+            Some(_) => maybe_projection.unwrap(),
             None => glam::Mat4::IDENTITY,
         };
 
@@ -70,8 +70,8 @@ impl Vertex {
                 Vertex::new_from_vec(proj * glam::Vec4::new(quad[3].x, quad[3].y, quad[3].z, 1.0)),
             ]);
 
-            let offset = i * 6;
-            index_data.extend([0, 1, 2, 2, 3, 0].map(|i| (i + offset) as u16));
+            let offset = i * 4;
+            index_data.extend([0, 1, 2, 2, 3, 0].map(|j| (offset + j) as u16));
         }
 
         QuadListRenderData {

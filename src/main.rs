@@ -325,6 +325,13 @@ fn start(
                             old_chunk: chunk_idx,
                         });
                     }
+
+                    let light_volume_vtx_data = light_uniform.vertex_data_for_sunlight_proj();
+                    queue.write_buffer(
+                        &scene.vertex_buffers[1],
+                        0,
+                        bytemuck::cast_slice(&light_volume_vtx_data.vertex_data),
+                    );
                 }
 
                 if update_result.did_move_blocks {
@@ -663,7 +670,7 @@ fn setup_scene(
         multiview: None,
     });
 
-    let create_wire_pipeline = |vtx_shader_entry_point: &str| {
+    let create_wire_pipeline = |vtx_shader_entry_point: &str, cull_mode: Option<wgpu::Face>| {
         if device
             .features()
             .contains(wgpu::Features::POLYGON_MODE_LINE)
@@ -694,7 +701,7 @@ fn setup_scene(
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
+                    cull_mode,
                     polygon_mode: wgpu::PolygonMode::Line,
                     ..Default::default()
                 },
@@ -714,8 +721,8 @@ fn setup_scene(
         }
     };
 
-    let pipeline_wire = create_wire_pipeline("vs_main");
-    let pipeline_wire_no_instancing = create_wire_pipeline("vs_wire_no_instancing");
+    let pipeline_wire = create_wire_pipeline("vs_main", Some(wgpu::Face::Back));
+    let pipeline_wire_no_instancing = create_wire_pipeline("vs_wire_no_instancing", None);
 
     let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Light VB"),
@@ -736,7 +743,7 @@ fn setup_scene(
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Volume Vertex Buffer"),
             contents: bytemuck::cast_slice(&light_volume_vtx_data.vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         }),
     ];
 
