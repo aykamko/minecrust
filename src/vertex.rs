@@ -1,7 +1,7 @@
 use glam::Vec3;
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, Debug)]
 pub struct Vertex {
     pos: [f32; 4],
     tex_coord: [f32; 2],
@@ -64,37 +64,33 @@ impl Vertex {
     pub fn generate_quad_data(
         quads: &Vec<[glam::Vec3; 4]>,
         maybe_projection: Option<glam::Mat4>,
-    ) -> QuadListRenderData {
-        let mut vertex_data: Vec<Vertex> = vec![];
-        let mut index_data: Vec<u16> = vec![];
-
+        quad_data_out: &mut QuadListRenderData,
+    ) {
         let proj = match maybe_projection {
             Some(_) => maybe_projection.unwrap(),
             None => glam::Mat4::IDENTITY,
         };
 
-        for (i, quad) in quads.iter().enumerate() {
-            vertex_data.extend([
+        for quad in quads {
+            let index_offset = quad_data_out.vertex_data.len();
+            quad_data_out.vertex_data.extend([
                 Vertex::new_from_vec(proj * glam::Vec4::new(quad[0].x, quad[0].y, quad[0].z, 1.0)),
                 Vertex::new_from_vec(proj * glam::Vec4::new(quad[1].x, quad[1].y, quad[1].z, 1.0)),
                 Vertex::new_from_vec(proj * glam::Vec4::new(quad[2].x, quad[2].y, quad[2].z, 1.0)),
                 Vertex::new_from_vec(proj * glam::Vec4::new(quad[3].x, quad[3].y, quad[3].z, 1.0)),
             ]);
 
-            let offset = i * 4;
-            index_data.extend([0, 1, 2, 2, 3, 0].map(|j| (offset + j) as u16));
-        }
-
-        QuadListRenderData {
-            vertex_data,
-            index_data,
+            quad_data_out
+                .index_data
+                .extend([0, 1, 2, 2, 3, 0].map(|i| (index_offset + i) as u16));
         }
     }
 
     pub fn generate_quad_data_for_cube(
         cc: &CuboidCoords,
         maybe_projection: Option<glam::Mat4>,
-    ) -> QuadListRenderData {
+        quad_data_out: &mut QuadListRenderData,
+    ) {
         Vertex::generate_quad_data(
             &vec![
                 // left face
@@ -141,6 +137,7 @@ impl Vertex {
                 ],
             ],
             maybe_projection,
+            quad_data_out,
         )
     }
 }
