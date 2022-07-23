@@ -18,6 +18,7 @@ use cgmath::{prelude::*, Point3};
 use futures::executor::block_on;
 use itertools::Itertools;
 use spawner::Spawner;
+use world::{VISIBLE_CHUNK_WIDTH, CHUNK_XZ_SIZE, CHUNK_Y_SIZE};
 use std::{borrow::Cow, collections::HashSet, future::Future, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 use winit::{
@@ -638,14 +639,28 @@ fn setup_scene(
     // BEGIN light space matrix
     let znear = -1000.0;
     let zfar = 500.0;
-    let light_projection = cgmath::ortho(-50.0, 50.0, -50.0, 50.0, znear, zfar);
-    let light_view = camera::look_at_rh(
-        [40.0, 30.0, 40.0].into(), /* light position */
-        [0.0, 0.0, 0.0].into(), /* where light is pointing */
-        camera.world_up,
+    let VISIBLE_BLOCK_WIDTH = (VISIBLE_CHUNK_WIDTH * CHUNK_XZ_SIZE) as f32;
+
+    let scale_factor = 2.0;
+
+    let light_projection = glam::Mat4::orthographic_rh(
+        -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        CHUNK_XZ_SIZE as f32 * scale_factor,
+        -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        CHUNK_XZ_SIZE as f32 * scale_factor,
+        0.0, // -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        CHUNK_XZ_SIZE as f32 * scale_factor * 8.0,
     );
 
-    let light_space_matrix: [[f32; 4]; 4] = (light_projection * light_view).into();
+    // TODO: y-position of light should always stay the same, only x/y should move with camera
+    let light_view = glam::Mat4::look_at_rh(
+        [40.0, 30.0, 40.0].into(), /* light position */
+        [0.0, 0.0, 0.0].into(), /* where light is pointing */
+        [0.0, 1.0, 0.0].into(),
+    );
+
+    // let light_space_matrix: [[f32; 4]; 4] = (camera::OPENGL_TO_WGPU_MATRIX * light_projection * light_view).into();
+    let light_space_matrix: [[f32; 4]; 4] = (light_projection * light_view).to_cols_array_2d();
     let light_space_matrix_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Light Space Matrix"),
         contents: bytemuck::cast_slice(&[light_space_matrix]),

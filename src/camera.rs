@@ -21,7 +21,7 @@ pub struct Camera {
 }
 
 #[rustfmt::skip]
-const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
     0.0, 1.0, 0.0, 0.0,
     0.0, 0.0, 0.5, 0.0,
@@ -109,11 +109,11 @@ impl Camera {
         // close would be the same size as objects far away.
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
-        // 3. The coordinate system in Wgpu is based on DirectX, and Metal's coordinate systems. That
-        // means that in normalized device coordinates (opens new window)the x axis and y axis are
-        // in the range of -1.0 to +1.0, and the z axis is 0.0 to +1.0. The cgmath crate (as well as
-        // most game math crates) is built for OpenGL's coordinate system. This matrix will scale
-        // and translate our scene from OpenGL's coordinate system to WGPU's. We'll define it as
+        // 3. The coordinate system in Wgpu is based on DirectX, and Metal's coordinate systems.
+        // That means that in normalized device coordinates the x axis and y axis are in the range
+        // of -1.0 to +1.0, and the z axis is 0.0 to +1.0. The cgmath crate (as well as most game
+        // math crates) is built for OpenGL's coordinate system. This matrix will scale and
+        // translate our scene from OpenGL's coordinate system to WGPU's. We'll define it as
         // follows.
         return OPENGL_TO_WGPU_MATRIX * proj * view;
     }

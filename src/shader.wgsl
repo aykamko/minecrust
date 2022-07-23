@@ -110,6 +110,7 @@ fn vs_main(
     out.tex_coord = vertex.tex_coord;
     out.world_position = translate_matrix * vertex.position;
     out.clip_position = camera_position.view_proj * out.world_position;
+    // out.clip_position = light_space_matrix * out.world_position;
     out.texture_atlas_offset = instance.texture_atlas_offset;
     out.color_adjust = instance.color_adjust;
 
@@ -171,7 +172,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     var color = base_color * vertex.color_adjust;
     // var color = base_color * vec4(1.0, 1.0, 1.0, vertex.color_adjust.a);
-    color.a -= distance_alpha_adjust; // fog effect: fade distant vertices
+    // color.a -= distance_alpha_adjust; // fog effect: fade distant vertices
 
     // We don't need (or want) much ambient light, so 0.1 is fine
     let ambient_strength = 0.3;
