@@ -151,14 +151,38 @@ fn shadow_calculation(fragPosLightSpace: vec4<f32>) -> f32 {
     let bias = 0.001;
 
     // check whether current frag pos is in shadow
-    var shadow: f32;
-    if (currentDepth - bias > closestDepth) {
-        shadow = 1.0;
-    } else {
-        shadow = 0.0;
-    }
+    return select(0.0, 1.0, currentDepth - bias > closestDepth);
+}
 
-    return shadow;
+fn shadow_calculation_pcf(fragPosLightSpace: vec4<f32>) -> f32 {
+    // perform perspective divide ([-1, 1])
+    var projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    // transform to [0,1] range
+    projCoords = projCoords * 0.5 + 0.5;
+    projCoords.y = 1.0 - projCoords.y;
+    // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+    let closestDepth = textureSample(t_shadow_map, s_shadow_map, projCoords.xy).r; 
+    // get depth of current fragment from light's perspective
+    let currentDepth = projCoords.z;
+
+    // NOTE(aleks): smallest bias I can get before things get janky
+    let bias = 0.0003;
+
+    var pcf_shadow: f32 = 0.0;
+    let texture_dims = textureDimensions(t_shadow_map, 0);
+    let texel_size: vec2<f32> = vec2(1.0 / f32(texture_dims.x), 1.0 / f32(texture_dims.y));
+    for (var x = -1; x <= 1; x++) {
+        for (var y = -1; y <= 1; y++) {
+            let offset = vec2<f32>(f32(x), f32(y));
+            let sample_loc: vec2<f32> = projCoords.xy + offset * texel_size;
+            let pcf_depth = textureSample(t_shadow_map, s_shadow_map, sample_loc).r; 
+            pcf_shadow += select(0.0, 1.0, currentDepth - bias > pcf_depth);
+        }    
+    }
+    pcf_shadow /= 9.0;
+
+    // Points outside of the sunlight volume should not be in shadow
+    return select(pcf_shadow, 0.0, currentDepth > 1.0);
 }
 
 @fragment
@@ -192,7 +216,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     // let lighted_color = (ambient_color + diffuse_color) * color.xyz;
 
-    var shadow = shadow_calculation(vertex.light_space_position);
+    var shadow = shadow_calculation_pcf(vertex.light_space_position);
 
     let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
     return vec4<f32>(lighted_color, color.a);
