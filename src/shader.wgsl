@@ -107,6 +107,20 @@ fn vs_main(
     return out;
 }
 
+@vertex
+fn vs_wire_no_instancing(
+    vertex: VertexInput,
+) -> VertexOutput {
+    var out: VertexOutput;
+    out.tex_coord = vertex.tex_coord;
+    out.world_position = vertex.position;
+    out.clip_position = camera_position.view_proj * out.world_position;
+
+    out.light_space_position = light.light_space_matrix * out.world_position;
+
+    return out;
+}
+
 @group(0) @binding(0)
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)

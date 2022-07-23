@@ -61,9 +61,9 @@ struct ChunkRenderDescriptor {
 }
 
 struct Scene {
-    vertex_buffers: [wgpu::Buffer; 1],
-    index_buf: wgpu::Buffer,
-    index_count: usize,
+    vertex_buffers: [wgpu::Buffer; 2],
+    index_buffers: [wgpu::Buffer; 2],
+    index_counts: [usize; 2],
     texture_bind_group: wgpu::BindGroup,
     camera_bind_group: wgpu::BindGroup,
     light_bind_group: wgpu::BindGroup,
@@ -79,6 +79,7 @@ struct Scene {
     shadow_map_pipeline: wgpu::RenderPipeline,
 
     pipeline_wire: Option<wgpu::RenderPipeline>,
+    pipeline_wire_no_instancing: Option<wgpu::RenderPipeline>,
 }
 
 async fn setup() -> Setup {
@@ -187,7 +188,7 @@ fn start(
 
     // Light
     let mut light_uniform = light::LightUniform::new(
-        [0.0, 5.0, 0.0].into(), 
+        [0.0, 5.0, 0.0].into(),
         [1.0, 1.0, 1.0].into(),
         [40.0, 30.0, 40.0].into(),
         sunlight_ortho_proj_coords,
@@ -560,7 +561,7 @@ fn setup_scene(
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: wgpu::BufferSize::new(
-                        mem::size_of::<light::LightUniformRaw>() as u64
+                        mem::size_of::<light::LightUniformRaw>() as u64,
                     ),
                 },
                 count: None,
@@ -584,10 +585,7 @@ fn setup_scene(
         layout: Some(
             &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[
-                    &camera_bind_group_layout,
-                    &light_bind_group_layout,
-                ],
+                bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
                 push_constant_ranges: &[],
             }),
         ),
@@ -665,54 +663,59 @@ fn setup_scene(
         multiview: None,
     });
 
-    let pipeline_wire = if device
-        .features()
-        .contains(wgpu::Features::POLYGON_MODE_LINE)
-    {
-        let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: vertex_buffer_layouts,
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_wire",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent {
-                            operation: wgpu::BlendOperation::Add,
-                            src_factor: wgpu::BlendFactor::SrcAlpha,
-                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                        },
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Line,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: texture::Texture::DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
-        Some(pipeline_wire)
-    } else {
-        None
+    let create_wire_pipeline = |vtx_shader_entry_point: &str| {
+        if device
+            .features()
+            .contains(wgpu::Features::POLYGON_MODE_LINE)
+        {
+            let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: vtx_shader_entry_point,
+                    buffers: vertex_buffer_layouts,
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_wire",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                operation: wgpu::BlendOperation::Add,
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            },
+                            alpha: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    polygon_mode: wgpu::PolygonMode::Line,
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: texture::Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            });
+            Some(pipeline_wire)
+        } else {
+            None
+        }
     };
+
+    let pipeline_wire = create_wire_pipeline("vs_main");
+    let pipeline_wire_no_instancing = create_wire_pipeline("vs_wire_no_instancing");
 
     let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Light VB"),
@@ -722,19 +725,38 @@ fn setup_scene(
 
     let face = face::Face::new();
 
+    let light_volume_vtx_data = light_uniform.vertex_data_for_sunlight_proj();
+
     let vertex_buffers = [
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
+            label: Some("Main Vertex Buffer"),
             contents: bytemuck::cast_slice(&face.vertex_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Light Volume Vertex Buffer"),
+            contents: bytemuck::cast_slice(&light_volume_vtx_data.vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
         }),
     ];
 
-    let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: bytemuck::cast_slice(&face.index_data),
-        usage: wgpu::BufferUsages::INDEX,
-    });
+    let index_buffers = [
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Main Index Buffer"),
+            contents: bytemuck::cast_slice(&face.index_data),
+            usage: wgpu::BufferUsages::INDEX,
+        }),
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Light Volume Index Buffer"),
+            contents: bytemuck::cast_slice(&light_volume_vtx_data.index_data),
+            usage: wgpu::BufferUsages::INDEX,
+        }),
+    ];
+
+    let index_counts = [
+        face.index_data.len(),
+        light_volume_vtx_data.index_data.len(),
+    ];
 
     let texture_atlas = texture::Texture::create_pixel_art_image_texture(
         include_bytes!("../assets/minecruft_atlas.png"),
@@ -872,8 +894,8 @@ fn setup_scene(
 
     Scene {
         vertex_buffers,
-        index_buf,
-        index_count: face.index_data.len(),
+        index_buffers,
+        index_counts,
         texture_bind_group,
         camera_bind_group,
         light_bind_group,
@@ -889,6 +911,7 @@ fn setup_scene(
         shadow_map_texture,
 
         pipeline_wire,
+        pipeline_wire_no_instancing,
     }
 }
 
@@ -930,7 +953,7 @@ fn render_scene(
         rpass.set_bind_group(0, &scene.camera_bind_group, &[]);
         rpass.set_bind_group(1, &scene.light_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
-        rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
+        rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
         for data_type in [ChunkDataType::Opaque] {
             for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
@@ -945,13 +968,17 @@ fn render_scene(
 
                 if let Some(ref instance_buffer) = maybe_instance_buffer {
                     rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-                    rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+                    rpass.draw_indexed(
+                        0..scene.index_counts[0] as u32,
+                        0,
+                        0..instance_buffer.len as _,
+                    );
 
                     if RENDER_WIREFRAME {
                         if let Some(ref pipe) = &scene.pipeline_wire {
                             rpass.set_pipeline(pipe);
                             rpass.draw_indexed(
-                                0..scene.index_count as u32,
+                                0..scene.index_counts[0] as u32,
                                 0,
                                 0..instance_buffer.len as _,
                             );
@@ -994,7 +1021,7 @@ fn render_scene(
         rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
         rpass.set_bind_group(2, &scene.light_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
-        rpass.set_index_buffer(scene.index_buf.slice(..), wgpu::IndexFormat::Uint16);
+        rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
         for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
             for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
@@ -1009,13 +1036,17 @@ fn render_scene(
 
                 if let Some(ref instance_buffer) = maybe_instance_buffer {
                     rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-                    rpass.draw_indexed(0..scene.index_count as u32, 0, 0..instance_buffer.len as _);
+                    rpass.draw_indexed(
+                        0..scene.index_counts[0] as u32,
+                        0,
+                        0..instance_buffer.len as _,
+                    );
 
                     if RENDER_WIREFRAME {
                         if let Some(ref pipe) = &scene.pipeline_wire {
                             rpass.set_pipeline(pipe);
                             rpass.draw_indexed(
-                                0..scene.index_count as u32,
+                                0..scene.index_counts[0] as u32,
                                 0,
                                 0..instance_buffer.len as _,
                             );
@@ -1025,6 +1056,16 @@ fn render_scene(
                     }
                 }
             }
+        }
+
+        // Draw light volume wireframe
+        if let Some(ref pipe) = &scene.pipeline_wire_no_instancing {
+            rpass.set_pipeline(pipe);
+            rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+            rpass.set_index_buffer(scene.index_buffers[1].slice(..), wgpu::IndexFormat::Uint16);
+            rpass.draw_indexed(0..scene.index_counts[1] as u32, 0, 0..1);
+
+            rpass.set_pipeline(&scene.pipeline);
         }
     }
 
