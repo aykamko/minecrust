@@ -36,31 +36,6 @@ struct Light {
 @group(2) @binding(0)
 var<uniform> light: Light;
 
-fn mat4_from_quaternion(quat: vec4<f32>) -> mat4x4<f32> {
-    let x2 = quat.x + quat.x;
-    let y2 = quat.y + quat.y;
-    let z2 = quat.z + quat.z;
-
-    let xx2 = x2 * quat.x;
-    let xy2 = x2 * quat.y;
-    let xz2 = x2 * quat.z;
-
-    let yy2 = y2 * quat.y;
-    let yz2 = y2 * quat.z;
-    let zz2 = z2 * quat.z;
-
-    let sy2 = y2 * quat.w;
-    let sz2 = z2 * quat.w;
-    let sx2 = x2 * quat.w;
-
-    return mat4x4<f32>(
-        1.0 - yy2 - zz2, xy2 + sz2, xz2 - sy2, 0.0,
-        xy2 - sz2, 1.0 - xx2 - zz2, yz2 + sx2, 0.0,
-        xz2 + sy2, yz2 - sx2, 1.0 - xx2 - yy2, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-    );
-}
-
 fn mat3_from_quaternion(quat: vec4<f32>) -> mat3x3<f32> {
     let x2 = quat.x + quat.x;
     let y2 = quat.y + quat.y;
@@ -82,6 +57,17 @@ fn mat3_from_quaternion(quat: vec4<f32>) -> mat3x3<f32> {
         1.0 - yy2 - zz2, xy2 + sz2, xz2 - sy2,
         xy2 - sz2, 1.0 - xx2 - zz2, yz2 + sx2,
         xz2 + sy2, yz2 - sx2, 1.0 - xx2 - yy2,
+    );
+}
+
+fn mat4_from_quaternion(quat: vec4<f32>) -> mat4x4<f32> {
+    let q_mat3 = mat3_from_quaternion(quat);
+
+    return mat4x4<f32>(
+        q_mat3[0].x, q_mat3[0].y, q_mat3[0].z, 0.0,
+        q_mat3[1].x, q_mat3[1].y, q_mat3[1].z, 0.0,
+        q_mat3[2].x, q_mat3[2].y, q_mat3[2].z, 0.0,
+        0.0, 0.0, 0.0, 1.0,
     );
 }
 

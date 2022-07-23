@@ -175,6 +175,24 @@ fn start(
         zfar,
     );
 
+    let scale_factor = 2.0;
+    let sunlight_ortho_proj = glam::Mat4::orthographic_rh(
+        -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        CHUNK_XZ_SIZE as f32 * scale_factor,
+        -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        CHUNK_XZ_SIZE as f32 * scale_factor,
+        0.0, // -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        CHUNK_XZ_SIZE as f32 * scale_factor * 8.0,
+    );
+
+    // Light
+    let mut light_uniform = light::LightUniform::new(
+        [0.0, 5.0, 0.0].into(), 
+        [1.0, 1.0, 1.0].into(),
+        [40.0, 30.0, 40.0].into(),
+        sunlight_ortho_proj,
+    );
+
     let mut camera_uniform = camera::CameraUniform::new();
     camera_uniform.update_view_proj(&camera);
 
@@ -187,6 +205,7 @@ fn start(
         &device,
         &queue,
         camera_uniform,
+        &light_uniform,
         &mut world_state,
         &camera,
     );
@@ -281,6 +300,13 @@ fn start(
                     &scene.camera_staging_buf,
                     0,
                     bytemuck::cast_slice(&[camera_uniform]),
+                );
+
+                light_uniform.update_light_space_proj(&camera);
+                queue.write_buffer(
+                    &scene.light_buf,
+                    0,
+                    bytemuck::cast_slice(&[light_uniform.to_raw()]),
                 );
 
                 #[derive(PartialEq)]
@@ -464,6 +490,7 @@ fn setup_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     camera_uniform: camera::CameraUniform,
+    light_uniform: &light::LightUniform,
     world_state: &mut world::WorldState,
     camera: &camera::Camera,
 ) -> Scene {
@@ -687,30 +714,11 @@ fn setup_scene(
         None
     };
 
-    // BEGIN light space matrix
-    let scale_factor = 2.0;
-    let sunlight_ortho_proj = glam::Mat4::orthographic_rh(
-        -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        CHUNK_XZ_SIZE as f32 * scale_factor,
-        -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        CHUNK_XZ_SIZE as f32 * scale_factor,
-        0.0, // -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        CHUNK_XZ_SIZE as f32 * scale_factor * 8.0,
-    );
-
-    // Light
-    let light_uniform = light::LightUniform {
-        position: [0.0, 5.0, 0.0].into(), 
-        color: [1.0, 1.0, 1.0].into(),
-        sun_position: [40.0, 30.0, 40.0].into(),
-        sunlight_ortho_proj,
-    };
     let light_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Light VB"),
         contents: bytemuck::cast_slice(&[light_uniform.to_raw()]),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
-    // END light space matrix
 
     let face = face::Face::new();
 

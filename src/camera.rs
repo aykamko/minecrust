@@ -7,6 +7,7 @@ use collision::{Aabb3, Frustum, Plane};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
+    pub initial_eye: cgmath::Point3<f32>,
     pub eye: cgmath::Point3<f32>,
     pub target: cgmath::Point3<f32>,
     pub up: cgmath::Vector3<f32>,
@@ -81,6 +82,7 @@ impl Camera {
             dummy_plane,
         );
         let mut partial_self = Self {
+            initial_eye: eye,
             eye,
             target,
             up,
