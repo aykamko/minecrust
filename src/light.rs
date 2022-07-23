@@ -1,6 +1,7 @@
 use crate::camera::Camera;
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use glam::{Mat4, Vec3};
+use wgpu::Origin3d;
 
 pub struct LightUniform {
     pub position: Vec3,
@@ -85,10 +86,14 @@ impl LightUniform {
             vertex_data: vec![],
             index_data: vec![],
         };
-
+        
+        // HACK: using inverse() and modifying the projection coords is jank, but it matches up
+        // with what I see on screen...
+        let mut ortho_coords = self.sunlight_ortho_proj_coords.clone();
+        (ortho_coords.near, ortho_coords.far) = (-ortho_coords.far, ortho_coords.near);
         Vertex::generate_quad_data_for_cube(
-            &self.sunlight_ortho_proj_coords,
-            Some(self.get_light_view_proj()),
+            &ortho_coords,
+            Some(self.get_light_view_proj().inverse()),
             &mut sunlight_vertex_data,
         );
 
@@ -101,6 +106,19 @@ impl LightUniform {
                 top: self.sun_position_camera_adjusted.y + sunlight_cube_size,
                 near: self.sun_position_camera_adjusted.z - sunlight_cube_size,
                 far: self.sun_position_camera_adjusted.z + sunlight_cube_size,
+            },
+            None,
+            &mut sunlight_vertex_data,
+        );
+
+        Vertex::generate_quad_data_for_cube(
+            &CuboidCoords {
+                left: self.sun_target_camera_adjusted.x - sunlight_cube_size,
+                right: self.sun_target_camera_adjusted.x + sunlight_cube_size,
+                bottom: self.sun_target_camera_adjusted.y - sunlight_cube_size,
+                top: self.sun_target_camera_adjusted.y + sunlight_cube_size,
+                near: self.sun_target_camera_adjusted.z - sunlight_cube_size,
+                far: self.sun_target_camera_adjusted.z + sunlight_cube_size,
             },
             None,
             &mut sunlight_vertex_data,

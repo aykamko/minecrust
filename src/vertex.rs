@@ -7,6 +7,7 @@ pub struct Vertex {
     tex_coord: [f32; 2],
 }
 
+#[derive(Clone)]
 pub struct CuboidCoords {
     pub left: f32,
     pub right: f32,
