@@ -185,7 +185,7 @@ fn shadow_calculation_pcf(fragPosLightSpace: vec4<f32>) -> f32 {
     return select(pcf_shadow, 0.0, currentDepth > 1.0);
 }
 
-let MAX_SHADOW_EDGE_DISTANCE = 32;
+let MAX_SHADOW_EDGE_DISTANCE = 8;
 
 fn revectorize_shadow(relative_distances: vec2<f32>) -> f32 {
     let r = abs(relative_distances);
@@ -193,14 +193,12 @@ fn revectorize_shadow(relative_distances: vec2<f32>) -> f32 {
 }
 
 fn shadow_test(shadowmap_depth: f32, real_depth: f32) -> f32 {
-
     // real_depth <= shadowmap_depth ? 1.0 : 0.0;
     let bias = 0.0003;
     return select(0.0, 1.0, real_depth - bias <= shadowmap_depth);
 }
 
 fn estimate_relative_position(distance: vec2<f32>) -> f32 {
-    // let max_shadow_edge_distance = 16;
     let dist = distance;
 
     var T: f32 = 1.0;
@@ -245,17 +243,8 @@ fn traverse_shadow_silhouette(initial_shadowmap_coords: vec3<f32>, texel_size: v
         let shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, current_coords.xy).r;
         let s = shadow_test(shadowmap_depth, real_depth);
 
-        // When the visibility of |initial_shadowmap_coords| and |current_coords| are different
         if (s == 0.0) {
             found_shadow_edge = 1.0;
-
-            // // TODO(aleks): unpack this spaghetti
-            // //We disable exiting discontinuities if the neighbour entering discontinuity is in all the directions
-            // //We disable entering discontinuities if the neighbour exiting discontinuity is in all the directions
-            // hasDisc = getDisc(centeredLightCoord, vec2(0.0, 0.0), inputDiscontinuity.b);
-            // if(!hasDisc) foundEdgeEnd = 0.0;
-            // else foundEdgeEnd = 1.0;
-
             break;
         } else {
             let d = compute_discontinuity(current_coords, texel_size);
@@ -283,6 +272,7 @@ fn compute_distance_to_shadow_edge(shadowmap_coords: vec3<f32>, texel_size: vec2
 }
 
 // https://arxiv.org/pdf/1711.07793.pdf
+// https://github.com/MarcioCerqueira/GlobalIllumination/blob/master/ShadowMapping/Shaders/RBSM/ConservativeSMSR.frag
 fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec4<f32> {
     var shadowmap_coords = light_space_pos.xyz / light_space_pos.w;
     shadowmap_coords = shadowmap_coords * 0.5 + 0.5;
@@ -314,12 +304,10 @@ fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec4<f32> {
         return vec4<f32>(0.0, 0.0, 0.0, -1.0);
     }
 
-    // If fragment is on the shadow edge
     let relative_distance = compute_distance_to_shadow_edge(shadowmap_coords, texel_size, sub_coord);
     let normalized_relative_distance = normalize_distance_to_shadow_edge(relative_distance);
     let s = revectorize_shadow(normalized_relative_distance);
     return vec4<f32>(normalized_relative_distance, s, -1.0);
-    // return vec3<f32>(s, 0.0, -1.0);
 }
 
 @fragment
