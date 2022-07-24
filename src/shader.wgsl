@@ -230,8 +230,8 @@ fn normalize_distance_to_shadow_edge(relative_distance: vec4<f32>, shadow_val: f
 }
 
 fn check_discontinuity(shadowmap_coord: vec3<f32>, direction: vec2<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> bool {
-    var sample_loc_1 = vec2<f32>(-1.0, -1.0);
-    var sample_loc_2 = vec2<f32>(-1.0, -1.0);
+    var sample_loc_1: vec2<f32>;
+    var sample_loc_2: vec2<f32>;
     var use_sample_1 = false;
     var use_sample_2 = false;
 
@@ -328,8 +328,8 @@ fn traverse_shadow_silhouette(initial_shadowmap_coords: vec3<f32>, discontinuity
 fn compute_distance_to_shadow_edge(shadowmap_coords: vec3<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>, sub_coord: vec2<f32>) -> vec4<f32> {
     let left = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(-1.0, 0.0), 1.0 - sub_coord.x);
     let right = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(1.0, 0.0), sub_coord.x);
-    let down = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(0.0, -1.0), 1.0 - sub_coord.y);
-    let up = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(0.0, 1.0), sub_coord.y);
+    let down = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(0.0, 1.0), sub_coord.y);
+    let up = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(0.0, -1.0), 1.0 - sub_coord.y);
 
     return vec4<f32>(left, right, down, up);
 }
@@ -338,10 +338,10 @@ fn compute_discontinuity(shadowmap_coords: vec3<f32>, texel_size: vec2<f32>) -> 
     let center = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy).r, shadowmap_coords.z);
     let left = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(-1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
     let right = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
-    let top = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, 1.0) * texel_size).r, shadowmap_coords.z);
-    let bottom = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, -1.0) * texel_size).r, shadowmap_coords.z);
+    let top = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, -1.0) * texel_size).r, shadowmap_coords.z);
+    let bottom = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, 1.0) * texel_size).r, shadowmap_coords.z);
 
-    let discontinuity_directions = abs(vec4<f32>(left, right, bottom, top) - center);
+    let discontinuity_directions = abs(vec4<f32>(left, right, top, bottom) - center);
 
     let discontinuity_compressed = (2.0 * discontinuity_directions.xz + discontinuity_directions.yw) / 4.0;
     let discontinuity_type = 1.0 - center;
