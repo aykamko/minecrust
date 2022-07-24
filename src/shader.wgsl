@@ -185,18 +185,20 @@ fn shadow_calculation_pcf(fragPosLightSpace: vec4<f32>) -> f32 {
     return select(pcf_shadow, 0.0, currentDepth > 1.0);
 }
 
-let MAX_SHADOW_EDGE_DISTANCE = 16;
+let MAX_SHADOW_EDGE_DISTANCE = 8;
 
 // BUG(aleks): its definitely here
 fn revectorize_shadow(relative_distances: vec2<f32>, shadow_val: f32) -> f32 {
     let r = relative_distances;
     let s = shadow_val;
-    if ((r.x * r.y == 2.0 * s) ||
-       ((abs(r.x) * abs(r.y) > 0.0) && ((1.0 - s) + (2.0 * s - 1.0) * (abs(r.x) + abs(r.y)) < 0.5))
-    ) {
-        return 0.0;
-    }
-    return 1.0;
+    // if ((r.x * r.y == 2.0 * s) ||
+    //    ((abs(r.x) * abs(r.y) > 0.0) && ((1.0 - s) + (2.0 * s - 1.0) * (abs(r.x) + abs(r.y)) < 0.5))
+    // ) {
+    //     return 0.0;
+    // }
+    // return 1.0;
+
+    return select(0.0, 1.0, (s * (r.x + r.y) + (1.0 - s) * (1.0 - r.x - r.y)) >= 0.5);
 }
 
 fn shadow_test(shadowmap_depth: f32, real_depth: f32) -> f32 {
@@ -350,7 +352,7 @@ fn compute_discontinuity(shadowmap_coords: vec3<f32>, texel_size: vec2<f32>) -> 
 }
 
 // https://arxiv.org/pdf/1711.07793.pdf
-fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec3<f32> {
+fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec4<f32> {
     var shadowmap_coords = light_space_pos.xyz / light_space_pos.w;
     shadowmap_coords = shadowmap_coords * 0.5 + 0.5;
     shadowmap_coords.y = 1.0 - shadowmap_coords.y;
@@ -359,7 +361,7 @@ fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec3<f32> {
     let real_depth = shadowmap_coords.z;
     if (real_depth > 1.0) {
         // Beyond zfar for sunlight volume
-        return vec3<f32>(0.0, 0.0, 1.0);
+        return vec4<f32>(0.0, 0.0, 1.0, -1.0);
     }
 
     let shadow_val = shadow_test(shadowmap_depth, real_depth);
@@ -379,10 +381,10 @@ fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec3<f32> {
         let relative_distance = compute_distance_to_shadow_edge(shadowmap_coords, discontinuity, texel_size, sub_coord);
         let normalized_relative_distance = normalize_distance_to_shadow_edge(relative_distance, shadow_val);
         let s = revectorize_shadow(normalized_relative_distance, shadow_val);
-        return vec3<f32>(normalized_relative_distance, -1.0);
+        return vec4<f32>(normalized_relative_distance, s, -1.0);
         // return vec3<f32>(s, 0.0, -1.0);
     }
-    return vec3<f32>(0.0, 0.0, shadow_val);
+    return vec4<f32>(0.0, 0.0, shadow_val, -1.0);
 }
 
 @fragment
@@ -416,14 +418,15 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     // let lighted_color = (ambient_color + diffuse_color) * color.xyz;
 
-    var shadow = shadow_calculation_rbsm(vertex.light_space_position);
-    if (shadow.z == -1.0) {
-        return vec4<f32>(shadow.x, 0.0, shadow.y, 1.0);
-    }
+    var shadow_debug = shadow_calculation_rbsm(vertex.light_space_position);
+    // if (shadow_debug.w == -1.0) {
+    //     return vec4<f32>(shadow_debug.x, shadow_debug.z, shadow_debug.y, 1.0);
+    // }
+    let shadow = 1.0 - shadow_debug.z;
     // var shadow = shadow_calculation_pcf(vertex.light_space_position);
 
-    //let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
-    let lighted_color = (ambient_color + diffuse_color + specular_color) * color.xyz; 
+    let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
+    // let lighted_color = (ambient_color + diffuse_color + specular_color) * color.xyz; 
     return vec4<f32>(lighted_color, color.a);
 }
 
