@@ -221,13 +221,11 @@ fn normalize_distance_to_shadow_edge(relative_distance: vec4<f32>, shadow_val: f
     );
 }
 
-fn check_discontinuity(shadowmap_coord: vec4<f32>, direction: vec2<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> bool {
+fn check_discontinuity(shadowmap_coord: vec3<f32>, direction: vec2<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> bool {
     var sample_loc_1 = vec2<f32>(-1.0, -1.0);
     var sample_loc_2 = vec2<f32>(-1.0, -1.0);
     var use_sample_1 = false;
     var use_sample_2 = false;
-
-    var shadowmap_depth: f32;
 
     if (direction.x == 0.0) {
         if (discontinuity.r == 0.5 || discontinuity.r == 0.75) {
@@ -281,14 +279,14 @@ fn check_discontinuity(shadowmap_coord: vec4<f32>, direction: vec2<f32>, discont
     return is_discontinuous;
 }
 
-fn traverse_shadow_silhouette(initial_shadowmap_coords: vec4<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>, direction: vec2<f32>) -> f32 {
+fn traverse_shadow_silhouette(initial_shadowmap_coords: vec3<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>, direction: vec2<f32>) -> f32 {
     // let max_shadow_edge_distance = 16;
 
     var shadow_edge_end = 0.0;
     var distance = 0.0;
     var has_discontinuity = false;
 
-    var current_coords: vec4<f32> = initial_shadowmap_coords;
+    var current_coords: vec3<f32> = initial_shadowmap_coords;
     let step = direction * texel_size;
 
     for (var i = 0; i < MAX_SHADOW_EDGE_DISTANCE; i++) {
@@ -323,7 +321,7 @@ fn traverse_shadow_silhouette(initial_shadowmap_coords: vec4<f32>, discontinuity
     return mix(-distance, distance, shadow_edge_end);
 }
 
-fn compute_distance_to_shadow_edge(shadowmap_coords: vec4<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> vec4<f32> {
+fn compute_distance_to_shadow_edge(shadowmap_coords: vec3<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> vec4<f32> {
     let left = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(-1.0, 0.0));
     let right = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(1.0, 0.0));
     let down = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(0.0, -1.0));
@@ -332,7 +330,7 @@ fn compute_distance_to_shadow_edge(shadowmap_coords: vec4<f32>, discontinuity: v
     return vec4<f32>(left, right, down, up);
 }
 
-fn compute_discontinuity(shadowmap_coords: vec4<f32>, texel_size: vec2<f32>) -> vec3<f32> {
+fn compute_discontinuity(shadowmap_coords: vec3<f32>, texel_size: vec2<f32>) -> vec3<f32> {
     let center = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, 0.0) * texel_size).r, shadowmap_coords.z);
     let left = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(-1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
     let right = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
@@ -352,13 +350,13 @@ fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> f32 {
     shadowmap_coords = shadowmap_coords * 0.5 + 0.5;
     shadowmap_coords.y = 1.0 - shadowmap_coords.y;
 
+    let shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy).r; 
     let real_depth = shadowmap_coords.z;
     if (real_depth > 1.0) {
         // Beyond zfar for sunlight volume
         return 0.0;
     }
 
-    let shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy).r; 
     let bias = 0.0003;
     let shadow_val = shadow_test(shadowmap_depth, real_depth);
     if (shadow_val == 1.0) {
