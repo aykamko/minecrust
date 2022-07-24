@@ -185,6 +185,187 @@ fn shadow_calculation_pcf(fragPosLightSpace: vec4<f32>) -> f32 {
     return select(pcf_shadow, 0.0, currentDepth > 1.0);
 }
 
+let MAX_SHADOW_EDGE_DISTANCE = 16;
+
+fn revectorize_shadow(relative_distances: vec2<f32>, shadow_val: f32) -> f32 {
+    let r = relative_distances;
+    let s = shadow_val;
+    return select(1.0, 0.0, (r.x * r.y == 2.0 * s) || ((abs(r.x) * abs(r.y) > 0.0) && ((1.0 - s) + (2.0 * s - 1.0) + (abs(r.x) + abs(r.y)) < 0.5)));
+}
+
+fn shadow_test(shadowmap_depth: f32, real_depth: f32) -> f32 {
+    let bias = 0.0003;
+    return select(0.0, 1.0, real_depth - bias > shadowmap_depth);
+}
+
+fn estimate_relative_position(direction: vec2<f32>, shadow_val: f32) -> f32 {
+    // let max_shadow_edge_distance = 16;
+    let dir = direction;
+
+    var T: f32 = 1.0;
+    if (dir.x < 0.0 && dir.y < 0.0) {
+        T = 0.0;
+    }
+    if (dir.x > 0.0 && dir.y > 0.0) {
+        T = -2.0;
+    }
+
+    let edge_length = min(abs(dir.x) + abs(dir.y), f32(MAX_SHADOW_EDGE_DISTANCE));
+    return (max(T, 2.0 * shadow_val - 1.0) * abs(max(T * dir.x, T * dir.y))) / edge_length;
+}
+
+fn normalize_distance_to_shadow_edge(relative_distance: vec4<f32>, shadow_val: f32) -> vec2<f32> {
+    return vec2<f32>(
+        estimate_relative_position(vec2<f32>(relative_distance.x, relative_distance.y), shadow_val),
+        estimate_relative_position(vec2<f32>(relative_distance.z, relative_distance.w), shadow_val)
+    );
+}
+
+fn check_discontinuity(shadowmap_coord: vec4<f32>, direction: vec2<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> bool {
+    var shadowmap_depth: f32;
+    var relative_coord = shadowmap_coord;
+    if (direction.x == 0.0) {
+        if (discontinuity.r == 0.5 || discontinuity.r == 0.75) {
+            relative_coord.x = shadowmap_coord.x - texel_size.x;
+            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
+            let left = shadow_test(shadowmap_depth, shadowmap_coord.z);
+            if (abs(left - discontinuity.z) == 0.0) {
+                return true;
+            }
+        }
+        if (discontinuity.r == 0.75 || discontinuity.r == 0.25) {
+            relative_coord.x = shadowmap_coord.x + texel_size.x;
+            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
+            let right = shadow_test(shadowmap_depth, shadowmap_coord.z);
+            if (abs(right - discontinuity.z) == 0.0) {
+                return true;
+            }
+        }
+    }
+
+    relative_coord = shadowmap_coord;
+    if (direction.y == 0.0) {
+        if (discontinuity.g == 0.5 || discontinuity.g == 0.75) {
+            // BUG(aleks): the signs here are reversed from above... is this a bug?
+            relative_coord.x = shadowmap_coord.y + texel_size.y;
+            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
+            let bottom = shadow_test(shadowmap_depth, shadowmap_coord.z);
+            if (abs(bottom - discontinuity.z) == 0.0) {
+                return true;
+            }
+        }
+        if (discontinuity.g == 0.75 || discontinuity.g == 0.25) {
+            relative_coord.x = shadowmap_coord.y - texel_size.y;
+            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
+            let top = shadow_test(shadowmap_depth, shadowmap_coord.z);
+            if (abs(top - discontinuity.z) == 0.0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+fn traverse_shadow_silhouette(initial_shadowmap_coords: vec4<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>, direction: vec2<f32>) -> f32 {
+    // let max_shadow_edge_distance = 16;
+
+    var shadow_edge_end = 0.0;
+    var distance = 0.0;
+    var has_discontinuity = false;
+
+    var current_coords: vec4<f32> = initial_shadowmap_coords;
+    let step = direction * texel_size;
+
+    for (var i = 0; i < MAX_SHADOW_EDGE_DISTANCE; i++) {
+        current_coords.x += step.x;
+        current_coords.y += step.y;
+        let real_depth = current_coords.z;
+        let shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, current_coords.xy).r;
+        let s = shadow_test(shadowmap_depth, real_depth);
+
+        // When the visibility of |initial_shadowmap_coords| and |current_coords| are different
+        if (abs(s - discontinuity.z) == 0.0) {
+            shadow_edge_end = 1.0;
+
+            // // TODO(aleks): unpack this spaghetti
+            // //We disable exiting discontinuities if the neighbour entering discontinuity is in all the directions
+            // //We disable entering discontinuities if the neighbour exiting discontinuity is in all the directions
+            // hasDisc = getDisc(centeredLightCoord, vec2(0.0, 0.0), inputDiscontinuity.b);
+            // if(!hasDisc) foundEdgeEnd = 0.0;
+            // else foundEdgeEnd = 1.0;
+
+            break;
+        } else {
+            has_discontinuity = check_discontinuity(current_coords, direction, discontinuity, texel_size);
+            if (!has_discontinuity) {
+                break;
+            }
+        }
+
+        distance += 1.0;
+    }
+
+    return mix(-distance, distance, shadow_edge_end);
+}
+
+fn compute_distance_to_shadow_edge(shadowmap_coords: vec4<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> vec4<f32> {
+    let left = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(-1.0, 0.0));
+    let right = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(1.0, 0.0));
+    let down = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(0.0, -1.0));
+    let up = traverse_shadow_silhouette(shadowmap_coords, discontinuity, texel_size, vec2<f32>(0.0, 1.0));
+
+    return vec4<f32>(left, right, down, up);
+}
+
+fn compute_discontinuity(shadowmap_coords: vec4<f32>, texel_size: vec2<f32>) -> vec3<f32> {
+    let center = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(0.0, 0.0) * texel_size).r, shadowmap_coords.z);
+
+    let left = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(-1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
+    let right = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
+    let top = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(0.0, 1.0) * texel_size).r, shadowmap_coords.z);
+    let bottom = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(0.0, -1.0) * texel_size).r, shadowmap_coords.z);
+
+    let discontinuity_directions = abs(vec4<f32>(left, right, bottom, top) - center);
+
+    let discontinuity_compressed = (2.0 * discontinuity_directions.xz + discontinuity_directions.yw) / 4.0;
+    let discontinuity_type = 1.0 - center;
+    return vec3<f32>(discontinuity_compressed, discontinuity_type);
+}
+
+// https://arxiv.org/pdf/1711.07793.pdf
+fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> f32 {
+    var shadowmap_coords = light_space_pos.xyz / light_space_pos.w;
+    shadowmap_coords = shadowmap_coords * 0.5 + 0.5;
+    shadowmap_coords.y = 1.0 - shadowmap_coords.y;
+
+    let real_depth = shadowmap_coords.z;
+    if (real_depth > 1.0) {
+        // Beyond zfar for sunlight volume
+        return 0.0;
+    }
+
+    let shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy).r; 
+    let bias = 0.0003;
+    let shadow_val = shadow_test(shadowmap_depth, real_depth);
+    if (shadow_val == 1.0) {
+        // Discard shadowed fragments from computation
+        return 1.0;
+    }
+
+    let texture_dims = textureDimensions(t_shadow_map, 0);
+    let texel_size: vec2<f32> = vec2(1.0 / f32(texture_dims.x), 1.0 / f32(texture_dims.y));
+
+    let discontinuity = compute_discontinuity(shadowmap_coords, texel_size);
+    // If fragment is on the shadow edge
+    if (discontinuity.r > 0.0 || discontinuity.g > 0.0) {
+        let relative_distance = compute_distance_to_shadow_edge(shadowmap_coords, discontinuity, texel_size);
+        let normalized_relative_distance = normalize_distance_to_shadow_edge(relative_distance, shadow_val);
+        return revectorize_shadow(normalized_relative_distance, shadow_val);
+    }
+    return shadow_val;
+}
+
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var unit_offset: f32 = 1.0 / 32.0;
@@ -216,7 +397,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     // let lighted_color = (ambient_color + diffuse_color) * color.xyz;
 
-    var shadow = shadow_calculation_pcf(vertex.light_space_position);
+    var shadow = shadow_calculation_rbsm(vertex.light_space_position);
 
     let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
     return vec4<f32>(lighted_color, color.a);
