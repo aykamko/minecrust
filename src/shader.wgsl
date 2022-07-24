@@ -222,49 +222,63 @@ fn normalize_distance_to_shadow_edge(relative_distance: vec4<f32>, shadow_val: f
 }
 
 fn check_discontinuity(shadowmap_coord: vec4<f32>, direction: vec2<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>) -> bool {
+    var sample_loc_1 = vec2<f32>(-1.0, -1.0);
+    var sample_loc_2 = vec2<f32>(-1.0, -1.0);
+    var use_sample_1 = false;
+    var use_sample_2 = false;
+
     var shadowmap_depth: f32;
-    var relative_coord = shadowmap_coord;
+
     if (direction.x == 0.0) {
         if (discontinuity.r == 0.5 || discontinuity.r == 0.75) {
-            relative_coord.x = shadowmap_coord.x - texel_size.x;
-            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
-            let left = shadow_test(shadowmap_depth, shadowmap_coord.z);
-            if (abs(left - discontinuity.z) == 0.0) {
-                return true;
-            }
+            // left
+            sample_loc_1 = vec2<f32>(shadowmap_coord.x - texel_size.x, shadowmap_coord.y);
+            use_sample_1 = true;
         }
         if (discontinuity.r == 0.75 || discontinuity.r == 0.25) {
-            relative_coord.x = shadowmap_coord.x + texel_size.x;
-            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
-            let right = shadow_test(shadowmap_depth, shadowmap_coord.z);
-            if (abs(right - discontinuity.z) == 0.0) {
-                return true;
-            }
+            // right
+            sample_loc_2 = vec2<f32>(shadowmap_coord.x + texel_size.x, shadowmap_coord.y);
+            use_sample_2 = true;
         }
+        // if (discontinuity.r == 0.75 || discontinuity.r == 0.25) {
+        //     relative_coord.x = shadowmap_coord.x + texel_size.x;
+        //     shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
+        //     let right = shadow_test(shadowmap_depth, shadowmap_coord.z);
+        //     if (abs(right - discontinuity.z) == 0.0) {
+        //         return true;
+        //     }
+        // }
     }
 
-    relative_coord = shadowmap_coord;
     if (direction.y == 0.0) {
         if (discontinuity.g == 0.5 || discontinuity.g == 0.75) {
-            // BUG(aleks): the signs here are reversed from above... is this a bug?
-            relative_coord.x = shadowmap_coord.y + texel_size.y;
-            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
-            let bottom = shadow_test(shadowmap_depth, shadowmap_coord.z);
-            if (abs(bottom - discontinuity.z) == 0.0) {
-                return true;
-            }
+            // bottom
+            // XXX(aleks): the signs here are reversed from above... is this a bug?
+            sample_loc_1 = vec2<f32>(shadowmap_coord.x, shadowmap_coord.y + texel_size.y);
+            use_sample_1 = true;
         }
         if (discontinuity.g == 0.75 || discontinuity.g == 0.25) {
-            relative_coord.x = shadowmap_coord.y - texel_size.y;
-            shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, relative_coord.xy).r;
-            let top = shadow_test(shadowmap_depth, shadowmap_coord.z);
-            if (abs(top - discontinuity.z) == 0.0) {
-                return true;
-            }
+            // top
+            sample_loc_2 = vec2<f32>(shadowmap_coord.x, shadowmap_coord.y - texel_size.y);
+            use_sample_2 = true;
         }
     }
 
-    return false;
+    let sample_1 = textureSample(t_shadow_map, s_shadow_map, sample_loc_1).r;
+    let sample_2 = textureSample(t_shadow_map, s_shadow_map, sample_loc_2).r;
+
+    if (!use_sample_1 || !use_sample_2) {
+        return false;
+    }
+    var is_discontinuous = false;
+    if (use_sample_1) {
+       is_discontinuous = is_discontinuous || abs(sample_1 - discontinuity.z) == 0.0;
+    }
+    if (use_sample_2) {
+       is_discontinuous = is_discontinuous || abs(sample_2 - discontinuity.z) == 0.0;
+    }
+
+    return is_discontinuous;
 }
 
 fn traverse_shadow_silhouette(initial_shadowmap_coords: vec4<f32>, discontinuity: vec3<f32>, texel_size: vec2<f32>, direction: vec2<f32>) -> f32 {
@@ -319,12 +333,11 @@ fn compute_distance_to_shadow_edge(shadowmap_coords: vec4<f32>, discontinuity: v
 }
 
 fn compute_discontinuity(shadowmap_coords: vec4<f32>, texel_size: vec2<f32>) -> vec3<f32> {
-    let center = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(0.0, 0.0) * texel_size).r, shadowmap_coords.z);
-
-    let left = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(-1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
-    let right = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
-    let top = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(0.0, 1.0) * texel_size).r, shadowmap_coords.z);
-    let bottom = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords + vec2<f32>(0.0, -1.0) * texel_size).r, shadowmap_coords.z);
+    let center = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, 0.0) * texel_size).r, shadowmap_coords.z);
+    let left = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(-1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
+    let right = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
+    let top = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, 1.0) * texel_size).r, shadowmap_coords.z);
+    let bottom = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, -1.0) * texel_size).r, shadowmap_coords.z);
 
     let discontinuity_directions = abs(vec4<f32>(left, right, bottom, top) - center);
 
