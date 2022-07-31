@@ -311,6 +311,9 @@ fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(normalized_relative_distance, s, -1.0);
 }
 
+
+let SHADOW_INTENSITY = 0.66;
+
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     var unit_offset: f32 = 1.0 / 32.0;
@@ -346,7 +349,9 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     // return vec4<f32>(lighted_color, color.a);
 
     var shadow_debug = shadow_calculation_rbsm(vertex.light_space_position);
-    let shadow = 1.0 - shadow_debug.z;
+    var shadow = 1.0 - shadow_debug.z;
+    shadow = select(0.0, SHADOW_INTENSITY, shadow == 1.0);
+
     let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
     return vec4<f32>(lighted_color, color.a);
 
