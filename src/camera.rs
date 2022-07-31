@@ -229,7 +229,7 @@ impl CameraController {
 
     fn speed(&self) -> f32 {
         if self.is_sprint_pressed {
-            self._speed * 4.0
+            self._speed / 8.0
         } else {
             self._speed
         }
