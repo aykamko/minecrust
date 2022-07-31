@@ -66,6 +66,14 @@ impl BlockType {
         }
     }
 
+    pub fn is_collidable(&self) -> bool {
+        match *self {
+            BlockType::Empty => false,
+            BlockType::Water => false,
+            _ => true,
+        }
+    }
+
     pub fn random_tree_leaf() -> BlockType {
         *[
             Self::TreeLeaves1,
@@ -963,10 +971,10 @@ impl WorldState {
             let collision_cube =
                 collision::Aabb3::new(*cube, Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0));
 
-            if !self
+            if self
                 .get_block(cube.x as usize, cube.y as usize, cube.z as usize)
                 .block_type
-                .is_transluscent()
+                .is_collidable()
             {
                 let maybe_collision = collision_ray.intersection(&collision_cube);
 
