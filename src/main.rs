@@ -1031,7 +1031,7 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
-        for data_type in [ChunkDataType::Opaque] {
+        for data_type in [ChunkDataType::Opaque, ChunkDataType::SemiTransluscent] {
             for chunk_idx in scene.chunk_order.iter().rev() {
                 render_chunk(&mut rpass, scene, world_state, *chunk_idx, data_type);
             }
@@ -1070,7 +1070,7 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
-        for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
+        for data_type in [ChunkDataType::Opaque, ChunkDataType::SemiTransluscent, ChunkDataType::Transluscent] {
             for chunk_idx in scene.chunk_order.iter().rev() {
                 render_chunk(&mut rpass, scene, world_state, *chunk_idx, data_type);
             }

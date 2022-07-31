@@ -56,6 +56,16 @@ impl BlockType {
         }
     }
 
+    pub fn is_semi_transluscent(&self) -> bool {
+        match *self {
+            BlockType::TreeLeaves1 => true,
+            BlockType::TreeLeaves2 => true,
+            BlockType::TreeLeaves3 => true,
+            BlockType::TreeLeaves4 => true,
+            _ => false,
+        }
+    }
+
     pub fn random_tree_leaf() -> BlockType {
         *[
             Self::TreeLeaves1,
@@ -185,6 +195,8 @@ pub fn get_world_center() -> Point3<usize> {
 pub enum ChunkDataType {
     Opaque,
     Transluscent,
+    // Still generates a shadow
+    SemiTransluscent,
 }
 
 #[derive(Clone)]
@@ -455,7 +467,9 @@ impl WorldState {
         let mut leaf_y = trunk_top - 3;
         for diam in leaf_slice_diameters {
             let radius = (diam - 1) / 2;
-            for (leaf_x, leaf_z) in iproduct!(x - radius + 1..x + radius, z - radius + 1..z + radius) {
+            for (leaf_x, leaf_z) in
+                iproduct!(x - radius + 1..x + radius, z - radius + 1..z + radius)
+            {
                 // TODO(aleks): need a "set block if empty" primitive
                 if self.get_block(leaf_x, leaf_y, leaf_z).is_empty() {
                     set_block!(self, leaf_x, leaf_y, leaf_z, BlockType::random_tree_leaf());
@@ -696,6 +710,9 @@ impl WorldState {
         let mut transluscent_instances = Vec::<InstanceRaw>::with_capacity(4096);
         let mut transluscent_instance_distances = Vec::<i32>::with_capacity(4096);
 
+        let mut semi_transluscent_instances = Vec::<InstanceRaw>::with_capacity(4096);
+        let mut semi_transluscent_instance_distances = Vec::<i32>::with_capacity(4096);
+
         let chunk = self.get_chunk(chunk_idx);
 
         let [chunk_x, chunk_z] = chunk_idx;
@@ -728,7 +745,12 @@ impl WorldState {
                         1.0
                     };
 
-                    let (instance_vec, distance_vec) = if block.block_type.is_transluscent() {
+                    let (instance_vec, distance_vec) = if block.block_type.is_semi_transluscent() {
+                        (
+                            &mut semi_transluscent_instances,
+                            &mut semi_transluscent_instance_distances,
+                        )
+                    } else if block.block_type.is_transluscent() {
                         (
                             &mut transluscent_instances,
                             &mut transluscent_instance_distances,
@@ -815,6 +837,8 @@ impl WorldState {
 
         permutation::sort(&transluscent_instance_distances)
             .apply_slice_in_place(&mut transluscent_instances);
+        permutation::sort(&semi_transluscent_instance_distances)
+            .apply_slice_in_place(&mut semi_transluscent_instances);
         permutation::sort(&opaque_instance_distances).apply_slice_in_place(&mut opaque_instances);
 
         ChunkData {
@@ -829,6 +853,10 @@ impl WorldState {
                 TypedInstances {
                     data_type: ChunkDataType::Transluscent,
                     instance_data: transluscent_instances,
+                },
+                TypedInstances {
+                    data_type: ChunkDataType::SemiTransluscent,
+                    instance_data: semi_transluscent_instances,
                 },
             ],
         }
