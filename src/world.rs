@@ -2,6 +2,7 @@ use crate::camera::Camera;
 use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use bitmaps::Bitmap;
+use rand::prelude::SliceRandom;
 
 use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point3};
@@ -35,11 +36,35 @@ pub enum BlockType {
     Water,
     Glass,
     Tree,
+    TreeLeaves1,
+    TreeLeaves2,
+    TreeLeaves3,
+    TreeLeaves4,
 }
 
 impl BlockType {
     pub fn is_transluscent(&self) -> bool {
-        *self == BlockType::Empty || *self == BlockType::Water
+        match *self {
+            BlockType::Empty => true,
+            BlockType::Water => true,
+            BlockType::Glass => true,
+            BlockType::TreeLeaves1 => true,
+            BlockType::TreeLeaves2 => true,
+            BlockType::TreeLeaves3 => true,
+            BlockType::TreeLeaves4 => true,
+            _ => false,
+        }
+    }
+
+    pub fn random_tree_leaf() -> BlockType {
+        *[
+            Self::TreeLeaves1,
+            Self::TreeLeaves2,
+            Self::TreeLeaves3,
+            Self::TreeLeaves4,
+        ]
+        .choose(&mut rand::thread_rng())
+        .unwrap()
     }
 }
 
@@ -65,6 +90,10 @@ impl BlockType {
             BlockType::Water => [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
             BlockType::Glass => [[2.0, 1.0], [2.0, 1.0], [2.0, 1.0]],
             BlockType::Tree => [[1.0, 2.0], [1.0, 2.0], [0.0, 2.0]],
+            BlockType::TreeLeaves1 => [[0.0, 3.0], [0.0, 3.0], [0.0, 3.0]],
+            BlockType::TreeLeaves2 => [[1.0, 3.0], [1.0, 3.0], [1.0, 3.0]],
+            BlockType::TreeLeaves3 => [[0.0, 4.0], [0.0, 4.0], [0.0, 4.0]],
+            BlockType::TreeLeaves4 => [[1.0, 3.0], [1.0, 3.0], [1.0, 3.0]],
             _ => [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         }
     }
@@ -101,6 +130,12 @@ impl NeighborBitmap {
 struct Block {
     block_type: BlockType,
     neighbors: NeighborBitmap, // top (+y), bottom (-y), left (+x), right (-x), front (+z), back (-z)
+}
+
+impl Block {
+    pub fn is_empty(&self) -> bool {
+        self.block_type == BlockType::Empty
+    }
 }
 
 pub const CHUNK_XZ_SIZE: usize = 16;
@@ -403,6 +438,76 @@ impl WorldState {
             .collect::<Vec<_>>()
     }
 
+    pub fn maybe_generate_tree(&mut self, trunk_base: [usize; 3]) {
+        const TREE_CHANCE: f32 = 1.0 / 200.0;
+        if rand::thread_rng().gen::<f32>() > TREE_CHANCE {
+            return;
+        }
+
+        let [x, y_base, z] = trunk_base;
+        let trunk_top = y_base + 6;
+        for y in y_base..trunk_top {
+            set_block!(self, x, y, z, BlockType::Tree);
+        }
+
+        // Minecraft Lollipop Spruce Tree
+        let leaf_slice_diameters = [7, 7, 5, 3];
+        let mut leaf_y = trunk_top - 3;
+        for diam in leaf_slice_diameters {
+            let radius = (diam - 1) / 2;
+            for (leaf_x, leaf_z) in iproduct!(x - radius + 1..x + radius, z - radius + 1..z + radius) {
+                // TODO(aleks): need a "set block if empty" primitive
+                if self.get_block(leaf_x, leaf_y, leaf_z).is_empty() {
+                    set_block!(self, leaf_x, leaf_y, leaf_z, BlockType::random_tree_leaf());
+                }
+            }
+            leaf_y += 1;
+        }
+    }
+
+    pub fn generate_chunk(&mut self, [chunk_x, chunk_z]: [usize; 2]) {
+        let elevation_map = map_generation::generate_chunk_elevation_map(
+            [chunk_x, chunk_z],
+            MIN_HEIGHT,
+            MAX_HEIGHT,
+        );
+        let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
+        // vprintln!(
+        //     "Took {}ms to generate elevation map",
+        //     func_start.elapsed().as_millis()
+        // );
+
+        for (z, x) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
+            let ground_elevation = elevation_map[x][z] as usize;
+            let (world_x, world_z) = (base_x + x, base_z + z);
+            let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
+                BlockType::Sand
+            } else {
+                BlockType::Grass
+            };
+            set_block!(self, world_x, ground_elevation, world_z, top_block_type);
+
+            let min_ground_or_water = core::cmp::min(ground_elevation, WATER_HEIGHT as usize);
+            for y in 0..min_ground_or_water {
+                set_block!(self, world_x, y, world_z, BlockType::Sand);
+            }
+            for y in min_ground_or_water..ground_elevation {
+                set_block!(self, world_x, y, world_z, BlockType::Dirt);
+            }
+            for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
+                if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
+                    set_block!(self, world_x, y, world_z, BlockType::Water);
+                }
+            }
+
+            if top_block_type == BlockType::Grass {
+                self.maybe_generate_tree([world_x, ground_elevation, world_z]);
+            }
+        }
+
+        self.get_chunk_mut([chunk_x, chunk_z]).is_generated = true;
+    }
+
     pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) {
         let func_start = Instant::now();
 
@@ -425,11 +530,15 @@ impl WorldState {
 
         let [chunk_x, chunk_z] = outer_chunk_idx;
         // Allocate neighbors to avoid out-of-bounds array accessing when modifying blocks
+        allocate_inner([chunk_x - 1, chunk_z - 1]);
         allocate_inner([chunk_x - 1, chunk_z]);
+        allocate_inner([chunk_x - 1, chunk_z + 1]);
         allocate_inner([chunk_x, chunk_z - 1]);
         allocate_inner([chunk_x, chunk_z]);
         allocate_inner([chunk_x, chunk_z + 1]);
+        allocate_inner([chunk_x + 1, chunk_z - 1]);
         allocate_inner([chunk_x + 1, chunk_z]);
+        allocate_inner([chunk_x + 1, chunk_z + 1]);
 
         vprintln!(
             "Took {}ms to allocate memory",
@@ -437,51 +546,7 @@ impl WorldState {
         );
 
         if !self.get_chunk(outer_chunk_idx).is_generated {
-            let elevation_map = map_generation::generate_chunk_elevation_map(
-                [chunk_x, chunk_z],
-                MIN_HEIGHT,
-                MAX_HEIGHT,
-            );
-            let (base_x, base_z) = (chunk_x * CHUNK_XZ_SIZE, chunk_z * CHUNK_XZ_SIZE);
-            vprintln!(
-                "Took {}ms to generate elevation map",
-                func_start.elapsed().as_millis()
-            );
-
-            for (z, x) in iproduct!(0..CHUNK_XZ_SIZE, 0..CHUNK_XZ_SIZE) {
-                let ground_elevation = elevation_map[x][z] as usize;
-                let (world_x, world_z) = (base_x + x, base_z + z);
-                let top_block_type = if ground_elevation < WATER_HEIGHT as usize {
-                    BlockType::Sand
-                } else {
-                    BlockType::Grass
-                };
-                set_block!(self, world_x, ground_elevation, world_z, top_block_type);
-
-                let min_ground_or_water = core::cmp::min(ground_elevation, WATER_HEIGHT as usize);
-                for y in 0..min_ground_or_water {
-                    set_block!(self, world_x, y, world_z, BlockType::Sand);
-                }
-                for y in min_ground_or_water..ground_elevation {
-                    set_block!(self, world_x, y, world_z, BlockType::Dirt);
-                }
-                for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
-                    if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
-                        set_block!(self, world_x, y, world_z, BlockType::Water);
-                    }
-                }
-
-                if top_block_type == BlockType::Grass {
-                    const TREE_CHANCE: f32 = 1.0 / 200.0;
-                    if rand::thread_rng().gen::<f32>() <= TREE_CHANCE {
-                        for y in ground_elevation..ground_elevation + 6 {
-                            set_block!(self, world_x, y, world_z, BlockType::Tree);
-                        }
-                    }
-                }
-            }
-
-            self.get_chunk_mut(outer_chunk_idx).is_generated = true;
+            self.generate_chunk(outer_chunk_idx)
         }
 
         vprintln!(
@@ -593,7 +658,7 @@ impl WorldState {
         {
             let [abs_chunk_x, abs_chunk_z] = abs_chunk_iter.next().unwrap();
             all_chunk_data[[rel_chunk_x, rel_chunk_z]] =
-                self.generate_chunk_data([abs_chunk_x, abs_chunk_z], camera);
+                self.compute_chunk_mesh([abs_chunk_x, abs_chunk_z], camera);
         }
 
         let elapsed_time = func_start.elapsed().as_millis();
@@ -605,7 +670,7 @@ impl WorldState {
         (all_chunk_data, self.get_chunk_order_by_distance(&camera))
     }
 
-    pub fn generate_chunk_data(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
+    pub fn compute_chunk_mesh(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
         self.maybe_allocate_chunk(chunk_idx);
 
         use cgmath::{Deg, Quaternion, Vector3};
@@ -750,8 +815,7 @@ impl WorldState {
 
         permutation::sort(&transluscent_instance_distances)
             .apply_slice_in_place(&mut transluscent_instances);
-        permutation::sort(&opaque_instance_distances)
-            .apply_slice_in_place(&mut opaque_instances);
+        permutation::sort(&opaque_instance_distances).apply_slice_in_place(&mut opaque_instances);
 
         ChunkData {
             position: chunk_idx,

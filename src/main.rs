@@ -429,7 +429,7 @@ fn start(
                         .iter()
                         .map(|chunk_mod| {
                             let new_chunk_data =
-                                world_state.generate_chunk_data(chunk_mod.new_chunk, &camera);
+                                world_state.compute_chunk_mesh(chunk_mod.new_chunk, &camera);
 
                             let render_descriptor_idx =
                                 world_state.get_render_descriptor_idx(chunk_mod.old_chunk);
