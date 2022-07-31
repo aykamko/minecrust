@@ -6,6 +6,7 @@ use bitmaps::Bitmap;
 use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point3};
 use collision::Continuous;
+use rand::Rng;
 use std::char::MAX;
 use std::collections::HashSet;
 use std::convert::Into;
@@ -467,6 +468,15 @@ impl WorldState {
                 for y in (MIN_HEIGHT as usize)..(WATER_HEIGHT as usize) {
                     if self.get_block(world_x, y, world_z).block_type == BlockType::Empty {
                         set_block!(self, world_x, y, world_z, BlockType::Water);
+                    }
+                }
+
+                if top_block_type == BlockType::Grass {
+                    const TREE_CHANCE: f32 = 1.0 / 200.0;
+                    if rand::thread_rng().gen::<f32>() <= TREE_CHANCE {
+                        for y in ground_elevation..ground_elevation + 6 {
+                            set_block!(self, world_x, y, world_z, BlockType::Tree);
+                        }
                     }
                 }
             }

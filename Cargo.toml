@@ -22,6 +22,7 @@ noise = "0.7.0"
 bmp = "0.5.0"
 permutation = "0.4.0"
 glam = "0.21.2"
+rand = "0.8.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-executor = "1.0"
