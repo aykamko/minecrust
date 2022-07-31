@@ -181,7 +181,7 @@ pub fn get_world_center() -> Point3<usize> {
     )
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ChunkDataType {
     Opaque,
     Transluscent,

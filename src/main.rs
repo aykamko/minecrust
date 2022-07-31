@@ -951,6 +951,48 @@ fn setup_scene(
     }
 }
 
+static RENDER_WIREFRAME: bool = false;
+static RENDER_LIGHT_DEBUG_DATA: bool = false;
+
+fn render_chunk<'a>(
+    rpass: &mut wgpu::RenderPass<'a>,
+    scene: &'a Scene,
+    world_state: &world::WorldState,
+    chunk_idx: [usize; 2],
+    data_type: ChunkDataType,
+) {
+    let [chunk_x, chunk_z] = chunk_idx;
+    let render_descriptor_idx = world_state.get_render_descriptor_idx([chunk_x, chunk_z]);
+    let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
+
+    let maybe_instance_buffer = chunk_render_datum
+        .annotated_instance_buffers
+        .iter()
+        .find(|&ib| ib.data_type == data_type);
+
+    if let Some(ref instance_buffer) = maybe_instance_buffer {
+        rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+        rpass.draw_indexed(
+            0..scene.index_counts[0] as u32,
+            0,
+            0..instance_buffer.len as _,
+        );
+
+        if RENDER_WIREFRAME {
+            if let Some(ref pipe) = &scene.pipeline_wire {
+                rpass.set_pipeline(pipe);
+                rpass.draw_indexed(
+                    0..scene.index_counts[0] as u32,
+                    0,
+                    0..instance_buffer.len as _,
+                );
+
+                rpass.set_pipeline(&scene.pipeline);
+            }
+        }
+    }
+}
+
 fn render_scene(
     view: &wgpu::TextureView,
     device: &wgpu::Device,
@@ -959,9 +1001,6 @@ fn render_scene(
     world_state: &world::WorldState,
     spawner: &Spawner,
 ) {
-    static RENDER_WIREFRAME: bool = false;
-    static RENDER_LIGHT_DEBUG_DATA: bool = false;
-
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -993,37 +1032,8 @@ fn render_scene(
         rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
         for data_type in [ChunkDataType::Opaque] {
-            for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
-                let render_descriptor_idx =
-                    world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);
-                let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
-
-                let maybe_instance_buffer = chunk_render_datum
-                    .annotated_instance_buffers
-                    .iter()
-                    .find(|&ib| ib.data_type == data_type);
-
-                if let Some(ref instance_buffer) = maybe_instance_buffer {
-                    rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-                    rpass.draw_indexed(
-                        0..scene.index_counts[0] as u32,
-                        0,
-                        0..instance_buffer.len as _,
-                    );
-
-                    if RENDER_WIREFRAME {
-                        if let Some(ref pipe) = &scene.pipeline_wire {
-                            rpass.set_pipeline(pipe);
-                            rpass.draw_indexed(
-                                0..scene.index_counts[0] as u32,
-                                0,
-                                0..instance_buffer.len as _,
-                            );
-
-                            rpass.set_pipeline(&scene.pipeline);
-                        }
-                    }
-                }
+            for chunk_idx in scene.chunk_order.iter().rev() {
+                render_chunk(&mut rpass, scene, world_state, *chunk_idx, data_type);
             }
         }
     }
@@ -1061,37 +1071,8 @@ fn render_scene(
         rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
         for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent] {
-            for [chunk_x, chunk_z] in scene.chunk_order.iter().rev() {
-                let render_descriptor_idx =
-                    world_state.get_render_descriptor_idx([*chunk_x, *chunk_z]);
-                let chunk_render_datum = &scene.chunk_render_descriptors[render_descriptor_idx];
-
-                let maybe_instance_buffer = chunk_render_datum
-                    .annotated_instance_buffers
-                    .iter()
-                    .find(|&ib| ib.data_type == data_type);
-
-                if let Some(ref instance_buffer) = maybe_instance_buffer {
-                    rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
-                    rpass.draw_indexed(
-                        0..scene.index_counts[0] as u32,
-                        0,
-                        0..instance_buffer.len as _,
-                    );
-
-                    if RENDER_WIREFRAME {
-                        if let Some(ref pipe) = &scene.pipeline_wire {
-                            rpass.set_pipeline(pipe);
-                            rpass.draw_indexed(
-                                0..scene.index_counts[0] as u32,
-                                0,
-                                0..instance_buffer.len as _,
-                            );
-
-                            rpass.set_pipeline(&scene.pipeline);
-                        }
-                    }
-                }
+            for chunk_idx in scene.chunk_order.iter().rev() {
+                render_chunk(&mut rpass, scene, world_state, *chunk_idx, data_type);
             }
         }
 
