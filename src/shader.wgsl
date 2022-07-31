@@ -194,7 +194,8 @@ fn revectorize_shadow(relative_distances: vec2<f32>) -> f32 {
 
 fn shadow_test(shadowmap_depth: f32, real_depth: f32) -> f32 {
     // real_depth <= shadowmap_depth ? 1.0 : 0.0;
-    let bias = 0.0003;
+    // let bias = 0.0003;
+    let bias = 0.0005;
     return select(0.0, 1.0, real_depth - bias <= shadowmap_depth);
 }
 

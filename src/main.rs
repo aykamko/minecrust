@@ -181,13 +181,13 @@ fn start(
 
     let scale_factor = 1.0;
     let sunlight_ortho_proj_coords = vertex::CuboidCoords {
-        left: -(CHUNK_XZ_SIZE as f32 * scale_factor),
-        right: CHUNK_XZ_SIZE as f32 * scale_factor,
-        bottom: -(CHUNK_XZ_SIZE as f32 * scale_factor),
+        left: -(CHUNK_XZ_SIZE as f32 * scale_factor * 2.0),
+        right: CHUNK_XZ_SIZE as f32 * scale_factor * 2.0,
+        bottom: -(CHUNK_XZ_SIZE as f32 * scale_factor * 2.0),
         top: CHUNK_XZ_SIZE as f32 * scale_factor,
         near: 0.0,
         // Can't be too far or z-depth values won't have enough precision
-        far: 100.0,
+        far: 125.0,
     };
 
     // Light
@@ -196,6 +196,7 @@ fn start(
         [1.0, 1.0, 1.0].into(),
         sunlight_pos,
         sunlight_ortho_proj_coords,
+        [2048, 2048],
     );
 
     let mut camera_uniform = camera::CameraUniform::new();
@@ -792,7 +793,7 @@ fn setup_scene(
     let shadow_map_texture = texture::Texture::create_depth_texture(
         "shadow_map_texture",
         &device,
-        [2048, 2048],
+        light_uniform.shadow_map_pixel_size,
         &wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToBorder,
             address_mode_v: wgpu::AddressMode::ClampToBorder,
@@ -959,7 +960,7 @@ fn render_scene(
     spawner: &Spawner,
 ) {
     static RENDER_WIREFRAME: bool = false;
-    static RENDER_LIGHT_DEBUG_DATA: bool = true;
+    static RENDER_LIGHT_DEBUG_DATA: bool = false;
 
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder =

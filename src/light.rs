@@ -12,6 +12,7 @@ pub struct LightUniform {
     pub sun_target_camera_adjusted: Vec3,
     pub sunlight_ortho_proj_coords: CuboidCoords,
     pub sunlight_ortho_proj: glam::Mat4,
+    pub shadow_map_pixel_size: [u32; 2],
 }
 
 #[repr(C)]
@@ -30,6 +31,7 @@ impl LightUniform {
         color: Vec3,
         sun_position: Vec3,
         sunlight_ortho_proj_coords: CuboidCoords,
+        shadow_map_pixel_size: [u32; 2],
     ) -> Self {
         let sunlight_ortho_proj = glam::Mat4::orthographic_rh(
             sunlight_ortho_proj_coords.left,
@@ -39,6 +41,7 @@ impl LightUniform {
             sunlight_ortho_proj_coords.near,
             sunlight_ortho_proj_coords.far,
         );
+
         Self {
             position,
             color,
@@ -48,6 +51,7 @@ impl LightUniform {
             sun_target_camera_adjusted: [0.0, 0.0, 0.0].into(),
             sunlight_ortho_proj_coords,
             sunlight_ortho_proj,
+            shadow_map_pixel_size,
         }
     }
 
@@ -73,12 +77,15 @@ impl LightUniform {
     }
 
     pub fn update_light_space_proj(&mut self, camera: &Camera) {
-        let sun_y_adjust = camera.initial_eye.y - camera.eye.y;
+        // let sun_adjust = Vec3::new(
+        //     f32::trunc(camera.eye.x) - camera.eye.x,
+        //     camera.initial_eye.y - camera.eye.y,
+        //     f32::trunc(camera.eye.z) - camera.eye.z,
+        // );
+        let sun_adjust = Vec3::new(0.0, camera.initial_eye.y - camera.eye.y, 0.0);
 
-        self.sun_position_camera_adjusted = self.sun_position;
-        self.sun_target_camera_adjusted = self.sun_target;
-        self.sun_position_camera_adjusted.y += sun_y_adjust;
-        self.sun_target_camera_adjusted.y += sun_y_adjust;
+        self.sun_position_camera_adjusted = self.sun_position + sun_adjust;
+        self.sun_target_camera_adjusted = self.sun_target + sun_adjust;
     }
 
     pub fn vertex_data_for_sunlight(&self) -> QuadListRenderData {
@@ -86,7 +93,7 @@ impl LightUniform {
             vertex_data: vec![],
             index_data: vec![],
         };
-        
+
         // HACK: using inverse() and modifying the projection coords is jank, but it matches up
         // with what I see on screen...
         let mut ortho_coords = self.sunlight_ortho_proj_coords.clone();
