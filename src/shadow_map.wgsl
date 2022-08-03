@@ -81,5 +81,15 @@ fn vs_main(
     return out;
 }
 
+ struct FragmentOutput {
+   @builtin(frag_depth) depth: f32,
+   @builtin(sample_mask) mask_out: u32
+ }
+
 @fragment
-fn fs_main(vertex: VertexOutput) {}
+fn fs_main(vertex: VertexOutput, @builtin(sample_mask) mask_in: u32) -> FragmentOutput {
+    var frag_out: FragmentOutput;
+    frag_out.mask_out = mask_in;
+    frag_out.depth = vertex.clip_position.z;
+    return frag_out;
+}
