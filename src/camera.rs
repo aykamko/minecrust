@@ -277,6 +277,14 @@ impl CameraController {
                         self.is_sprint_pressed = is_pressed;
                         true
                     }
+                    VirtualKeyCode::Minus => {
+                        self._speed *= 0.5;
+                        true
+                    }
+                    VirtualKeyCode::Equals => {
+                        self._speed *= 2.0;
+                        true
+                    }
                     _ => false,
                 }
             }
