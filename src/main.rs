@@ -65,6 +65,7 @@ struct Scene {
     vertex_buffers: [wgpu::Buffer; 2],
     index_buffers: [wgpu::Buffer; 2],
     index_counts: [usize; 2],
+    albedo_only_texture_bind_group: wgpu::BindGroup,
     texture_bind_group: wgpu::BindGroup,
     camera_bind_group: wgpu::BindGroup,
     light_bind_group: wgpu::BindGroup,
@@ -507,6 +508,29 @@ fn setup_scene(
     world_state: &mut world::WorldState,
     camera: &camera::Camera,
 ) -> Scene {
+    let albedo_only_texture_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                // Texture Atlas
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
     let texture_bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -597,7 +621,11 @@ fn setup_scene(
         layout: Some(
             &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
+                bind_group_layouts: &[
+                    &camera_bind_group_layout,
+                    &light_bind_group_layout,
+                    &albedo_only_texture_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             }),
         ),
@@ -810,6 +838,20 @@ fn setup_scene(
     );
 
     // Create bind groups
+    let albedo_only_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &albedo_only_texture_bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&texture_atlas.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&texture_atlas.sampler),
+            },
+        ],
+        label: None,
+    });
     let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &texture_bind_group_layout,
         entries: &[
@@ -932,6 +974,7 @@ fn setup_scene(
         vertex_buffers,
         index_buffers,
         index_counts,
+        albedo_only_texture_bind_group,
         texture_bind_group,
         camera_bind_group,
         light_bind_group,
@@ -1028,6 +1071,7 @@ fn render_scene(
         rpass.set_pipeline(&scene.shadow_map_pipeline);
         rpass.set_bind_group(0, &scene.camera_bind_group, &[]);
         rpass.set_bind_group(1, &scene.light_bind_group, &[]);
+        rpass.set_bind_group(2, &scene.albedo_only_texture_bind_group, &[]);
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
@@ -1070,7 +1114,11 @@ fn render_scene(
         rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
         rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
 
-        for data_type in [ChunkDataType::Opaque, ChunkDataType::Transluscent, ChunkDataType::SemiTransluscent] {
+        for data_type in [
+            ChunkDataType::Opaque,
+            ChunkDataType::Transluscent,
+            ChunkDataType::SemiTransluscent,
+        ] {
             for chunk_idx in scene.chunk_order.iter().rev() {
                 render_chunk(&mut rpass, scene, world_state, *chunk_idx, data_type);
             }

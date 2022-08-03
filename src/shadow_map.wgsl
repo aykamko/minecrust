@@ -34,15 +34,19 @@ fn mat4_from_position(pos: vec4<f32>) -> mat4x4<f32> {
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
+    @location(1) tex_coord: vec2<f32>,
 }
 
 struct VertexOutput {
+    @location(0) tex_coord: vec2<f32>,
     @builtin(position) clip_position: vec4<f32>,
+    @location(1) texture_atlas_offset: vec2<f32>,
 }
 
 struct InstanceInput {
     @location(4) instance_position: vec4<f32>,
     @location(5) rotation_quaternion: vec4<f32>,
+    @location(9) texture_atlas_offset: vec2<f32>,
 }
 
 struct CameraUniform {
@@ -72,7 +76,9 @@ fn vs_main(
 
     var out: VertexOutput;
     let world_position = translate_matrix * vertex.position;
+    out.tex_coord = vertex.tex_coord;
     out.clip_position = light.light_space_matrix * world_position;
+    out.texture_atlas_offset = instance.texture_atlas_offset;
 
     // From here:
     // https://github.com/gfx-rs/wgpu/pull/71/files#diff-f91eefe904403aab76f6354857e063ff33ad277b5f046091ae1a92d9e18f8276R16-R17
@@ -81,6 +87,11 @@ fn vs_main(
     return out;
 }
 
+@group(2) @binding(0)
+var t_diffuse: texture_2d<f32>;
+@group(2) @binding(1)
+var s_diffuse: sampler;
+
  struct FragmentOutput {
    @builtin(frag_depth) depth: f32,
    @builtin(sample_mask) mask_out: u32
@@ -88,6 +99,11 @@ fn vs_main(
 
 @fragment
 fn fs_main(vertex: VertexOutput, @builtin(sample_mask) mask_in: u32) -> FragmentOutput {
+    var unit_offset: f32 = 1.0 / 32.0;
+    var atlas_scaled_coords = vertex.tex_coord / 32.0;
+    var offset_coords = atlas_scaled_coords + (unit_offset * vertex.texture_atlas_offset);
+    var base_color = textureSample(t_diffuse, s_diffuse, offset_coords);
+
     var frag_out: FragmentOutput;
     frag_out.mask_out = mask_in;
     frag_out.depth = vertex.clip_position.z;
