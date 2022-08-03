@@ -314,8 +314,13 @@ fn shadow_calculation_rbsm(light_space_pos: vec4<f32>) -> vec4<f32> {
 
 let SHADOW_INTENSITY = 0.66;
 
+struct FragmentOutput {
+  @builtin(frag_depth) depth: f32,
+  @location(0) color: vec4<f32>,
+}
+
 @fragment
-fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(vertex: VertexOutput) -> FragmentOutput {
     var unit_offset: f32 = 1.0 / 32.0;
     var atlas_scaled_coords = vertex.tex_coord / 32.0;
     var offset_coords = atlas_scaled_coords + (unit_offset * vertex.texture_atlas_offset);
@@ -353,7 +358,12 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
     shadow = select(0.0, SHADOW_INTENSITY, shadow == 1.0);
 
     let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
-    return vec4<f32>(lighted_color, color.a);
+
+    var frag_out: FragmentOutput;
+    frag_out.depth = select(vertex.clip_position.z, 1.1, base_color.a == 0.0);
+    frag_out.color = vec4<f32>(lighted_color, color.a);
+
+    return frag_out;
 
     // DEBUG
     // var shadow_debug = shadow_calculation_rbsm(vertex.light_space_position);

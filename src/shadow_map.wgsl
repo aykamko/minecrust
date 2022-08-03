@@ -92,10 +92,9 @@ var t_diffuse: texture_2d<f32>;
 @group(2) @binding(1)
 var s_diffuse: sampler;
 
- struct FragmentOutput {
-   @builtin(frag_depth) depth: f32,
-   @builtin(sample_mask) mask_out: u32
- }
+struct FragmentOutput {
+  @builtin(frag_depth) depth: f32,
+}
 
 @fragment
 fn fs_main(vertex: VertexOutput, @builtin(sample_mask) mask_in: u32) -> FragmentOutput {
@@ -105,7 +104,6 @@ fn fs_main(vertex: VertexOutput, @builtin(sample_mask) mask_in: u32) -> Fragment
     var base_color = textureSample(t_diffuse, s_diffuse, offset_coords);
 
     var frag_out: FragmentOutput;
-    frag_out.mask_out = mask_in;
     frag_out.depth = select(vertex.clip_position.z, 1.1, base_color.a == 0.0);
     return frag_out;
 }
