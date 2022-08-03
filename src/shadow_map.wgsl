@@ -106,6 +106,6 @@ fn fs_main(vertex: VertexOutput, @builtin(sample_mask) mask_in: u32) -> Fragment
 
     var frag_out: FragmentOutput;
     frag_out.mask_out = mask_in;
-    frag_out.depth = vertex.clip_position.z;
+    frag_out.depth = select(vertex.clip_position.z, 1.1, base_color.a == 0.0);
     return frag_out;
 }
