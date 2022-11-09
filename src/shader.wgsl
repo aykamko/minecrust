@@ -348,22 +348,25 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput {
     let specular_strength = pow(max(dot(vertex.world_normal, half_dir), 0.0), 32.0);
     let specular_color = light.color * specular_strength;
 
-    // Basic shadow
-    // let shadow = shadow_calculation_naive(vertex.light_space_position);
-    // let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
-    // return vec4<f32>(lighted_color, color.a);
-
-    var shadow_debug = shadow_calculation_rbsm(vertex.light_space_position);
-    var shadow = 1.0 - shadow_debug.z;
-    shadow = select(0.0, SHADOW_INTENSITY, shadow == 1.0);
-
-    let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
-
     var frag_out: FragmentOutput;
+
+    // Basic shadow
+    let shadow = shadow_calculation_naive(vertex.light_space_position);
+    let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
     frag_out.depth = select(vertex.clip_position.z, 1.1, base_color.a == 0.0);
     frag_out.color = vec4<f32>(lighted_color, color.a);
-
     return frag_out;
+
+    // var shadow_debug = shadow_calculation_rbsm(vertex.light_space_position);
+    // var shadow = 1.0 - shadow_debug.z;
+    // shadow = select(0.0, SHADOW_INTENSITY, shadow == 1.0);
+
+    // let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
+
+    // frag_out.depth = select(vertex.clip_position.z, 1.1, base_color.a == 0.0);
+    // frag_out.color = vec4<f32>(lighted_color, color.a);
+
+    // return frag_out;
 
     // DEBUG
     // var shadow_debug = shadow_calculation_rbsm(vertex.light_space_position);
