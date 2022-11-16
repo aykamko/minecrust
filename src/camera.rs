@@ -1,7 +1,6 @@
 use core::num;
 
 use crate::world::CHUNK_XZ_SIZE;
-// #[cfg(not(target_arch = "wasm32"))]
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
 use collision::{Aabb3, Frustum, Plane};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};

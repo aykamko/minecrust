@@ -8,7 +8,6 @@ pub mod face;
 pub mod instance;
 pub mod light;
 pub mod map_generation;
-// pub mod pipeline;
 pub mod spawner;
 pub mod texture;
 pub mod vec_extra;
@@ -876,10 +875,12 @@ fn setup_scene(
     // Shadow Map
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-            // HACK: this will break shadows
+            // HACK: both of these will break shadows
             let border_color = None;
+            let clamp = wgpu::AddressMode::ClampToEdge;
         } else {
             let border_color = Some(wgpu::SamplerBorderColor::OpaqueWhite);
+            let clamp = wgpu::AddressMode::ClampToBorder;
         }
     }
     let shadow_map_texture = texture::Texture::create_depth_texture(
@@ -887,9 +888,9 @@ fn setup_scene(
         &device,
         light_uniform.shadow_map_pixel_size,
         &wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: clamp,
+            address_mode_v: clamp,
+            address_mode_w: clamp,
             border_color: border_color,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
