@@ -1125,21 +1125,25 @@ impl WorldState {
         return block_at_pos.block_type.is_collidable();
     }
 
-    pub fn collision_from_ray(
+    pub fn collision_normal_from_ray(
         &self,
         origin: &cgmath::Point3<f32>,
-        target: &cgmath::Point3<f32>,
-    ) -> bool {
+        original_target: &cgmath::Point3<f32>,
+    ) -> Option<Vector3<f32>> {
+
+        let direction = (original_target - origin).normalize();
+        // Scoot target forward 0.5 units
+        let target = original_target + (direction / 2.0);
+
         let block_at_pos = self.get_block(target.x as usize, target.y as usize, target.z as usize);
         if !block_at_pos.block_type.is_collidable() {
-            return false;
+            return None;
         }
 
         let cube = Point3::new(target.x.floor(), target.y.floor(), target.z.floor());
         let collision_cube =
             collision::Aabb3::new(cube, Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0));
 
-        let direction = target - origin;
         let collision_ray = collision::Ray::new(*origin, direction);
 
         let maybe_collision_point = collision_ray.intersection(&collision_cube);
@@ -1148,29 +1152,29 @@ impl WorldState {
             // Get the collision normal
             let collision_normal = if collision_point.x - collision_point.x.floor() == 0.0 {
                 if collision_point.x == cube.x {
-                    Vector3::new(-1.0, 0.0, 0.0)
+                    Some(Vector3::new(-1.0, 0.0, 0.0))
                 } else {
-                    Vector3::new(1.0, 0.0, 0.0)
+                    Some(Vector3::new(1.0, 0.0, 0.0))
                 }
             } else if collision_point.y - collision_point.y.floor() == 0.0 {
                 if collision_point.y == cube.y {
-                    Vector3::new(0.0, -1.0, 0.0)
+                    Some(Vector3::new(0.0, -1.0, 0.0))
                 } else {
-                    Vector3::new(0.0, 1.0, 0.0)
+                    Some(Vector3::new(0.0, 1.0, 0.0))
                 }
             } else if collision_point.z - collision_point.z.floor() == 0.0 {
                 if collision_point.z == cube.z {
-                    Vector3::new(0.0, 0.0, -1.0)
+                    Some(Vector3::new(0.0, 0.0, -1.0))
                 } else {
-                    Vector3::new(0.0, 0.0, 1.0)
+                    Some(Vector3::new(0.0, 0.0, 1.0))
                 }
             } else {
-                Vector3::new(0.0, 0.0, 0.0)
+                return None
             };
-            println!("Normal is {:?}", collision_normal);
-            return true;
+            // println!("Normal is {:?}", collision_normal);
+            return collision_normal;
         } else {
-            return false;
+            return None;
         }
     }
 

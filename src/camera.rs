@@ -395,11 +395,25 @@ impl CameraController {
         }
 
         if did_move {
-            let maybe_collision = world_state.collision_from_ray(&camera.eye, &next_eye);
-            if maybe_collision {
-                // Abort camera movement due to collision
-                did_move = false;
+            let maybe_collision_normal = world_state.collision_normal_from_ray(&camera.eye, &next_eye);
+            if let Some(collision_normal) = maybe_collision_normal {
+                if collision_normal.x != 0.0 {
+                    next_eye.x = camera.eye.x;
+                    next_target.x = camera.target.x;
+                }
+                if collision_normal.y != 0.0 {
+                    next_eye.y = camera.eye.y;
+                    next_target.y = camera.target.y;
+                }
+                if collision_normal.z != 0.0 {
+                    next_eye.z = camera.eye.z;
+                    next_target.z = camera.target.z;
+                }
             }
+            // if maybe_collision {
+            //     // Abort camera movement due to collision
+            //     did_move = false;
+            // }
         }
 
         if did_move {
