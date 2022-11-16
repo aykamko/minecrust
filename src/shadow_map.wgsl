@@ -97,7 +97,7 @@ struct FragmentOutput {
 }
 
 @fragment
-fn fs_main(vertex: VertexOutput, @builtin(sample_mask) mask_in: u32) -> FragmentOutput {
+fn fs_main(vertex: VertexOutput) -> FragmentOutput {
     var unit_offset: f32 = 1.0 / 32.0;
     var atlas_scaled_coords = vertex.tex_coord / 32.0;
     var offset_coords = atlas_scaled_coords + (unit_offset * vertex.texture_atlas_offset);
