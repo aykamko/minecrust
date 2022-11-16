@@ -37,6 +37,15 @@ use wasm_bindgen::prelude::*;
 
 #[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
 pub fn run() {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
+        } else {
+            env_logger::init();
+        }
+    }
+
     let s = block_on(setup());
     start(s);
 }
@@ -107,6 +116,7 @@ async fn setup() -> Setup {
         surface
     };
 
+    log::warn!("WGPU setup");
     let adapter =
         wgpu::util::initialize_adapter_from_env_or_default(&instance, backend, Some(&surface))
             .await
@@ -115,7 +125,8 @@ async fn setup() -> Setup {
     let adapter_info = adapter.get_info();
     println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
 
-    // let trace_dir = std::env::var("WGPU_TRACE");
+    log::warn!("Requesting device");
+    let trace_dir = std::env::var("WGPU_TRACE");
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
@@ -123,8 +134,7 @@ async fn setup() -> Setup {
                 features: adapter.features(),
                 limits: adapter.limits(),
             },
-            None,
-            // trace_dir.ok().as_ref().map(std::path::Path::new),
+            trace_dir.ok().as_ref().map(std::path::Path::new),
         )
         .await
         .expect("Unable to find a suitable GPU adapter!");
