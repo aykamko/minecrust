@@ -12,7 +12,7 @@ use std::char::MAX;
 use std::collections::HashSet;
 use std::convert::Into;
 use std::ops::Mul;
-#[cfg(not(target_arch = "wasm32"))]
+// #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
 const VERBOSE_LOGS: bool = false;

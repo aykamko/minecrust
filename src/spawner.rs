@@ -28,7 +28,7 @@ pub struct Spawner {}
 
 #[cfg(target_arch = "wasm32")]
 impl Spawner {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {}
     }
 
