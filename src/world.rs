@@ -1125,6 +1125,39 @@ impl WorldState {
         return block_at_pos.block_type.is_collidable();
     }
 
+    pub fn collision_from_ray(
+        &self,
+        origin: &cgmath::Point3<f32>,
+        target: &cgmath::Point3<f32>,
+    ) -> Option<parry3d::query::RayIntersection> {
+        use parry3d::query::RayCast;
+
+        let direction = target - origin;
+        let block_at_pos = self.get_block(target.x as usize, target.y as usize, target.z as usize);
+        if !block_at_pos.block_type.is_collidable() {
+            return None;
+        }
+
+        let collider_cuboid =
+            parry3d::shape::Cuboid::new(parry3d::math::Vector::new(0.5, 0.5, 0.5));
+        let collider_ray = parry3d::query::details::Ray::new(
+            parry3d::math::Point::new(origin.x, origin.y, origin.z),
+            parry3d::math::Vector::new(direction.x, direction.y, direction.z),
+        );
+
+        let cuboid_translation = parry3d::math::Isometry::new(
+            parry3d::math::Vector::new(target.x.floor(), target.y.floor(), target.z.floor()),
+            parry3d::math::Vector::new(0.0, 0.0, 0.0),
+        );
+
+        return collider_cuboid.cast_ray_and_get_normal(
+            &cuboid_translation,
+            &collider_ray,
+            f32::max_value(),
+            true,
+        );
+    }
+
     fn get_affected_chunks(&self, block_pos: &cgmath::Point3<usize>) -> Vec<[usize; 2]> {
         let (collider_x, collider_z) = (block_pos.x, block_pos.z);
         let (colliding_chunk_x, colliding_chunk_z) = (

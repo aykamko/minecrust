@@ -318,6 +318,7 @@ impl CameraController {
             pre_update_block_location.z / CHUNK_XZ_SIZE,
         ];
         let mut did_move = false;
+        let mut did_translate = false;
 
         // Vector pointing out of the camera's eye towards the target
         let forward = camera.target - camera.eye;
@@ -332,11 +333,13 @@ impl CameraController {
         //if self.is_forward_pressed && forward_mag > self.speed {
         if self.is_forward_pressed {
             did_move = true;
+            did_translate = true;
             next_eye += forward_norm * self.speed();
             next_target += forward_norm * self.speed();
         }
         if self.is_backward_pressed {
             did_move = true;
+            did_translate = true;
             next_eye -= forward_norm * self.speed();
             next_target -= forward_norm * self.speed();
         }
@@ -346,22 +349,26 @@ impl CameraController {
 
         if self.is_right_pressed {
             did_move = true;
+            did_translate = true;
             next_eye += right_norm * self.speed();
             next_target += right_norm * self.speed();
         }
         if self.is_left_pressed {
             did_move = true;
+            did_translate = true;
             next_eye -= right_norm * self.speed();
             next_target -= right_norm * self.speed();
         }
 
         if self.is_space_pressed {
             did_move = true;
+            did_translate = true;
             next_eye += camera.world_up * self.speed();
             next_target += camera.world_up * self.speed();
         }
         if self.is_shift_pressed {
             did_move = true;
+            did_translate = true;
             next_eye -= camera.world_up * self.speed();
             next_target -= camera.world_up * self.speed();
         }
@@ -371,26 +378,34 @@ impl CameraController {
 
         let (x_delta, y_delta) = self.last_mouse_delta;
         if y_delta != 0.0 {
-            did_move = true;
             let theta = cgmath::Rad((-y_delta * self.mouse_sensitivity) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(right_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;
-            next_target = next_target + forward_diff;
+            did_translate = true;
+            next_target += forward_diff;
         }
         if x_delta != 0.0 {
-            did_move = true;
             let theta = cgmath::Rad((-x_delta * self.mouse_sensitivity) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(up_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;
-            next_target = next_target + forward_diff;
+            did_translate = true;
+            next_target += forward_diff;
         }
 
-        if world_state.block_collidable_at_point(&next_eye) {
-            did_move = false;
-        } else {
+        if did_move {
+            let maybe_collision = world_state.collision_from_ray(&camera.eye, &next_eye);
+            if !maybe_collision.is_none() {
+                // Abort camera movement due to collision
+                did_move = false;
+            }
+        }
+
+        if did_move {
             camera.eye = next_eye;
+        }
+        if did_translate {
             camera.target = next_target;
         }
 
