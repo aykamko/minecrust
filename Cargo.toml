@@ -30,7 +30,6 @@ cfg-if = "1"
 env_logger = "0.9"
 log = "0.4"
 palette = "0.5"
-parry3d = { version = "0.11", features = ["dim3"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = {version = "0.2", default-features = false, features = ["js"]}

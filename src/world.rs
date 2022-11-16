@@ -5,7 +5,7 @@ use bitmaps::Bitmap;
 use rand::prelude::SliceRandom;
 
 use super::instance::InstanceRaw;
-use cgmath::{prelude::*, MetricSpace, Point3};
+use cgmath::{prelude::*, MetricSpace, Point3, Vector3};
 use collision::Continuous;
 use rand::Rng;
 use std::char::MAX;
@@ -1142,9 +1142,36 @@ impl WorldState {
         let direction = target - origin;
         let collision_ray = collision::Ray::new(*origin, direction);
 
-        let collision_point = collision_ray.intersection(&collision_cube);
+        let maybe_collision_point = collision_ray.intersection(&collision_cube);
 
-        return collision_point.is_some();
+        if let Some(collision_point) = maybe_collision_point {
+            // Get the collision normal
+            let collision_normal = if collision_point.x - collision_point.x.floor() == 0.0 {
+                if collision_point.x == cube.x {
+                    Vector3::new(-1.0, 0.0, 0.0)
+                } else {
+                    Vector3::new(1.0, 0.0, 0.0)
+                }
+            } else if collision_point.y - collision_point.y.floor() == 0.0 {
+                if collision_point.y == cube.y {
+                    Vector3::new(0.0, -1.0, 0.0)
+                } else {
+                    Vector3::new(0.0, 1.0, 0.0)
+                }
+            } else if collision_point.z - collision_point.z.floor() == 0.0 {
+                if collision_point.z == cube.z {
+                    Vector3::new(0.0, 0.0, -1.0)
+                } else {
+                    Vector3::new(0.0, 0.0, 1.0)
+                }
+            } else {
+                Vector3::new(0.0, 0.0, 0.0)
+            };
+            println!("Normal is {:?}", collision_normal);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     fn get_affected_chunks(&self, block_pos: &cgmath::Point3<usize>) -> Vec<[usize; 2]> {
