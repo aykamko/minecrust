@@ -12,7 +12,7 @@ use std::char::MAX;
 use std::collections::HashSet;
 use std::convert::Into;
 use std::ops::Mul;
-// #[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
 const VERBOSE_LOGS: bool = false;
@@ -168,9 +168,10 @@ pub const CHUNK_Y_SIZE: usize = 256;
 pub const NUM_BLOCKS_IN_CHUNK: usize = CHUNK_XZ_SIZE * CHUNK_Y_SIZE * CHUNK_XZ_SIZE;
 
 // The largest the world can be in xz dimension
-pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
+//pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
+pub const MAX_CHUNK_WORLD_WIDTH: usize = 64;
 // How many chunks are visible in xz dimension
-pub const VISIBLE_CHUNK_WIDTH: usize = 32;
+pub const VISIBLE_CHUNK_WIDTH: usize = 8;
 
 const CHUNK_DOES_NOT_EXIST_VALUE: u32 = u32::max_value();
 pub const NO_RENDER_DESCRIPTOR_INDEX: usize = usize::max_value();
@@ -557,6 +558,7 @@ impl WorldState {
     }
 
     pub fn maybe_allocate_chunk(&mut self, outer_chunk_idx: [usize; 2]) {
+        #[cfg(not(target_arch = "wasm32"))]
         let func_start = Instant::now();
 
         let mut allocate_inner = |inner_chunk_idx: [usize; 2]| {
@@ -588,6 +590,7 @@ impl WorldState {
         allocate_inner([chunk_x + 1, chunk_z]);
         allocate_inner([chunk_x + 1, chunk_z + 1]);
 
+        #[cfg(not(target_arch = "wasm32"))]
         vprintln!(
             "Took {}ms to allocate memory",
             func_start.elapsed().as_millis()
@@ -597,6 +600,7 @@ impl WorldState {
             self.generate_chunk(outer_chunk_idx)
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         vprintln!(
             "Took {}ms to process elevation map",
             func_start.elapsed().as_millis()
@@ -687,6 +691,7 @@ impl WorldState {
     }
 
     pub fn generate_world_data(&mut self, camera: &Camera) -> (Vec2d<ChunkData>, Vec<[usize; 2]>) {
+        #[cfg(not(target_arch = "wasm32"))]
         let func_start = Instant::now();
 
         let mut all_chunk_data: Vec2d<ChunkData> = Vec2d::new(
@@ -709,11 +714,14 @@ impl WorldState {
                 self.compute_chunk_mesh([abs_chunk_x, abs_chunk_z], camera);
         }
 
-        let elapsed_time = func_start.elapsed().as_millis();
-        println!(
-            "Took {}ms to generate whole world vertex data",
-            elapsed_time
-        );
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let elapsed_time = func_start.elapsed().as_millis();
+            println!(
+                "Took {}ms to generate whole world vertex data",
+                elapsed_time
+            );
+        }
 
         (all_chunk_data, self.get_chunk_order_by_distance(&camera))
     }

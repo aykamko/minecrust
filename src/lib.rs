@@ -40,7 +40,7 @@ pub fn run() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init_with_level(log::Level::Warn).expect("Couldn't initialize logger");
+            console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
         } else {
             env_logger::init();
         }
@@ -190,11 +190,20 @@ fn start(
 ) {
     let supported_formats = surface.get_supported_formats(&adapter);
     log::warn!("Supported formats: {:?}", supported_formats);
-    assert!(supported_formats.contains(&wgpu::TextureFormat::Bgra8Unorm));
+
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+           let chosen_format = wgpu::TextureFormat::Rgba8UnormSrgb;
+        } else {
+           let chosen_format = wgpu::TextureFormat::Bgra8Unorm;
+        }
+    };
+
+    assert!(supported_formats.contains(&chosen_format));
 
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: wgpu::TextureFormat::Bgra8Unorm,
+        format: chosen_format,
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
@@ -657,6 +666,7 @@ fn setup_scene(
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
+    log::info!("Creating shadow map render pipeline");
     let shadow_map_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(
@@ -694,6 +704,7 @@ fn setup_scene(
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
     });
+    log::info!("Shadow map render pipeline complete");
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
@@ -705,6 +716,7 @@ fn setup_scene(
         push_constant_ranges: &[],
     });
 
+    log::info!("Creating forward-pass render pipeline");
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
