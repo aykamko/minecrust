@@ -8,6 +8,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 futures = "0.3"
 bytemuck = { version = "1.9.1", features = ["derive"] }
@@ -23,6 +26,20 @@ bmp = "0.5.0"
 permutation = "0.4.0"
 glam = "0.21.2"
 rand = "0.8.5"
+cfg-if = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = {version = "0.2", default-features = false, features = ["custom"]}
+console_error_panic_hook = "0.1.6"
+console_log = "0.2.0"
+wgpu = { version = "0.13.1", features = ["webgl"]}
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4.30"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Window",
+    "Element",
+]}
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-executor = "1.0"
