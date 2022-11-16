@@ -4,6 +4,7 @@ extern crate itertools;
 extern crate bmp;
 
 pub mod camera;
+pub mod color;
 pub mod face;
 pub mod instance;
 pub mod light;
@@ -13,7 +14,6 @@ pub mod texture;
 pub mod vec_extra;
 pub mod vertex;
 pub mod world;
-pub mod color;
 
 use cgmath::{prelude::*, Point3};
 use futures::executor::block_on;
@@ -121,8 +121,8 @@ async fn setup() -> Setup {
     {
         // Winit prevents sizing with CSS, so we have to set
         // the size manually when on web.
-        use winit::dpi::PhysicalSize;
-        window.set_inner_size(PhysicalSize::new(1024, 1024));
+        use winit::dpi::LogicalSize;
+        window.set_inner_size(LogicalSize::new(1024, 1024));
 
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
@@ -352,7 +352,7 @@ fn start(
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                let update_result = camera_controller.update_camera(&mut camera);
+                let update_result = camera_controller.update_camera(&mut camera, &world_state);
                 camera_uniform.update_view_proj(&camera);
                 queue.write_buffer(
                     &scene.camera_staging_buf,

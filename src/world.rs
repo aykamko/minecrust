@@ -69,6 +69,7 @@ impl BlockType {
         match *self {
             BlockType::Empty => false,
             BlockType::Water => false,
+            BlockType::RedFlower => false,
             _ => true,
         }
     }
@@ -1117,6 +1118,11 @@ impl WorldState {
         } else {
             None
         }
+    }
+
+    pub fn block_collidable_at_point(&self, point: &cgmath::Point3<f32>) -> bool {
+        let block_at_pos = self.get_block(point.x as usize, point.y as usize, point.z as usize);
+        return block_at_pos.block_type.is_collidable();
     }
 
     fn get_affected_chunks(&self, block_pos: &cgmath::Point3<usize>) -> Vec<[usize; 2]> {

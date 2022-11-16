@@ -1,5 +1,3 @@
-use core::num;
-
 use crate::world::CHUNK_XZ_SIZE;
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
 use collision::{Aabb3, Frustum, Plane};
@@ -272,7 +270,7 @@ impl CameraController {
                         self.is_shift_pressed = is_pressed;
                         true
                     }
-                    VirtualKeyCode::LControl | VirtualKeyCode::RControl  => {
+                    VirtualKeyCode::LControl | VirtualKeyCode::RControl => {
                         self.is_sprint_pressed = is_pressed;
                         true
                     }
@@ -305,7 +303,11 @@ impl CameraController {
         self.last_mouse_delta = (0.0, 0.0);
     }
 
-    pub fn update_camera(&mut self, camera: &mut Camera) -> CameraUpdateResult {
+    pub fn update_camera(
+        &mut self,
+        camera: &mut Camera,
+        world_state: &crate::world::WorldState,
+    ) -> CameraUpdateResult {
         let pre_update_block_location = cgmath::Point3::<usize>::new(
             camera.eye.x as usize,
             camera.eye.y as usize,
@@ -322,18 +324,21 @@ impl CameraController {
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
 
+        let mut next_eye = camera.eye;
+        let mut next_target = camera.target;
+
         // Prevents glitching when camera gets too close to the
         // center of the scene.
         //if self.is_forward_pressed && forward_mag > self.speed {
         if self.is_forward_pressed {
             did_move = true;
-            camera.eye += forward_norm * self.speed();
-            camera.target += forward_norm * self.speed();
+            next_eye += forward_norm * self.speed();
+            next_target += forward_norm * self.speed();
         }
         if self.is_backward_pressed {
             did_move = true;
-            camera.eye -= forward_norm * self.speed();
-            camera.target -= forward_norm * self.speed();
+            next_eye -= forward_norm * self.speed();
+            next_target -= forward_norm * self.speed();
         }
 
         // Strafing vector
@@ -341,24 +346,24 @@ impl CameraController {
 
         if self.is_right_pressed {
             did_move = true;
-            camera.eye += right_norm * self.speed();
-            camera.target += right_norm * self.speed();
+            next_eye += right_norm * self.speed();
+            next_target += right_norm * self.speed();
         }
         if self.is_left_pressed {
             did_move = true;
-            camera.eye -= right_norm * self.speed();
-            camera.target -= right_norm * self.speed();
+            next_eye -= right_norm * self.speed();
+            next_target -= right_norm * self.speed();
         }
 
         if self.is_space_pressed {
             did_move = true;
-            camera.eye += camera.world_up * self.speed();
-            camera.target += camera.world_up * self.speed();
+            next_eye += camera.world_up * self.speed();
+            next_target += camera.world_up * self.speed();
         }
         if self.is_shift_pressed {
             did_move = true;
-            camera.eye -= camera.world_up * self.speed();
-            camera.target -= camera.world_up * self.speed();
+            next_eye -= camera.world_up * self.speed();
+            next_target -= camera.world_up * self.speed();
         }
 
         // "Vertical" strafing vector
@@ -371,8 +376,7 @@ impl CameraController {
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(right_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;
-            let new_target = camera.target + forward_diff;
-            camera.target = new_target;
+            next_target = next_target + forward_diff;
         }
         if x_delta != 0.0 {
             did_move = true;
@@ -380,8 +384,14 @@ impl CameraController {
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(up_norm, theta);
             let new_forward = rot.rotate_vector(forward_norm) * forward_mag;
             let forward_diff = new_forward - forward;
-            let new_target = camera.target + forward_diff;
-            camera.target = new_target;
+            next_target = next_target + forward_diff;
+        }
+
+        if world_state.block_collidable_at_point(&next_eye) {
+            did_move = false;
+        } else {
+            camera.eye = next_eye;
+            camera.target = next_target;
         }
 
         // Update view frustum
