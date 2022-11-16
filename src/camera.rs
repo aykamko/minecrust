@@ -396,7 +396,7 @@ impl CameraController {
 
         if did_move {
             let maybe_collision = world_state.collision_from_ray(&camera.eye, &next_eye);
-            if !maybe_collision.is_none() {
+            if maybe_collision {
                 // Abort camera movement due to collision
                 did_move = false;
             }
