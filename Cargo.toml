@@ -29,7 +29,7 @@ rand = "0.8.5"
 cfg-if = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = {version = "0.2", default-features = false, features = ["custom"]}
+getrandom = {version = "0.2", default-features = false, features = ["js"]}
 console_error_panic_hook = "0.1.6"
 console_log = "0.2.0"
 wgpu = { version = "0.13.1", features = ["webgl"]}
