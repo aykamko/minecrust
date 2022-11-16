@@ -32,10 +32,10 @@ use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
 
 const VERBOSE_LOGS: bool = false;
 
-#[cfg(target_arch="wasm32")]
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub fn run() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -107,8 +107,33 @@ async fn setup() -> Setup {
     });
     let window = builder.build(&event_loop).unwrap();
 
-    let backend = wgpu::Backends::PRIMARY;
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+           let backend = wgpu::Backends::GL;
+        } else {
+           let backend = wgpu::Backends::PRIMARY;
+        }
+    };
     let instance = wgpu::Instance::new(backend);
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Winit prevents sizing with CSS, so we have to set
+        // the size manually when on web.
+        use winit::dpi::PhysicalSize;
+        window.set_inner_size(PhysicalSize::new(1024, 1024));
+
+        use winit::platform::web::WindowExtWebSys;
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let dst = doc.get_element_by_id("wasm-example")?;
+                let canvas = web_sys::Element::from(window.canvas());
+                dst.append_child(&canvas).ok()?;
+                Some(())
+            })
+            .expect("Couldn't append canvas to document body.");
+    }
 
     let size = window.inner_size();
     let surface = unsafe {
@@ -164,6 +189,7 @@ fn start(
     }: Setup,
 ) {
     let supported_formats = surface.get_supported_formats(&adapter);
+    log::warn!("Supported formats: {:?}", supported_formats);
     assert!(supported_formats.contains(&wgpu::TextureFormat::Bgra8Unorm));
 
     let config = wgpu::SurfaceConfiguration {
