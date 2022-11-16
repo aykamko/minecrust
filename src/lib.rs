@@ -109,7 +109,7 @@ async fn setup() -> Setup {
 
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-           let backend = wgpu::Backends::GL;
+           let backend = wgpu::Backends::SECONDARY;
         } else {
            let backend = wgpu::Backends::PRIMARY;
         }
@@ -876,9 +876,9 @@ fn setup_scene(
         &device,
         light_uniform.shadow_map_pixel_size,
         &wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToBorder,
-            address_mode_v: wgpu::AddressMode::ClampToBorder,
-            address_mode_w: wgpu::AddressMode::ClampToBorder,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
             border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
