@@ -13,10 +13,12 @@ pub mod texture;
 pub mod vec_extra;
 pub mod vertex;
 pub mod world;
+pub mod color;
 
 use cgmath::{prelude::*, Point3};
 use futures::executor::block_on;
 use itertools::Itertools;
+use palette::Pixel;
 use spawner::Spawner;
 use std::{borrow::Cow, collections::HashSet, future::Future, mem, pin::Pin, task};
 use vertex::QuadListRenderData;
@@ -194,7 +196,7 @@ fn start(
         if #[cfg(target_arch = "wasm32")] {
            let chosen_format = wgpu::TextureFormat::Rgba8UnormSrgb;
         } else {
-           let chosen_format = wgpu::TextureFormat::Bgra8Unorm;
+           let chosen_format = wgpu::TextureFormat::Bgra8UnormSrgb;
         }
     };
 
@@ -1148,18 +1150,20 @@ fn render_scene(
     }
 
     {
+        let sky_color = wgpu::Color {
+            r: color::srgb_to_rgb(120.0 / 255.0),
+            g: color::srgb_to_rgb(167.0 / 255.0),
+            b: color::srgb_to_rgb(255.0 / 255.0),
+            a: 1.0,
+        };
+
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 120.0 / 255.0,
-                        g: 167.0 / 255.0,
-                        b: 255.0 / 255.0,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(sky_color),
                     store: true,
                 },
             })],
