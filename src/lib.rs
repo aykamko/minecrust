@@ -462,6 +462,7 @@ fn start(
                 }
 
                 if !chunk_mods.is_empty() {
+                    #[cfg(not(target_arch = "wasm32"))]
                     let chunk_mod_time = std::time::Instant::now();
 
                     chunk_mods.dedup();
@@ -469,6 +470,7 @@ fn start(
                     for chunk_mod in chunk_mods.iter() {
                         world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     if VERBOSE_LOGS && update_result.did_move_chunks {
                         println!(
                             "Took {}ms to allocate chunks",
@@ -499,6 +501,7 @@ fn start(
                         })
                         .collect::<Vec<_>>();
 
+                    #[cfg(not(target_arch = "wasm32"))]
                     if VERBOSE_LOGS && update_result.did_move_chunks {
                         println!(
                             "Took {}ms to update chunks",
@@ -871,6 +874,14 @@ fn setup_scene(
     });
 
     // Shadow Map
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            // HACK: this will break shadows
+            let border_color = None;
+        } else {
+            let border_color = Some(wgpu::SamplerBorderColor::OpaqueWhite);
+        }
+    }
     let shadow_map_texture = texture::Texture::create_depth_texture(
         "shadow_map_texture",
         &device,
@@ -879,7 +890,7 @@ fn setup_scene(
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
+            border_color: border_color,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
