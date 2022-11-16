@@ -115,7 +115,7 @@ async fn setup() -> Setup {
     let adapter_info = adapter.get_info();
     println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
 
-    let trace_dir = std::env::var("WGPU_TRACE");
+    // let trace_dir = std::env::var("WGPU_TRACE");
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
@@ -123,7 +123,8 @@ async fn setup() -> Setup {
                 features: adapter.features(),
                 limits: adapter.limits(),
             },
-            trace_dir.ok().as_ref().map(std::path::Path::new),
+            None,
+            // trace_dir.ok().as_ref().map(std::path::Path::new),
         )
         .await
         .expect("Unable to find a suitable GPU adapter!");
