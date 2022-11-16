@@ -130,6 +130,17 @@ var t_shadow_map: texture_2d<f32>;
 @group(0) @binding(3)
 var s_shadow_map: sampler;
 
+fn sample_shadow_map(coords: vec2<f32>) -> f32 {
+    let tex_sample = textureSample(t_shadow_map, s_shadow_map, coords).r;
+    // Simulates wgpu::AddressMode::ClampToBorder/GL_CLAMP_TO_BORDER + white border color.
+    // This mode isn't supported in WebGL
+    if (coords.x > 1.0 || coords.x < 0.0 || coords.y > 1.0 || coords.y < 0.0) {
+        return 1.0;
+    } else {
+        return tex_sample;
+    }
+}
+
 // https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 fn shadow_calculation_naive(fragPosLightSpace: vec4<f32>) -> f32 {
     // perform perspective divide ([-1, 1])
@@ -138,7 +149,7 @@ fn shadow_calculation_naive(fragPosLightSpace: vec4<f32>) -> f32 {
     projCoords = projCoords * 0.5 + 0.5;
     projCoords.y = 1.0 - projCoords.y;
     // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-    let closestDepth = textureSample(t_shadow_map, s_shadow_map, projCoords.xy).r; 
+    let closestDepth = sample_shadow_map(projCoords.xy);
     // get depth of current fragment from light's perspective
     let currentDepth = projCoords.z;
 
@@ -161,7 +172,7 @@ fn shadow_calculation_pcf(fragPosLightSpace: vec4<f32>) -> f32 {
     projCoords = projCoords * 0.5 + 0.5;
     projCoords.y = 1.0 - projCoords.y;
     // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-    let closestDepth = textureSample(t_shadow_map, s_shadow_map, projCoords.xy).r; 
+    let closestDepth = sample_shadow_map(projCoords.xy); 
     // get depth of current fragment from light's perspective
     let currentDepth = projCoords.z;
 
@@ -175,7 +186,7 @@ fn shadow_calculation_pcf(fragPosLightSpace: vec4<f32>) -> f32 {
         for (var y = -1; y <= 1; y++) {
             let offset = vec2<f32>(f32(x), f32(y));
             let sample_loc: vec2<f32> = projCoords.xy + offset * texel_size;
-            let pcf_depth = textureSample(t_shadow_map, s_shadow_map, sample_loc).r; 
+            let pcf_depth = sample_shadow_map(sample_loc); 
             pcf_shadow += select(0.0, 1.0, currentDepth - bias > pcf_depth);
         }    
     }
@@ -222,10 +233,10 @@ fn normalize_distance_to_shadow_edge(relative_distance: vec4<f32>) -> vec2<f32> 
 }
 
 fn compute_discontinuity(shadowmap_coords: vec3<f32>, texel_size: vec2<f32>) -> vec4<f32> {
-    let left = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(-1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
-    let right = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(1.0, 0.0) * texel_size).r, shadowmap_coords.z); 
-    let bottom = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, 1.0) * texel_size).r, shadowmap_coords.z);
-    let top = shadow_test(textureSample(t_shadow_map, s_shadow_map, shadowmap_coords.xy + vec2<f32>(0.0, -1.0) * texel_size).r, shadowmap_coords.z);
+    let left = shadow_test(sample_shadow_map(shadowmap_coords.xy + vec2<f32>(-1.0, 0.0) * texel_size), shadowmap_coords.z); 
+    let right = shadow_test(sample_shadow_map(shadowmap_coords.xy + vec2<f32>(1.0, 0.0) * texel_size), shadowmap_coords.z); 
+    let bottom = shadow_test(sample_shadow_map(shadowmap_coords.xy + vec2<f32>(0.0, 1.0) * texel_size), shadowmap_coords.z);
+    let top = shadow_test(sample_shadow_map(shadowmap_coords.xy + vec2<f32>(0.0, -1.0) * texel_size), shadowmap_coords.z);
 
     return abs(vec4<f32>(left, right, bottom, top) - 1.0);
 }
@@ -241,7 +252,7 @@ fn traverse_shadow_silhouette(initial_shadowmap_coords: vec3<f32>, texel_size: v
 
     for (var i = 0; i < MAX_SHADOW_EDGE_DISTANCE; i++) {
         let real_depth = current_coords.z;
-        let shadowmap_depth = textureSample(t_shadow_map, s_shadow_map, current_coords.xy).r;
+        let shadowmap_depth = sample_shadow_map(current_coords.xy);
         let s = shadow_test(shadowmap_depth, real_depth);
 
         if (s == 0.0) {
