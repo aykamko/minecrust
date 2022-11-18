@@ -1125,12 +1125,85 @@ impl WorldState {
         return block_at_pos.block_type.is_collidable();
     }
 
+    pub fn collision_normal_from_ray_2(
+        &self,
+        camera: &Camera,
+        next_eye: &cgmath::Point3<f32>,
+    ) -> Option<Vector3<f32>> {
+        let distance = (next_eye - camera.eye).magnitude().ceil() as usize;
+
+        let collider = self.get_colliding_block(camera, distance);
+
+        return match self.get_colliding_block(camera, distance) {
+            Some(collision) => {
+                let collision_point = collision.collision_point;
+                let block_pos = collision.block_pos;
+                // Get the collision normal
+                let collision_normal = if collision_point.x - collision_point.x.floor() == 0.0 {
+                    if collision_point.x as usize == block_pos.x {
+                        Some(Vector3::new(-1.0, 0.0, 0.0))
+                    } else {
+                        Some(Vector3::new(1.0, 0.0, 0.0))
+                    }
+                } else if collision_point.y - collision_point.y.floor() == 0.0 {
+                    if collision_point.y as usize == block_pos.y {
+                        Some(Vector3::new(0.0, -1.0, 0.0))
+                    } else {
+                        Some(Vector3::new(0.0, 1.0, 0.0))
+                    }
+                } else if collision_point.z - collision_point.z.floor() == 0.0 {
+                    if collision_point.z as usize == block_pos.z {
+                        Some(Vector3::new(0.0, 0.0, -1.0))
+                    } else {
+                        Some(Vector3::new(0.0, 0.0, 1.0))
+                    }
+                } else {
+                    return None;
+                };
+                // println!("Normal is {:?}", collision_normal);
+                return collision_normal;
+            }
+            None => None,
+        };
+        // if collider.is_none() {
+        //     return None;
+        // }
+
+        // if let Some(collision_point) = maybe_collision_point {
+        //     // Get the collision normal
+        //     let collision_normal = if collision_point.x - collision_point.x.floor() == 0.0 {
+        //         if collision_point.x == cube.x {
+        //             Some(Vector3::new(-1.0, 0.0, 0.0))
+        //         } else {
+        //             Some(Vector3::new(1.0, 0.0, 0.0))
+        //         }
+        //     } else if collision_point.y - collision_point.y.floor() == 0.0 {
+        //         if collision_point.y == cube.y {
+        //             Some(Vector3::new(0.0, -1.0, 0.0))
+        //         } else {
+        //             Some(Vector3::new(0.0, 1.0, 0.0))
+        //         }
+        //     } else if collision_point.z - collision_point.z.floor() == 0.0 {
+        //         if collision_point.z == cube.z {
+        //             Some(Vector3::new(0.0, 0.0, -1.0))
+        //         } else {
+        //             Some(Vector3::new(0.0, 0.0, 1.0))
+        //         }
+        //     } else {
+        //         return None
+        //     };
+        //     // println!("Normal is {:?}", collision_normal);
+        //     return collision_normal;
+        // } else {
+        //     return None;
+        // }
+    }
+
     pub fn collision_normal_from_ray(
         &self,
         origin: &cgmath::Point3<f32>,
         original_target: &cgmath::Point3<f32>,
     ) -> Option<Vector3<f32>> {
-
         let direction = (original_target - origin).normalize();
         // Scoot target forward 0.5 units
         let target = original_target + (direction / 2.0);
@@ -1141,6 +1214,7 @@ impl WorldState {
         }
 
         let cube = Point3::new(target.x.floor(), target.y.floor(), target.z.floor());
+        // TODO: need to get closest collision within all cubes along this ray
         let collision_cube =
             collision::Aabb3::new(cube, Point3::new(cube.x + 1.0, cube.y + 1.0, cube.z + 1.0));
 
@@ -1169,7 +1243,7 @@ impl WorldState {
                     Some(Vector3::new(0.0, 0.0, 1.0))
                 }
             } else {
-                return None
+                return None;
             };
             // println!("Normal is {:?}", collision_normal);
             return collision_normal;

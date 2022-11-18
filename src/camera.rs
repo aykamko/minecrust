@@ -395,7 +395,8 @@ impl CameraController {
         }
 
         if did_move {
-            let maybe_collision_normal = world_state.collision_normal_from_ray(&camera.eye, &next_eye);
+            let maybe_collision_normal =
+                world_state.collision_normal_from_ray_2(&camera, &next_eye);
             if let Some(collision_normal) = maybe_collision_normal {
                 if collision_normal.x != 0.0 {
                     next_eye.x = camera.eye.x;
@@ -410,10 +411,11 @@ impl CameraController {
                     next_target.z = camera.target.z;
                 }
             }
-            // if maybe_collision {
-            //     // Abort camera movement due to collision
-            //     did_move = false;
-            // }
+            if world_state.block_collidable_at_point(&next_eye) {
+                // Scoot camera backwards if there's a collision after sliding
+                let translate_vector = next_eye - camera.eye;
+                next_eye = camera.eye - translate_vector;
+            }
         }
 
         if did_move {
