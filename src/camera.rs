@@ -1,4 +1,4 @@
-use crate::world::CHUNK_XZ_SIZE;
+use crate::{world::CHUNK_XZ_SIZE, DomControlsUserEvent};
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
 use collision::{Aabb3, Frustum, Plane};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
@@ -296,6 +296,47 @@ impl CameraController {
                 true
             }
             _ => false,
+        }
+    }
+
+    pub fn process_web_dom_button_event(&mut self, event: &DomControlsUserEvent) -> bool {
+        match event {
+            DomControlsUserEvent::UpPressed => {
+                self.is_forward_pressed = true;
+                true
+            }
+            DomControlsUserEvent::UpReleased => {
+                self.is_forward_pressed = false;
+                true
+            }
+            DomControlsUserEvent::DownPressed => {
+                self.is_backward_pressed = true;
+                true
+            }
+            DomControlsUserEvent::DownReleased => {
+                self.is_backward_pressed = false;
+                true
+            }
+            DomControlsUserEvent::LeftPressed => {
+                self.is_left_pressed = true;
+                true
+            }
+            DomControlsUserEvent::LeftReleased => {
+                self.is_left_pressed = false;
+                true
+            }
+            DomControlsUserEvent::RightPressed => {
+                self.is_right_pressed = true;
+                true
+            }
+            DomControlsUserEvent::RightReleased => {
+                self.is_right_pressed = false;
+                true
+            }
+            _ => {
+                log::info!("got some other user event: {:?}", event);
+                false
+            }
         }
     }
 
