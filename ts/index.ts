@@ -13,5 +13,12 @@ import("../pkg/index").then((wasmModule) => {
   const leftButton = document.getElementsByClassName("left")[0];
   const rightButton = document.getElementsByClassName("right")[0];
 
+  upButton.addEventListener("touchstart", () => {
+    wasmModule.up_button_pressed();
+  });
+  upButton.addEventListener("mousedown", () => {
+    wasmModule.up_button_pressed();
+  });
+
   wasmModule.run(viewportWidth, viewportHeight);
 });
