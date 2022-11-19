@@ -36,8 +36,8 @@ const VERBOSE_LOGS: bool = false;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-pub fn run() {
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn run(width: usize, height: usize) {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -47,7 +47,7 @@ pub fn run() {
         }
     }
 
-    let s = block_on(setup());
+    let s = block_on(setup(width, height));
     start(s);
 }
 
@@ -98,13 +98,13 @@ struct Scene {
     pipeline_wire_no_instancing: Option<wgpu::RenderPipeline>,
 }
 
-async fn setup() -> Setup {
+async fn setup(width: usize, height: usize) -> Setup {
     let event_loop = EventLoop::new();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title("Minecrust");
     builder = builder.with_inner_size(winit::dpi::LogicalSize {
-        width: 1024,
-        height: 1024,
+        width: width as i32,
+        height: height as i32,
     });
     let window = builder.build(&event_loop).unwrap();
 
@@ -122,7 +122,7 @@ async fn setup() -> Setup {
         // Winit prevents sizing with CSS, so we have to set
         // the size manually when on web.
         use winit::dpi::LogicalSize;
-        window.set_inner_size(LogicalSize::new(1024, 1024));
+        window.set_inner_size(LogicalSize::new(width as i32, height as i32));
 
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()

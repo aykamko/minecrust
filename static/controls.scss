@@ -1,0 +1,202 @@
+.gameboy {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  flex-direction: column-reverse;
+
+  padding: 20px;
+  font-family: sans-serif;
+  -webkit-user-select: none;
+  cursor: default;
+
+  button {
+    display: block;
+    border-style: inset;
+    border: none;
+    padding: 0;
+  }
+
+  .controls {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+
+    .dpad {
+      position: relative;
+      display: inline-block;
+      width: 90px;
+      height: 90px;
+      z-index: 5;
+
+      > * {
+        width: 33%;
+        height: 33%;
+        position: absolute;
+        background-color: #565e6a;
+        cursor: pointer;
+
+        i {
+          position: relative;
+          display: block;
+          margin: 0 auto;
+          text-align: center;
+          height: 100%;
+          font-size: 28px;
+          color: #333a4a;
+          text-shadow: 0px -0.5px 0px #aaa;
+        }
+      }
+
+      .up {
+        top: calc(0% + 4px);
+        left: 33%;
+        border-top: 4px solid black;
+        border-left: 4px solid black;
+        border-right: 4px solid black;
+        border-radius: 5px 5px 0px 0px;
+
+        &:active {
+          background: linear-gradient(to top, #565e6a 0%, #333 100%);
+        }
+
+        i {
+          top: -5px;
+        }
+      }
+      .right {
+        top: 33%;
+        left: calc(66% - 4px);
+        border-top: 4px solid black;
+        border-bottom: 4px solid black;
+        border-right: 4px solid black;
+        border-radius: 0px 5px 5px 0px;
+        box-shadow: 0px -2px 0px #888 inset;
+
+        &:active {
+          background: linear-gradient(to right, #565e6a 0%, #333 100%);
+        }
+
+        i {
+          top: -5px;
+        }
+      }
+      .down {
+        top: calc(66% - 4px);
+        left: 33%;
+        border-left: 4px solid black;
+        border-bottom: 4px solid black;
+        border-right: 4px solid black;
+        border-radius: 0px 0px 5px 5px;
+        box-shadow: 0px -2px 0px #888 inset;
+
+        &:active {
+          background: linear-gradient(to bottom, #565e6a 0%, #333 100%);
+        }
+      }
+      .left {
+        top: 33%;
+        left: calc(0% + 4px);
+        border-top: 4px solid black;
+        border-bottom: 4px solid black;
+        border-left: 4px solid black;
+        border-radius: 5px 0px 0px 5px;
+        box-shadow: 0px -2px 0px #888 inset;
+
+        i {
+          top: -5px;
+        }
+
+        &:active {
+          background: linear-gradient(to left, #565e6a 0%, #333 100%);
+        }
+      }
+      .middle {
+        top: 33%;
+        left: 33%;
+        z-index: -5;
+        user-select: none;
+
+        &::after {
+          content: "";
+          position: absolute;
+          top: 20%;
+          left: 20%;
+          display: inline-block;
+          border: 1px solid #6e737a;
+          background: linear-gradient(
+            to bottom,
+            #6d7075 0%,
+            #6d7075 30%,
+            #23272f 70%,
+            #23272f 100%
+          );
+          border-radius: 50%;
+          height: 60%;
+          width: 60%;
+        }
+      }
+
+      .up-down {
+        background-color: #565e6a;
+        border: 4px solid black;
+        border-radius: 5px;
+        width: 20px;
+        height: 60px;
+      }
+      .left-right {
+        background-color: #565e6a;
+        border: 4px solid black;
+        border-radius: 5px;
+        width: 60px;
+        height: 20px;
+      }
+    }
+    .a-b {
+      position: relative;
+      display: inline-block;
+      width: 120px;
+      height: 90px;
+
+      .a,
+      .b {
+        position: absolute;
+        display: inline-block;
+        font-size: 22px;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        border-radius: 50%;
+        background-color: #2c313e;
+        border-bottom: 2px solid #888;
+        box-shadow: -1px 1px 5px black, 0px 0px 5px black inset;
+        text-shadow: 0px -1px 1px #888;
+        color: #2c313e;
+        text-align: center;
+        -webkit-user-select: none;
+        cursor: pointer;
+        transition: box-shadow 0.1s ease-out, border 0.1s ease-out,
+          line-height 0.2s ease-out;
+
+        &:active {
+          box-shadow: -1px 1px 1px black, 0px 0px 5px black inset;
+          border-width: 0px;
+          line-height: 45px;
+        }
+      }
+      .a {
+        top: 15px;
+        right: 10px;
+      }
+      .b {
+        top: 35px;
+        left: 0%;
+      }
+    }
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
