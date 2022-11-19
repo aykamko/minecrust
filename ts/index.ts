@@ -1,16 +1,17 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const upButton = document.getElementsByClassName("up")[0];
-    const downButton = document.getElementsByClassName("up")[0];
-    const leftButton = document.getElementsByClassName("up")[0];
-    const rightButton = document.getElementsByClassName("up")[0];
 });
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 
 import("../pkg/index").then((wasmModule) => {
   console.log("WASM Loaded");
 
-  wasmModule.run(
-    document.documentElement.clientWidth,
-    document.documentElement.clientHeight
-  );
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+
+  const upButton = document.getElementsByClassName("up")[0];
+  const downButton = document.getElementsByClassName("down")[0];
+  const leftButton = document.getElementsByClassName("left")[0];
+  const rightButton = document.getElementsByClassName("right")[0];
+
+  wasmModule.run(viewportWidth, viewportHeight);
 });
