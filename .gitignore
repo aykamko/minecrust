@@ -2,3 +2,6 @@
 /target
 map.bmp
 scratch
+node_modules
+dist
+pkg
