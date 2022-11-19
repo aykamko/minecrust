@@ -25,7 +25,7 @@ use vertex::QuadListRenderData;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
 };
 use world::{CHUNK_XZ_SIZE, CHUNK_Y_SIZE, VISIBLE_CHUNK_WIDTH};
 
@@ -51,6 +51,7 @@ pub fn run(width: usize, height: usize) {
     start(s);
 }
 
+#[derive(Debug)]
 enum DomControlsUserEvent {
     UpPressed,
     UpReleased,
@@ -113,9 +114,27 @@ struct Scene {
     pipeline_wire_no_instancing: Option<wgpu::RenderPipeline>,
 }
 
+struct EventLoopGlobalState {
+    event_loop_proxy: Option<EventLoopProxy<DomControlsUserEvent>>,
+}
+static mut event_loop_global_state: EventLoopGlobalState = EventLoopGlobalState {
+    event_loop_proxy: None,
+};
+
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn up_button_pressed() {
     log::info!("Up button pressed");
+    let event_loop_proxy = unsafe {
+        match event_loop_global_state.event_loop_proxy {
+            None => return,
+            _ => event_loop_global_state.event_loop_proxy.as_ref().unwrap(),
+        }
+    };
+
+    log::info!("Sending event to proxy");
+    event_loop_proxy
+        .send_event(DomControlsUserEvent::UpPressed)
+        .expect("Failed to send up button event");
 }
 
 async fn setup(width: usize, height: usize) -> Setup {
@@ -136,6 +155,10 @@ async fn setup(width: usize, height: usize) -> Setup {
         }
     };
     let instance = wgpu::Instance::new(backend);
+
+    unsafe {
+        event_loop_global_state.event_loop_proxy = Some(event_loop.create_proxy());
+    }
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -356,6 +379,15 @@ fn start(
                     }
                 }
                 _ => (),
+            },
+
+            Event::UserEvent(event) => match event {
+                DomControlsUserEvent::UpPressed => {
+                    log::info!("event for up button was processed");
+                }
+                _ => {
+                    log::info!("got some other user event: {:?}", event);
+                }
             },
 
             Event::RedrawRequested(_) => {
