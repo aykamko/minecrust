@@ -1,5 +1,5 @@
 use minecrust::run;
 
 fn main() {
-    run();
+    run(1024, 1024);
 }

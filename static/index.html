@@ -1,18 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Minecrust</title>
     <style>
-        canvas {
-            background-color: black;
-        }
+      body {
+        overflow: hidden;
+        /* disable all zooming, panning, etc. on mobile */
+        touch-action: none;
+      }
+      canvas {
+        background-color: black;
+      }
     </style>
+    <link
+      href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css"
+      rel="stylesheet"
+      integrity="sha384-T8Gy5hrqNKT+hzMclPo118YTQO6cYprQmhrYwIiQ/3axmI1hQomh7Ud2hPOy8SP1"
+      crossorigin="anonymous"
+    />
+    <link href="./reset.css" rel="stylesheet" type="text/css" />
+    <link href="./controls.css" rel="stylesheet" type="text/css" />
     <script src="./index.js"></script>
-</head>
+  </head>
 
-<body id="wasm-example">
-</body>
+  <body>
+    <div class="gameboy">
+      <div class="controls">
+        <div class="dpad">
+          <button class="up"><i class="fa fa-caret-up"></i></button>
+          <button class="right"><i class="fa fa-caret-right"></i></button>
+          <button class="down"><i class="fa fa-caret-down"></i></button>
+          <button class="left"><i class="fa fa-caret-left"></i></button>
+          <div class="middle"></div>
+        </div>
+        <div class="a-b">
+          <button class="b">B</button>
+          <button class="a">A</button>
+        </div>
+      </div>
+    </div>
+    <div id="wasm-example"></div>
+  </body>
+</html>
