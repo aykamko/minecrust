@@ -51,9 +51,24 @@ pub fn run(width: usize, height: usize) {
     start(s);
 }
 
+enum DomControlsUserEvent {
+    UpPressed,
+    UpReleased,
+    DownPressed,
+    DownReleased,
+    LeftPressed,
+    LeftReleased,
+    RightPressed,
+    RightReleased,
+    ButtonAPressed,
+    ButtonAReleased,
+    ButtonBPressed,
+    ButtonBReleased,
+}
+
 struct Setup {
     window: winit::window::Window,
-    event_loop: EventLoop<()>,
+    event_loop: EventLoop<DomControlsUserEvent>,
     #[allow(dead_code)]
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
@@ -98,8 +113,25 @@ struct Scene {
     pipeline_wire_no_instancing: Option<wgpu::RenderPipeline>,
 }
 
+#[cfg(target_arch = "wasm32")]
+fn attach_event_loop_to_dom_buttons(event_loop: &EventLoop<DomControlsUserEvent>) {
+    let event_loop_proxy = event_loop.create_proxy();
+
+    let document = web_sys::window().unwrap().document().unwrap();
+    let up_button = document.get_element_by_id("button-up").unwrap();
+
+    // let up_callback = Closure::<dyn FnMut(_)>::new(move |event: web_sys::TouchEvent| {
+    //     event_loop_proxy.send_event(DomControlsUserEvent::UpPressed);
+    // });
+    up_button.add_event_listener_with_callback("touchstart", move |event: web_sys::TouchEvent| {
+        event_loop_proxy.send_event(DomControlsUserEvent::UpPressed);
+    });
+    // up_button.add_event_listener_with_callback("touchstart", up_callback.as_ref().unchecked_ref())?;
+    // up_callback.forget();
+}
+
 async fn setup(width: usize, height: usize) -> Setup {
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::<DomControlsUserEvent>::with_user_event();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title("Minecrust");
     builder = builder.with_inner_size(winit::dpi::LogicalSize {
@@ -134,6 +166,8 @@ async fn setup(width: usize, height: usize) -> Setup {
                 Some(())
             })
             .expect("Couldn't append canvas to document body.");
+
+        attach_event_loop_to_dom_buttons(&event_loop);
     }
 
     let size = window.inner_size();

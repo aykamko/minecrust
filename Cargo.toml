@@ -42,6 +42,7 @@ web-sys = { version = "0.3", features = [
     "Document",
     "Window",
     "Element",
+    "TouchEvent",
 ]}
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
