@@ -52,7 +52,7 @@ pub fn run(width: usize, height: usize) {
 }
 
 #[derive(Debug)]
-enum DomControlsUserEvent {
+pub enum DomControlsUserEvent {
     UpPressed,
     UpReleased,
     DownPressed,
@@ -121,9 +121,7 @@ static mut event_loop_global_state: EventLoopGlobalState = EventLoopGlobalState 
     event_loop_proxy: None,
 };
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn up_button_pressed() {
-    log::info!("Up button pressed");
+fn send_dom_controls_user_event(event: DomControlsUserEvent) {
     let event_loop_proxy = unsafe {
         match event_loop_global_state.event_loop_proxy {
             None => return,
@@ -131,10 +129,42 @@ pub fn up_button_pressed() {
         }
     };
 
-    log::info!("Sending event to proxy");
     event_loop_proxy
-        .send_event(DomControlsUserEvent::UpPressed)
-        .expect("Failed to send up button event");
+        .send_event(event)
+        .expect("Failed to queue DOM button event");
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn up_button_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::UpPressed);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn up_button_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::UpReleased);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn down_button_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::DownPressed);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn down_button_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::DownReleased);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn left_button_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::LeftPressed);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn left_button_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::LeftReleased);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn right_button_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::RightPressed);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn right_button_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::RightReleased);
 }
 
 async fn setup(width: usize, height: usize) -> Setup {
@@ -381,14 +411,9 @@ fn start(
                 _ => (),
             },
 
-            Event::UserEvent(event) => match event {
-                DomControlsUserEvent::UpPressed => {
-                    log::info!("event for up button was processed");
-                }
-                _ => {
-                    log::info!("got some other user event: {:?}", event);
-                }
-            },
+            Event::UserEvent(event) => {
+                camera_controller.process_web_dom_button_event(&event);
+            }
 
             Event::RedrawRequested(_) => {
                 let frame = match surface.get_current_texture() {
