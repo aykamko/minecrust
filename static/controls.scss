@@ -11,6 +11,8 @@
   -webkit-user-select: none;
   cursor: default;
 
+  pointer-events: none;
+
   button {
     display: block;
     border-style: inset;
@@ -19,6 +21,10 @@
   }
 
   .controls {
+    > div {
+      pointer-events: all;
+    }
+
     width: 100%;
     display: flex;
     justify-content: space-between;
