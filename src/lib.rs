@@ -113,21 +113,9 @@ struct Scene {
     pipeline_wire_no_instancing: Option<wgpu::RenderPipeline>,
 }
 
-#[cfg(target_arch = "wasm32")]
-fn attach_event_loop_to_dom_buttons(event_loop: &EventLoop<DomControlsUserEvent>) {
-    let event_loop_proxy = event_loop.create_proxy();
-
-    let document = web_sys::window().unwrap().document().unwrap();
-    let up_button = document.get_element_by_id("button-up").unwrap();
-
-    // let up_callback = Closure::<dyn FnMut(_)>::new(move |event: web_sys::TouchEvent| {
-    //     event_loop_proxy.send_event(DomControlsUserEvent::UpPressed);
-    // });
-    up_button.add_event_listener_with_callback("touchstart", move |event: web_sys::TouchEvent| {
-        event_loop_proxy.send_event(DomControlsUserEvent::UpPressed);
-    });
-    // up_button.add_event_listener_with_callback("touchstart", up_callback.as_ref().unchecked_ref())?;
-    // up_callback.forget();
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn up_button_pressed() {
+    log::info!("Up button pressed");
 }
 
 async fn setup(width: usize, height: usize) -> Setup {
@@ -166,8 +154,6 @@ async fn setup(width: usize, height: usize) -> Setup {
                 Some(())
             })
             .expect("Couldn't append canvas to document body.");
-
-        attach_event_loop_to_dom_buttons(&event_loop);
     }
 
     let size = window.inner_size();
