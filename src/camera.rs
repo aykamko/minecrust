@@ -198,6 +198,7 @@ pub struct CameraController {
     is_sprint_pressed: bool,
     last_mouse_delta: (f64, f64),
     last_joystick_vector: (f64, f64),
+    last_translation_joystick_vector: (f64, f64),
     num_updates: u64,
 }
 
@@ -224,6 +225,7 @@ impl CameraController {
             is_sprint_pressed: false,
             last_mouse_delta: (0.0, 0.0),
             last_joystick_vector: (0.0, 0.0),
+            last_translation_joystick_vector: (0.0, 0.0),
             num_updates: 0,
         }
     }
@@ -349,27 +351,12 @@ impl CameraController {
                 self.last_joystick_vector = (0.0, 0.0);
                 true
             }
-            DomControlsUserEvent::TranslationJoystickDirectionChanged { direction } => {
-                self.clear_translational_inputs();
-                match direction {
-                    0 => {
-                        self.is_forward_pressed = true;
-                    }
-                    1 => {
-                        self.is_right_pressed = true;
-                    }
-                    2 => {
-                        self.is_backward_pressed = true;
-                    }
-                    3 => {
-                        self.is_left_pressed = true;
-                    }
-                    _ => (),
-                }
+            DomControlsUserEvent::TranslationJoystickMoved { vector } => {
+                self.last_translation_joystick_vector = *vector;
                 true
             }
             DomControlsUserEvent::TranslationJoystickReleased => {
-                self.clear_translational_inputs();
+                self.last_translation_joystick_vector = (0.0, 0.0);
                 true
             }
             _ => {
@@ -377,13 +364,6 @@ impl CameraController {
                 false
             }
         }
-    }
-
-    fn clear_translational_inputs(&mut self) {
-        self.is_forward_pressed = false;
-        self.is_right_pressed = false;
-        self.is_backward_pressed = false;
-        self.is_left_pressed = false;
     }
 
     pub fn reset_mouse_delta(&mut self) {
@@ -415,36 +395,44 @@ impl CameraController {
         let mut next_eye = camera.eye;
         let mut next_target = camera.target;
 
-        // Prevents glitching when camera gets too close to the
-        // center of the scene.
-        //if self.is_forward_pressed && forward_mag > self.speed {
-        if self.is_forward_pressed {
-            did_move = true;
-            did_translate = true;
-            next_eye += forward_norm * self.speed();
-            next_target += forward_norm * self.speed();
-        }
-        if self.is_backward_pressed {
-            did_move = true;
-            did_translate = true;
-            next_eye -= forward_norm * self.speed();
-            next_target -= forward_norm * self.speed();
-        }
-
         // Strafing vector
         let right_norm = forward_norm.cross(camera.up);
 
-        if self.is_right_pressed {
+        if self.last_translation_joystick_vector.0 != 0.0
+            || self.last_translation_joystick_vector.1 != 0.0
+        {
             did_move = true;
             did_translate = true;
-            next_eye += right_norm * self.speed();
-            next_target += right_norm * self.speed();
-        }
-        if self.is_left_pressed {
-            did_move = true;
-            did_translate = true;
-            next_eye -= right_norm * self.speed();
-            next_target -= right_norm * self.speed();
+            let (x, y) = self.last_translation_joystick_vector;
+            next_eye += y as f32 * forward_norm * self.speed();
+            next_eye += x as f32 * right_norm * self.speed();
+            next_target += y as f32 * forward_norm * self.speed();
+            next_target += x as f32 * right_norm * self.speed();
+        } else {
+            if self.is_forward_pressed {
+                did_move = true;
+                did_translate = true;
+                next_eye += forward_norm * self.speed();
+                next_target += forward_norm * self.speed();
+            }
+            if self.is_backward_pressed {
+                did_move = true;
+                did_translate = true;
+                next_eye -= forward_norm * self.speed();
+                next_target -= forward_norm * self.speed();
+            }
+            if self.is_right_pressed {
+                did_move = true;
+                did_translate = true;
+                next_eye += right_norm * self.speed();
+                next_target += right_norm * self.speed();
+            }
+            if self.is_left_pressed {
+                did_move = true;
+                did_translate = true;
+                next_eye -= right_norm * self.speed();
+                next_target -= right_norm * self.speed();
+            }
         }
 
         if self.is_space_pressed {

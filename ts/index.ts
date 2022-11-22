@@ -76,17 +76,8 @@ import("../pkg/index").then((wasmModule) => {
     position: { left: "50%", top: "50%" },
     color: "black",
   });
-  translationJoystick.on("dir", function (_, data) {
-    // console.log(data.vector);
-    let directionEnum = (
-      {
-        up: 0,
-        right: 1,
-        down: 2,
-        left: 3,
-      } as const
-    )[data.direction.angle];
-    wasmModule.translation_joystick_direction_changed(directionEnum);
+  translationJoystick.on("move", function (_, data) {
+    wasmModule.translation_joystick_moved(data.vector.x, data.vector.y);
   });
   translationJoystick.on("end", function (_, data) {
     wasmModule.translation_joystick_released();

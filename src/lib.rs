@@ -67,7 +67,7 @@ pub enum DomControlsUserEvent {
     ButtonBReleased,
     PitchYawJoystickMoved { vector: (f64, f64) },
     PitchYawJoystickReleased,
-    TranslationJoystickDirectionChanged { direction: u8 },
+    TranslationJoystickMoved { vector: (f64, f64) },
     TranslationJoystickReleased,
 }
 
@@ -179,10 +179,8 @@ pub fn pitch_yaw_joystick_released() {
     send_dom_controls_user_event(DomControlsUserEvent::PitchYawJoystickReleased);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn translation_joystick_direction_changed(direction: u8) {
-    send_dom_controls_user_event(DomControlsUserEvent::TranslationJoystickDirectionChanged {
-        direction: direction,
-    });
+pub fn translation_joystick_moved(x: f64, y: f64) {
+    send_dom_controls_user_event(DomControlsUserEvent::TranslationJoystickMoved { vector: (x, y) });
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn translation_joystick_released() {
