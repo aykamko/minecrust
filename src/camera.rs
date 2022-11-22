@@ -195,6 +195,7 @@ pub struct CameraController {
     is_shift_pressed: bool,
     is_sprint_pressed: bool,
     last_mouse_delta: (f64, f64),
+    last_joystick_vector: (f64, f64),
     num_updates: u64,
 }
 
@@ -220,6 +221,7 @@ impl CameraController {
             is_shift_pressed: false,
             is_sprint_pressed: false,
             last_mouse_delta: (0.0, 0.0),
+            last_joystick_vector: (0.0, 0.0),
             num_updates: 0,
         }
     }
@@ -333,6 +335,14 @@ impl CameraController {
                 self.is_right_pressed = false;
                 true
             }
+            DomControlsUserEvent::PitchYawJoystickMoved { vector } => {
+                self.last_joystick_vector = *vector;
+                true
+            }
+            DomControlsUserEvent::PitchYawJoystickReleased => {
+                self.last_joystick_vector = (0.0, 0.0);
+                true
+            }
             _ => {
                 log::info!("got some other user event: {:?}", event);
                 false
@@ -417,7 +427,12 @@ impl CameraController {
         // "Vertical" strafing vector
         let up_norm = right_norm.cross(forward).normalize();
 
-        let (x_delta, y_delta) = self.last_mouse_delta;
+        let (x_delta, y_delta) =
+            if self.last_joystick_vector.0 != 0.0 || self.last_joystick_vector.1 != 0.0 {
+                self.last_joystick_vector
+            } else {
+                self.last_mouse_delta
+            };
         if y_delta != 0.0 {
             let theta = cgmath::Rad((-y_delta * self.mouse_sensitivity) as f32);
             let rot: cgmath::Basis3<f32> = cgmath::Rotation3::from_axis_angle(right_norm, theta);

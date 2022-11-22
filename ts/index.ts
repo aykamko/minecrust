@@ -1,3 +1,4 @@
+import * as nipplejs from "nipplejs";
 document.addEventListener("DOMContentLoaded", () => {});
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 
@@ -9,7 +10,7 @@ function registerDomButtonEventListeners(wasmModule: any) {
 
   for (const event of ["touchstart", "mousedown"]) {
     upButton.addEventListener(event, () => {
-      console.log('up pressed');
+      console.log("up pressed");
       wasmModule.up_button_pressed();
     });
     downButton.addEventListener(event, () => {
@@ -24,7 +25,7 @@ function registerDomButtonEventListeners(wasmModule: any) {
   }
   for (const event of ["touchend", "touchcancel", "mouseup", "mouseleave"]) {
     upButton.addEventListener(event, () => {
-      console.log('up released');
+      console.log("up released");
       wasmModule.up_button_released();
     });
     downButton.addEventListener(event, () => {
@@ -46,6 +47,31 @@ import("../pkg/index").then((wasmModule) => {
   const viewportHeight = document.documentElement.clientHeight;
 
   registerDomButtonEventListeners(wasmModule);
+
+  const joystickElem = document.getElementById("joystick");
+  const joystick = nipplejs.create({
+    zone: joystickElem,
+    mode: "static",
+    position: { left: "50%", top: "50%" },
+    color: "black",
+  });
+  joystick.on("move", function (_, data) {
+    console.log(data.vector);
+    wasmModule.pitch_yaw_joystick_moved(data.vector.x, -data.vector.y);
+  });
+  joystick.on("end", function (_, data) {
+    wasmModule.pitch_yaw_joystick_released();
+  });
+  // .on(
+  //   "dir:up plain:up dir:left plain:left dir:down " +
+  //     "plain:down dir:right plain:right",
+  //   function (evt, data) {
+  //     console.log(evt, data);
+  //   }
+  // )
+  // .on("pressure", function (evt, data) {
+  //   console.log(evt, data);
+  // });
 
   wasmModule.run(viewportWidth, viewportHeight);
 });
