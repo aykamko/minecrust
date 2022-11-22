@@ -1,3 +1,7 @@
+// HACK: convert to raw css using webpack
+import controls from "./controls.scss";
+controls;
+
 import * as nipplejs from "nipplejs";
 document.addEventListener("DOMContentLoaded", () => {});
 document.addEventListener("gesturestart", (e) => e.preventDefault());
