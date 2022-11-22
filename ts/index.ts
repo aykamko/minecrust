@@ -52,18 +52,18 @@ import("../pkg/index").then((wasmModule) => {
 
   //   registerDomButtonEventListeners(wasmModule);
 
-  const joystickElem = document.getElementById("joystick");
-  const joystick = nipplejs.create({
-    zone: joystickElem,
+  const pitchYawJoystickElem = document.getElementById("pitch-yaw-joystick");
+  const pitchYawJoystick = nipplejs.create({
+    zone: pitchYawJoystickElem,
     mode: "static",
     position: { left: "50%", top: "50%" },
     color: "black",
   });
-  joystick.on("move", function (_, data) {
+  pitchYawJoystick.on("move", function (_, data) {
     console.log(data.vector);
     wasmModule.pitch_yaw_joystick_moved(data.vector.x, -data.vector.y);
   });
-  joystick.on("end", function (_, data) {
+  pitchYawJoystick.on("end", function (_, data) {
     wasmModule.pitch_yaw_joystick_released();
   });
 
