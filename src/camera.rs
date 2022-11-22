@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use crate::{world::CHUNK_XZ_SIZE, DomControlsUserEvent};
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
 use collision::{Aabb3, Frustum, Plane};
@@ -336,11 +338,38 @@ impl CameraController {
                 true
             }
             DomControlsUserEvent::PitchYawJoystickMoved { vector } => {
-                self.last_joystick_vector = *vector;
+                const PITCH_YAW_JOYSTICK_SCALE_FACTOR: f64 = 1.8;
+                self.last_joystick_vector = (
+                    vector.0 * PITCH_YAW_JOYSTICK_SCALE_FACTOR,
+                    vector.1 * PITCH_YAW_JOYSTICK_SCALE_FACTOR,
+                );
                 true
             }
             DomControlsUserEvent::PitchYawJoystickReleased => {
                 self.last_joystick_vector = (0.0, 0.0);
+                true
+            }
+            DomControlsUserEvent::TranslationJoystickDirectionChanged { direction } => {
+                self.clear_translational_inputs();
+                match direction {
+                    0 => {
+                        self.is_forward_pressed = true;
+                    }
+                    1 => {
+                        self.is_right_pressed = true;
+                    }
+                    2 => {
+                        self.is_backward_pressed = true;
+                    }
+                    3 => {
+                        self.is_left_pressed = true;
+                    }
+                    _ => (),
+                }
+                true
+            }
+            DomControlsUserEvent::TranslationJoystickReleased => {
+                self.clear_translational_inputs();
                 true
             }
             _ => {
@@ -348,6 +377,13 @@ impl CameraController {
                 false
             }
         }
+    }
+
+    fn clear_translational_inputs(&mut self) {
+        self.is_forward_pressed = false;
+        self.is_right_pressed = false;
+        self.is_backward_pressed = false;
+        self.is_left_pressed = false;
     }
 
     pub fn reset_mouse_delta(&mut self) {

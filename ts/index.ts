@@ -46,7 +46,7 @@ import("../pkg/index").then((wasmModule) => {
   const viewportWidth = document.documentElement.clientWidth;
   const viewportHeight = document.documentElement.clientHeight;
 
-  registerDomButtonEventListeners(wasmModule);
+  //   registerDomButtonEventListeners(wasmModule);
 
   const joystickElem = document.getElementById("joystick");
   const joystick = nipplejs.create({
@@ -61,6 +61,31 @@ import("../pkg/index").then((wasmModule) => {
   });
   joystick.on("end", function (_, data) {
     wasmModule.pitch_yaw_joystick_released();
+  });
+
+  const translationJoystickElem = document.getElementById(
+    "translation-joystick"
+  );
+  const translationJoystick = nipplejs.create({
+    zone: translationJoystickElem,
+    mode: "static",
+    position: { left: "50%", top: "50%" },
+    color: "black",
+  });
+  translationJoystick.on("dir", function (_, data) {
+    // console.log(data.vector);
+    let directionEnum = (
+      {
+        up: 0,
+        right: 1,
+        down: 2,
+        left: 3,
+      } as const
+    )[data.direction.angle];
+    wasmModule.translation_joystick_direction_changed(directionEnum);
+  });
+  translationJoystick.on("end", function (_, data) {
+    wasmModule.translation_joystick_released();
   });
   // .on(
   //   "dir:up plain:up dir:left plain:left dir:down " +
