@@ -340,7 +340,7 @@ impl CameraController {
                 true
             }
             DomControlsUserEvent::PitchYawJoystickMoved { vector } => {
-                const PITCH_YAW_JOYSTICK_SCALE_FACTOR: f64 = 1.8;
+                const PITCH_YAW_JOYSTICK_SCALE_FACTOR: f64 = 2.5;
                 self.last_joystick_vector = (
                     vector.0 * PITCH_YAW_JOYSTICK_SCALE_FACTOR,
                     vector.1 * PITCH_YAW_JOYSTICK_SCALE_FACTOR,
