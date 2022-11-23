@@ -12,7 +12,8 @@ document.addEventListener("gesturestart", (e) => e.preventDefault());
  * Source: https://stackoverflow.com/questions/21741841/detecting-ios-android-operating-system
  */
 function getMobileOperatingSystem() {
-  var userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+  var userAgent =
+    navigator.userAgent || navigator.vendor || (window as any).opera;
 
   // Windows Phone must come first because its UA also contains "Android"
   if (/windows phone/i.test(userAgent)) {
@@ -68,6 +69,30 @@ function registerDomButtonEventListeners(wasmModule: any) {
   }
 }
 
+// Ensure touches occur rapidly
+const delay = 500;
+// Sequential touches must be in close vicinity
+const minZoomTouchDelta = 10;
+
+// Track state of the last touch
+let lastTapAt = 0;
+
+export default function preventDoubleTapZoom(event: any) {
+  // Exit early if this involves more than one finger (e.g. pinch to zoom)
+  if (event.touches.length > 1) {
+    return;
+  }
+
+  const tapAt = new Date().getTime();
+  const timeDiff = tapAt - lastTapAt;
+  if (event.touches.length === 1 && timeDiff < delay) {
+    event.preventDefault();
+    // Trigger a fake click for the tap we just prevented
+    event.target.click();
+  }
+  lastTapAt = tapAt;
+}
+
 import("../pkg/index").then((wasmModule) => {
   console.log("WASM Loaded");
 
@@ -90,6 +115,9 @@ import("../pkg/index").then((wasmModule) => {
   pitchYawJoystick.on("end", function (_, data) {
     wasmModule.pitch_yaw_joystick_released();
   });
+  pitchYawJoystickElem.addEventListener("touchstart", (event) =>
+    preventDoubleTapZoom(event)
+  );
 
   const translationJoystickElem = document.getElementById(
     "translation-joystick"
@@ -106,6 +134,9 @@ import("../pkg/index").then((wasmModule) => {
   translationJoystick.on("end", function (_, data) {
     wasmModule.translation_joystick_released();
   });
+  translationJoystickElem.addEventListener("touchstart", (event) =>
+    preventDoubleTapZoom(event)
+  );
   // .on(
   //   "dir:up plain:up dir:left plain:left dir:down " +
   //     "plain:down dir:right plain:right",
