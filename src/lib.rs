@@ -396,6 +396,18 @@ fn start(
 
     let spawner = Spawner::new();
 
+    // Remove Loader element from DOM
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let loader_elem = doc.get_element_by_id("loader")?;
+                loader_elem.remove();
+                Some(())
+            });
+    }
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 

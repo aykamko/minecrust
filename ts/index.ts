@@ -1,6 +1,8 @@
 // HACK: convert to raw css using webpack
 import controls from "./controls.scss";
 controls;
+import loader from "./loader.scss";
+loader;
 
 import * as nipplejs from "nipplejs";
 document.addEventListener("gesturestart", (e) => e.preventDefault());
@@ -71,8 +73,6 @@ function registerDomButtonEventListeners(wasmModule: any) {
 
 // Ensure touches occur rapidly
 const delay = 500;
-// Sequential touches must be in close vicinity
-const minZoomTouchDelta = 10;
 
 // Track state of the last touch
 let lastTapAt = 0;
