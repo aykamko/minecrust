@@ -3,8 +3,40 @@ import controls from "./controls.scss";
 controls;
 
 import * as nipplejs from "nipplejs";
-document.addEventListener("DOMContentLoaded", () => {});
 document.addEventListener("gesturestart", (e) => e.preventDefault());
+
+/**
+ * Determine the mobile operating system.
+ * This function returns one of 'iOS', 'Android', 'Windows Phone', or 'unknown'.
+ *
+ * Source: https://stackoverflow.com/questions/21741841/detecting-ios-android-operating-system
+ */
+function getMobileOperatingSystem() {
+  var userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+
+  // Windows Phone must come first because its UA also contains "Android"
+  if (/windows phone/i.test(userAgent)) {
+    return "Windows Phone";
+  }
+
+  if (/android/i.test(userAgent)) {
+    return "Android";
+  }
+
+  // iOS detection from: http://stackoverflow.com/a/9039885/177710
+  if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) {
+    return "iOS";
+  }
+
+  return "unknown";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (getMobileOperatingSystem() !== "unknown") {
+    // Disable "mouse" events on game when on mobile
+    document.getElementById("wasm-container").style.pointerEvents = "none";
+  }
+});
 
 function isTouchDevice() {
   return (

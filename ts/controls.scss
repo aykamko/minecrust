@@ -18,7 +18,7 @@
   -webkit-user-select: none;
   cursor: default;
 
-  pointer-events: all;
+  pointer-events: none;
 
   button {
     display: block;
@@ -33,9 +33,7 @@
     display: flex;
     justify-content: space-between;
 
-    > div {
-      pointer-events: all;
-    }
+    pointer-events: all;
 
     .right-side {
       position: relative;
