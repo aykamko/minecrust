@@ -61,6 +61,7 @@ pub enum DomControlsUserEvent {
     PitchYawJoystickReleased,
     TranslationJoystickMoved { vector: (f64, f64) },
     TranslationJoystickReleased,
+    WindowResized { size: winit::dpi::PhysicalSize<u32> },
 }
 
 struct Setup {
@@ -162,6 +163,15 @@ pub fn translation_joystick_moved(x: f64, y: f64) {
 pub fn translation_joystick_released() {
     send_dom_controls_user_event(DomControlsUserEvent::TranslationJoystickReleased);
 }
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn web_window_resized(width: f64, height: f64, device_pixel_ratio: f64) {
+    send_dom_controls_user_event(DomControlsUserEvent::WindowResized {
+        size: winit::dpi::PhysicalSize {
+            width: (width * device_pixel_ratio) as u32,
+            height: (height * device_pixel_ratio) as u32,
+        },
+    });
+}
 
 async fn setup(width: usize, height: usize) -> Setup {
     let event_loop = EventLoop::<DomControlsUserEvent>::with_user_event();
@@ -191,7 +201,7 @@ async fn setup(width: usize, height: usize) -> Setup {
         // Winit prevents sizing with CSS, so we have to set
         // the size manually when on web.
         use winit::dpi::LogicalSize;
-        window.set_inner_size(LogicalSize::new(width as i32, height as i32));
+        // window.set_inner_size(LogicalSize::new(width as i32, height as i32));
 
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
@@ -250,6 +260,7 @@ fn resize(
     new_size: winit::dpi::PhysicalSize<u32>,
     device: &wgpu::Device,
     surface: &wgpu::Surface,
+    window: &winit::window::Window,
     config: &mut wgpu::SurfaceConfiguration,
     scene: &mut Scene,
     camera: &mut camera::Camera,
@@ -277,6 +288,14 @@ fn resize(
             },
         );
         camera.aspect = config.width as f32 / config.height as f32;
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            window.set_inner_size(winit::dpi::PhysicalSize::new(
+                config.width as i32,
+                config.height as i32,
+            ));
+        }
     }
 }
 
@@ -435,6 +454,7 @@ fn start(
                         physical_size,
                         &device,
                         &surface,
+                        &window,
                         &mut config,
                         &mut scene,
                         &mut camera,
@@ -445,6 +465,7 @@ fn start(
                         *new_inner_size,
                         &device,
                         &surface,
+                        &window,
                         &mut config,
                         &mut scene,
                         &mut camera,
@@ -468,6 +489,18 @@ fn start(
                 }
                 DomControlsUserEvent::BButtonPressed => {
                     right_mouse_clicked = true;
+                }
+                DomControlsUserEvent::WindowResized { size } => {
+                    log::info!("Web window resized: {:?}", size);
+                    resize(
+                        size,
+                        &device,
+                        &surface,
+                        &window,
+                        &mut config,
+                        &mut scene,
+                        &mut camera,
+                    );
                 }
                 _ => {
                     camera_controller.process_web_dom_button_event(&event);

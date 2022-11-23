@@ -96,9 +96,6 @@ export default function preventDoubleTapZoom(event: any) {
 import("../pkg/index").then((wasmModule) => {
   console.log("WASM Loaded");
 
-  const viewportWidth = document.documentElement.clientWidth;
-  const viewportHeight = document.documentElement.clientHeight;
-
   registerDomButtonEventListeners(wasmModule);
 
   const pitchYawJoystickElem = document.getElementById("pitch-yaw-joystick");
@@ -147,6 +144,16 @@ import("../pkg/index").then((wasmModule) => {
   // .on("pressure", function (evt, data) {
   //   console.log(evt, data);
   // });
+
+  window.addEventListener("resize", () => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    console.log(`new size is ${viewportWidth}x${viewportHeight}`);
+    wasmModule.web_window_resized(viewportWidth, viewportHeight, window.devicePixelRatio);
+  });
+
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
 
   wasmModule.run(viewportWidth, viewportHeight);
 });
