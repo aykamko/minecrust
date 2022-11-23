@@ -53,18 +53,10 @@ pub fn run(width: usize, height: usize) {
 
 #[derive(Debug)]
 pub enum DomControlsUserEvent {
-    UpPressed,
-    UpReleased,
-    DownPressed,
-    DownReleased,
-    LeftPressed,
-    LeftReleased,
-    RightPressed,
-    RightReleased,
-    ButtonAPressed,
-    ButtonAReleased,
-    ButtonBPressed,
-    ButtonBReleased,
+    AButtonPressed,
+    AButtonReleased,
+    BButtonPressed,
+    BButtonReleased,
     PitchYawJoystickMoved { vector: (f64, f64) },
     PitchYawJoystickReleased,
     TranslationJoystickMoved { vector: (f64, f64) },
@@ -139,36 +131,20 @@ fn send_dom_controls_user_event(event: DomControlsUserEvent) {
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn up_button_pressed() {
-    send_dom_controls_user_event(DomControlsUserEvent::UpPressed);
+pub fn a_button_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::AButtonPressed);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn up_button_released() {
-    send_dom_controls_user_event(DomControlsUserEvent::UpReleased);
+pub fn a_button_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::AButtonReleased);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn down_button_pressed() {
-    send_dom_controls_user_event(DomControlsUserEvent::DownPressed);
+pub fn b_button_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::BButtonPressed);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn down_button_released() {
-    send_dom_controls_user_event(DomControlsUserEvent::DownReleased);
-}
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn left_button_pressed() {
-    send_dom_controls_user_event(DomControlsUserEvent::LeftPressed);
-}
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn left_button_released() {
-    send_dom_controls_user_event(DomControlsUserEvent::LeftReleased);
-}
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn right_button_pressed() {
-    send_dom_controls_user_event(DomControlsUserEvent::RightPressed);
-}
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn right_button_released() {
-    send_dom_controls_user_event(DomControlsUserEvent::RightReleased);
+pub fn b_button_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::BButtonReleased);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn pitch_yaw_joystick_moved(x: f64, y: f64) {
@@ -431,9 +407,17 @@ fn start(
                 _ => (),
             },
 
-            Event::UserEvent(event) => {
-                camera_controller.process_web_dom_button_event(&event);
-            }
+            Event::UserEvent(event) => match event {
+                DomControlsUserEvent::AButtonPressed => {
+                    left_mouse_clicked = true;
+                }
+                DomControlsUserEvent::BButtonPressed => {
+                    right_mouse_clicked = true;
+                }
+                _ => {
+                    camera_controller.process_web_dom_button_event(&event);
+                }
+            },
 
             Event::RedrawRequested(_) => {
                 let frame = match surface.get_current_texture() {

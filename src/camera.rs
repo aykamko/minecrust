@@ -307,38 +307,6 @@ impl CameraController {
 
     pub fn process_web_dom_button_event(&mut self, event: &DomControlsUserEvent) -> bool {
         match event {
-            DomControlsUserEvent::UpPressed => {
-                self.is_forward_pressed = true;
-                true
-            }
-            DomControlsUserEvent::UpReleased => {
-                self.is_forward_pressed = false;
-                true
-            }
-            DomControlsUserEvent::DownPressed => {
-                self.is_backward_pressed = true;
-                true
-            }
-            DomControlsUserEvent::DownReleased => {
-                self.is_backward_pressed = false;
-                true
-            }
-            DomControlsUserEvent::LeftPressed => {
-                self.is_left_pressed = true;
-                true
-            }
-            DomControlsUserEvent::LeftReleased => {
-                self.is_left_pressed = false;
-                true
-            }
-            DomControlsUserEvent::RightPressed => {
-                self.is_right_pressed = true;
-                true
-            }
-            DomControlsUserEvent::RightReleased => {
-                self.is_right_pressed = false;
-                true
-            }
             DomControlsUserEvent::PitchYawJoystickMoved { vector } => {
                 const PITCH_YAW_JOYSTICK_SCALE_FACTOR: f64 = 2.5;
                 self.last_joystick_vector = (

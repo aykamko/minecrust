@@ -6,40 +6,32 @@ import * as nipplejs from "nipplejs";
 document.addEventListener("DOMContentLoaded", () => {});
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 
-function registerDomButtonEventListeners(wasmModule: any) {
-  const upButton = document.getElementsByClassName("up")[0];
-  const downButton = document.getElementsByClassName("down")[0];
-  const leftButton = document.getElementsByClassName("left")[0];
-  const rightButton = document.getElementsByClassName("right")[0];
+function isTouchDevice() {
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    (navigator as any).msMaxTouchPoints > 0
+  );
+}
 
-  for (const event of ["touchstart", "mousedown"]) {
-    upButton.addEventListener(event, () => {
-      console.log("up pressed");
-      wasmModule.up_button_pressed();
-    });
-    downButton.addEventListener(event, () => {
-      wasmModule.down_button_pressed();
-    });
-    leftButton.addEventListener(event, () => {
-      wasmModule.left_button_pressed();
-    });
-    rightButton.addEventListener(event, () => {
-      wasmModule.right_button_pressed();
-    });
-  }
+function registerDomButtonEventListeners(wasmModule: any) {
+  const aButton = document.getElementById("a-button");
+  const bButton = document.getElementById("b-button");
+
+  const startEvent = isTouchDevice() ? "touchstart" : "mousedown";
+  aButton.addEventListener(startEvent, () => {
+    wasmModule.a_button_pressed();
+  });
+  bButton.addEventListener(startEvent, () => {
+    wasmModule.b_button_pressed();
+  });
   for (const event of ["touchend", "touchcancel", "mouseup", "mouseleave"]) {
-    upButton.addEventListener(event, () => {
+    aButton.addEventListener(event, () => {
       console.log("up released");
-      wasmModule.up_button_released();
+      wasmModule.a_button_released();
     });
-    downButton.addEventListener(event, () => {
-      wasmModule.down_button_released();
-    });
-    leftButton.addEventListener(event, () => {
-      wasmModule.left_button_released();
-    });
-    rightButton.addEventListener(event, () => {
-      wasmModule.right_button_released();
+    bButton.addEventListener(event, () => {
+      wasmModule.b_button_released();
     });
   }
 }
@@ -50,7 +42,7 @@ import("../pkg/index").then((wasmModule) => {
   const viewportWidth = document.documentElement.clientWidth;
   const viewportHeight = document.documentElement.clientHeight;
 
-  //   registerDomButtonEventListeners(wasmModule);
+  registerDomButtonEventListeners(wasmModule);
 
   const pitchYawJoystickElem = document.getElementById("pitch-yaw-joystick");
   const pitchYawJoystick = nipplejs.create({
