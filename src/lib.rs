@@ -246,6 +246,40 @@ async fn setup(width: usize, height: usize) -> Setup {
     }
 }
 
+fn resize(
+    new_size: winit::dpi::PhysicalSize<u32>,
+    device: &wgpu::Device,
+    surface: &wgpu::Surface,
+    config: &mut wgpu::SurfaceConfiguration,
+    scene: &mut Scene,
+    camera: &mut camera::Camera,
+) {
+    if new_size.width > 0 && new_size.height > 0 {
+        config.width = new_size.width;
+        config.height = new_size.height;
+        log::info!("Resizing to {}x{}", config.width, config.height);
+        surface.configure(&device, &config);
+        scene.depth_texture = texture::Texture::create_depth_texture(
+            "depth_texture",
+            &device,
+            [config.width, config.height],
+            &wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                compare: Some(wgpu::CompareFunction::LessEqual),
+                lod_min_clamp: -100.0,
+                lod_max_clamp: 100.0,
+                ..Default::default()
+            },
+        );
+        camera.aspect = config.width as f32 / config.height as f32;
+    }
+}
+
 fn start(
     Setup {
         window,
@@ -271,7 +305,7 @@ fn start(
 
     assert!(supported_formats.contains(&chosen_format));
 
-    let config = wgpu::SurfaceConfiguration {
+    let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: chosen_format,
         width: size.width,
@@ -395,6 +429,27 @@ fn start(
                     }
                     _ => (),
                 },
+
+                WindowEvent::Resized(physical_size) => {
+                    resize(
+                        physical_size,
+                        &device,
+                        &surface,
+                        &mut config,
+                        &mut scene,
+                        &mut camera,
+                    );
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    resize(
+                        *new_inner_size,
+                        &device,
+                        &surface,
+                        &mut config,
+                        &mut scene,
+                        &mut camera,
+                    );
+                }
                 _ => (),
             },
 
