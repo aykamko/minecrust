@@ -149,7 +149,7 @@ import("../pkg/index").then((wasmModule) => {
     const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = document.documentElement.clientHeight;
     console.log(`new size is ${viewportWidth}x${viewportHeight}`);
-    wasmModule.web_window_resized(viewportWidth, viewportHeight, window.devicePixelRatio);
+    wasmModule.web_window_resized(viewportWidth, viewportHeight);
   });
 
   const viewportWidth = document.documentElement.clientWidth;

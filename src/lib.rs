@@ -61,7 +61,7 @@ pub enum DomControlsUserEvent {
     PitchYawJoystickReleased,
     TranslationJoystickMoved { vector: (f64, f64) },
     TranslationJoystickReleased,
-    WindowResized { size: winit::dpi::PhysicalSize<u32> },
+    WindowResized { size: winit::dpi::LogicalSize<u32> },
 }
 
 struct Setup {
@@ -164,12 +164,9 @@ pub fn translation_joystick_released() {
     send_dom_controls_user_event(DomControlsUserEvent::TranslationJoystickReleased);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn web_window_resized(width: f64, height: f64, device_pixel_ratio: f64) {
+pub fn web_window_resized(width: u32, height: u32) {
     send_dom_controls_user_event(DomControlsUserEvent::WindowResized {
-        size: winit::dpi::PhysicalSize {
-            width: (width * device_pixel_ratio) as u32,
-            height: (height * device_pixel_ratio) as u32,
-        },
+        size: winit::dpi::LogicalSize { width, height },
     });
 }
 
@@ -493,7 +490,7 @@ fn start(
                 DomControlsUserEvent::WindowResized { size } => {
                     log::info!("Web window resized: {:?}", size);
                     resize(
-                        size,
+                        size.to_physical(window.scale_factor()),
                         &device,
                         &surface,
                         &window,
