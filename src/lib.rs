@@ -38,21 +38,6 @@ const VERBOSE_LOGS: bool = false;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn run(width: usize, height: usize) {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
-        } else {
-            env_logger::init();
-        }
-    }
-
-    let mut s = block_on(State::new(width, height));
-    s.run();
-}
-
 struct Scene {
     vertex_buffers: [wgpu::Buffer; 2],
     index_buffers: [wgpu::Buffer; 2],
@@ -77,10 +62,6 @@ struct Scene {
 }
 
 struct State {
-    window: winit::window::Window,
-    event_loop: EventLoop<DomControlsUserEvent>,
-    #[allow(dead_code)]
-    instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
     surface_config: wgpu::SurfaceConfiguration,
     surface: wgpu::Surface,
@@ -109,20 +90,7 @@ struct ChunkRenderDescriptor {
 }
 
 impl State {
-    async fn new(width: usize, height: usize) -> Self {
-        let event_loop = EventLoopBuilder::<DomControlsUserEvent>::with_user_event().build();
-        unsafe {
-            crate::dom_controls::set_global_event_loop_proxy(&event_loop);
-        }
-
-        let mut builder = winit::window::WindowBuilder::new();
-        builder = builder.with_title("Minecrust");
-        builder = builder.with_inner_size(winit::dpi::LogicalSize {
-            width: width as i32,
-            height: height as i32,
-        });
-        let window = builder.build(&event_loop).unwrap();
-
+    async fn new(window: &winit::window::Window) -> Self {
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "wasm32")] {
                let backend = wgpu::Backends::SECONDARY;
@@ -193,7 +161,7 @@ impl State {
 
         assert!(supported_formats.contains(&chosen_format));
 
-        let mut surface_config = wgpu::SurfaceConfiguration {
+        let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: chosen_format,
             width: size.width,
@@ -203,12 +171,12 @@ impl State {
         };
         surface.configure(&device, &surface_config);
 
-        let mut camera_controller = camera::CameraController::new(0.15, 0.01);
+        let camera_controller = camera::CameraController::new(0.15, 0.01);
 
         // Start in the center
         let center = world::get_world_center();
         let zfar = 250.0;
-        let mut camera = camera::Camera::new(
+        let camera = camera::Camera::new(
             Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
             // have it look at the origin
             (0.0, 0.0, 0.0).into(),
@@ -235,7 +203,7 @@ impl State {
         };
 
         // Light
-        let mut light_uniform = light::LightUniform::new(
+        let light_uniform = light::LightUniform::new(
             [0.0, 5.0, 0.0].into(),
             [1.0, 1.0, 1.0].into(),
             sunlight_pos,
@@ -261,9 +229,6 @@ impl State {
         );
 
         State {
-            window,
-            event_loop,
-            instance,
             size,
             surface_config,
             surface,
@@ -310,340 +275,387 @@ impl State {
             );
             self.camera.aspect =
                 self.surface_config.width as f32 / self.surface_config.height as f32;
+        }
+    }
+}
 
-            #[cfg(target_arch = "wasm32")]
-            {
-                self.window.set_inner_size(winit::dpi::PhysicalSize::new(
-                    self.surface_config.width as i32,
-                    self.surface_config.height as i32,
-                ));
-            }
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn run(width: usize, height: usize) {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
+        } else {
+            env_logger::init();
         }
     }
 
-    fn run(&mut self) {
-        let mut curr_modifier_state: winit::event::ModifiersState =
-            winit::event::ModifiersState::empty();
-        let mut cursor_grabbed = false;
+    let event_loop = EventLoopBuilder::<DomControlsUserEvent>::with_user_event().build();
+    unsafe {
+        crate::dom_controls::set_global_event_loop_proxy(&event_loop);
+    }
 
-        let mut left_mouse_clicked = false;
-        let mut right_mouse_clicked = false;
+    let mut builder = winit::window::WindowBuilder::new();
+    builder = builder.with_title("Minecrust");
+    builder = builder.with_inner_size(winit::dpi::LogicalSize {
+        width: width as i32,
+        height: height as i32,
+    });
+    let mut window = builder.build(&event_loop).unwrap();
 
-        let spawner = Spawner::new();
+    let mut state = block_on(State::new(&window));
 
-        // Remove Loader element from DOM
-        #[cfg(target_arch = "wasm32")]
-        {
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| {
-                    let loader_elem = doc.get_element_by_id("loader")?;
-                    loader_elem.remove();
-                    Some(())
-                });
-        }
+    let mut curr_modifier_state: winit::event::ModifiersState =
+        winit::event::ModifiersState::empty();
+    let mut cursor_grabbed = false;
 
-        self.event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Poll;
+    let mut left_mouse_clicked = false;
+    let mut right_mouse_clicked = false;
 
-            match event {
-                Event::WindowEvent { event, window_id } => match event {
-                    WindowEvent::CloseRequested => {
-                        if window_id == self.window.id() {
-                            *control_flow = ControlFlow::Exit;
-                        }
+    let spawner = Spawner::new();
+
+    // Remove Loader element from DOM
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let loader_elem = doc.get_element_by_id("loader")?;
+                loader_elem.remove();
+                Some(())
+            });
+    }
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
+        match event {
+            Event::WindowEvent { event, window_id } => match event {
+                WindowEvent::CloseRequested => {
+                    if window_id == window.id() {
+                        *control_flow = ControlFlow::Exit;
                     }
-                    WindowEvent::ModifiersChanged(modifiers) => {
-                        curr_modifier_state = modifiers;
-                    }
-                    WindowEvent::KeyboardInput { input, .. } => {
-                        match (input.virtual_keycode, input.state) {
-                            (Some(VirtualKeyCode::W), ElementState::Pressed) => {
-                                if curr_modifier_state.logo() {
-                                    *control_flow = ControlFlow::Exit;
-                                    return;
-                                }
-                                self.camera_controller.process_window_event(&event);
+                }
+                WindowEvent::ModifiersChanged(modifiers) => {
+                    curr_modifier_state = modifiers;
+                }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    match (input.virtual_keycode, input.state) {
+                        (Some(VirtualKeyCode::W), ElementState::Pressed) => {
+                            if curr_modifier_state.logo() {
+                                *control_flow = ControlFlow::Exit;
+                                return;
                             }
-                            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                                self.window.set_cursor_visible(true);
-                                self.window
-                                    .set_cursor_grab(winit::window::CursorGrabMode::None)
-                                    .expect("Failed to release curosr");
-                                cursor_grabbed = false;
-                            }
-                            _ => {
-                                self.camera_controller.process_window_event(&event);
-                            }
+                            state.camera_controller.process_window_event(&event);
+                        }
+                        (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                            window.set_cursor_visible(true);
+                            window
+                                .set_cursor_grab(winit::window::CursorGrabMode::None)
+                                .expect("Failed to release curosr");
+                            cursor_grabbed = false;
+                        }
+                        _ => {
+                            state.camera_controller.process_window_event(&event);
                         }
                     }
-                    WindowEvent::MouseInput { state, button, .. } => match (state, button) {
-                        (ElementState::Pressed, MouseButton::Left) => {
-                            if !cursor_grabbed {
-                                self.window
-                                    .set_cursor_grab(winit::window::CursorGrabMode::Locked)
-                                    .expect("Failed to grab curosr");
-                                self.window.set_cursor_visible(false);
-                                cursor_grabbed = true;
-                            } else {
-                                left_mouse_clicked = true;
-                            }
-                        }
-                        (ElementState::Pressed, MouseButton::Right) => {
-                            right_mouse_clicked = true;
-                        }
-                        _ => (),
-                    },
-
-                    WindowEvent::Resized(physical_size) => {
-                        self.resize(physical_size);
-                    }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        self.resize(*new_inner_size);
-                    }
-                    _ => (),
-                },
-
-                Event::DeviceEvent { event, .. } => match event {
-                    DeviceEvent::MouseMotion { .. } => {
-                        if cursor_grabbed {
-                            self.camera_controller.process_device_event(&event);
+                }
+                WindowEvent::MouseInput { state, button, .. } => match (state, button) {
+                    (ElementState::Pressed, MouseButton::Left) => {
+                        if !cursor_grabbed {
+                            window
+                                .set_cursor_grab(winit::window::CursorGrabMode::Locked)
+                                .expect("Failed to grab curosr");
+                            window.set_cursor_visible(false);
+                            cursor_grabbed = true;
+                        } else {
+                            left_mouse_clicked = true;
                         }
                     }
-                    _ => (),
-                },
-
-                Event::UserEvent(event) => match event {
-                    DomControlsUserEvent::AButtonPressed => {
-                        left_mouse_clicked = true;
-                    }
-                    DomControlsUserEvent::BButtonPressed => {
+                    (ElementState::Pressed, MouseButton::Right) => {
                         right_mouse_clicked = true;
                     }
-                    DomControlsUserEvent::WindowResized { size } => {
-                        log::info!("Web window resized: {:?}", size);
-                        self.resize(size.to_physical(self.window.scale_factor()));
-                    }
-                    _ => {
-                        self.camera_controller.process_web_dom_button_event(&event);
-                    }
+                    _ => (),
                 },
 
-                Event::RedrawRequested(_) => {
-                    let frame = match self.surface.get_current_texture() {
-                        Ok(frame) => frame,
-                        Err(_) => {
-                            self.surface.configure(&self.device, &self.surface_config);
-                            self.surface
-                                .get_current_texture()
-                                .expect("Failed to acquire next surface texture!")
-                        }
-                    };
-                    let view = frame
-                        .texture
-                        .create_view(&wgpu::TextureViewDescriptor::default());
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(physical_size);
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    state.resize(*new_inner_size);
+                }
+                _ => (),
+            },
 
-                    let update_result = self
-                        .camera_controller
-                        .update_camera(&mut self.camera, &self.world_state);
-                    self.camera_uniform.update_view_proj(&self.camera);
-                    self.queue.write_buffer(
-                        &self.scene.camera_staging_buf,
-                        0,
-                        bytemuck::cast_slice(&[self.camera_uniform]),
-                    );
-
-                    self.light_uniform.update_light_space_proj(&self.camera);
-                    self.queue.write_buffer(
-                        &self.scene.light_buf,
-                        0,
-                        bytemuck::cast_slice(&[self.light_uniform.to_raw()]),
-                    );
-
-                    #[derive(PartialEq)]
-                    struct ChunkModification {
-                        new_chunk: [usize; 2],
-                        old_chunk: [usize; 2],
+            Event::DeviceEvent { event, .. } => match event {
+                DeviceEvent::MouseMotion { .. } => {
+                    if cursor_grabbed {
+                        state.camera_controller.process_device_event(&event);
                     }
-                    let mut chunk_mods: Vec<ChunkModification> = vec![];
+                }
+                _ => (),
+            },
 
-                    if update_result.did_move {
-                        let chunks_modified = self.world_state.highlight_colliding_block(&self.camera);
-                        for chunk_idx in chunks_modified {
-                            chunk_mods.push(ChunkModification {
-                                new_chunk: chunk_idx,
-                                old_chunk: chunk_idx,
-                            });
-                        }
+            Event::UserEvent(event) => match event {
+                DomControlsUserEvent::AButtonPressed => {
+                    left_mouse_clicked = true;
+                }
+                DomControlsUserEvent::BButtonPressed => {
+                    right_mouse_clicked = true;
+                }
+                DomControlsUserEvent::WindowResized { size } => {
+                    log::info!("Web window resized: {:?}", size);
 
-                        let sunlight_vtx_data = self.light_uniform.vertex_data_for_sunlight();
-                        self.queue.write_buffer(
-                            &self.scene.vertex_buffers[1],
-                            0,
-                            bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
-                        );
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        window.set_inner_size(winit::dpi::PhysicalSize::new(
+                            state.surface_config.width as i32,
+                            state.surface_config.height as i32,
+                        ));
                     }
+                    state.resize(size.to_physical(window.scale_factor()));
+                }
+                _ => {
+                    state.camera_controller.process_web_dom_button_event(&event);
+                }
+            },
 
-                    if update_result.did_move_blocks {
-                        let chunk_idx = update_result.new_chunk_location;
+            Event::RedrawRequested(_) => {
+                let frame = match state.surface.get_current_texture() {
+                    Ok(frame) => frame,
+                    Err(_) => {
+                        state
+                            .surface
+                            .configure(&state.device, &state.surface_config);
+                        state
+                            .surface
+                            .get_current_texture()
+                            .expect("Failed to acquire next surface texture!")
+                    }
+                };
+                let view = frame
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let update_result = state
+                    .camera_controller
+                    .update_camera(&mut state.camera, &state.world_state);
+                state.camera_uniform.update_view_proj(&state.camera);
+                state.queue.write_buffer(
+                    &state.scene.camera_staging_buf,
+                    0,
+                    bytemuck::cast_slice(&[state.camera_uniform]),
+                );
+
+                state.light_uniform.update_light_space_proj(&state.camera);
+                state.queue.write_buffer(
+                    &state.scene.light_buf,
+                    0,
+                    bytemuck::cast_slice(&[state.light_uniform.to_raw()]),
+                );
+
+                #[derive(PartialEq)]
+                struct ChunkModification {
+                    new_chunk: [usize; 2],
+                    old_chunk: [usize; 2],
+                }
+                let mut chunk_mods: Vec<ChunkModification> = vec![];
+
+                if update_result.did_move {
+                    let chunks_modified =
+                        state.world_state.highlight_colliding_block(&state.camera);
+                    for chunk_idx in chunks_modified {
                         chunk_mods.push(ChunkModification {
                             new_chunk: chunk_idx,
                             old_chunk: chunk_idx,
                         });
                     }
 
-                    // Break a block with the camera!
-                    if left_mouse_clicked || right_mouse_clicked {
-                        let chunks_modified = if right_mouse_clicked {
-                            self.world_state.place_block(&self.camera, world::BlockType::Sand)
-                        } else {
-                            self.world_state.break_block(&self.camera)
-                        };
-                        left_mouse_clicked = false;
-                        right_mouse_clicked = false;
+                    let sunlight_vtx_data = state.light_uniform.vertex_data_for_sunlight();
+                    state.queue.write_buffer(
+                        &state.scene.vertex_buffers[1],
+                        0,
+                        bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
+                    );
+                }
 
+                if update_result.did_move_blocks {
+                    let chunk_idx = update_result.new_chunk_location;
+                    chunk_mods.push(ChunkModification {
+                        new_chunk: chunk_idx,
+                        old_chunk: chunk_idx,
+                    });
+                }
+
+                // Break a block with the camera!
+                if left_mouse_clicked || right_mouse_clicked {
+                    let chunks_modified = if right_mouse_clicked {
+                        state
+                            .world_state
+                            .place_block(&state.camera, world::BlockType::Sand)
+                    } else {
+                        state.world_state.break_block(&state.camera)
+                    };
+                    left_mouse_clicked = false;
+                    right_mouse_clicked = false;
+
+                    for chunk_idx in chunks_modified {
+                        chunk_mods.push(ChunkModification {
+                            new_chunk: chunk_idx,
+                            old_chunk: chunk_idx,
+                        });
+                    }
+
+                    if !update_result.did_move {
+                        let chunks_modified =
+                            state.world_state.highlight_colliding_block(&state.camera);
                         for chunk_idx in chunks_modified {
                             chunk_mods.push(ChunkModification {
                                 new_chunk: chunk_idx,
                                 old_chunk: chunk_idx,
                             });
                         }
-
-                        if !update_result.did_move {
-                            let chunks_modified = self.world_state.highlight_colliding_block(&self.camera);
-                            for chunk_idx in chunks_modified {
-                                chunk_mods.push(ChunkModification {
-                                    new_chunk: chunk_idx,
-                                    old_chunk: chunk_idx,
-                                });
-                            }
-                        }
                     }
-
-                    if update_result.did_move_chunks {
-                        let new_chunk_order = self.world_state.get_chunk_order_by_distance(&self.camera);
-
-                        let new_chunk_order_hashset =
-                            new_chunk_order.iter().cloned().collect::<HashSet<_>>();
-                        let old_chunk_order_hashset =
-                            self.scene.chunk_order.iter().cloned().collect::<HashSet<_>>();
-
-                        let new_chunks = (&new_chunk_order_hashset - &old_chunk_order_hashset)
-                            .iter()
-                            .cloned()
-                            .collect::<Vec<_>>();
-                        let old_chunks = (&old_chunk_order_hashset - &new_chunk_order_hashset)
-                            .iter()
-                            .cloned()
-                            .collect::<Vec<_>>();
-                        let neighbors_to_new_chunks =
-                            self.world_state.find_chunk_neighbors(&new_chunks, &self.scene.chunk_order);
-
-                        for chunk in neighbors_to_new_chunks {
-                            chunk_mods.push(ChunkModification {
-                                new_chunk: chunk,
-                                old_chunk: chunk,
-                            })
-                        }
-                        for (new_chunk, old_chunk) in izip!(new_chunks, old_chunks) {
-                            chunk_mods.push(ChunkModification {
-                                new_chunk,
-                                old_chunk,
-                            });
-                        }
-
-                        self.scene.chunk_order = new_chunk_order;
-                    }
-
-                    if !chunk_mods.is_empty() {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let chunk_mod_time = std::time::Instant::now();
-
-                        chunk_mods.dedup();
-
-                        for chunk_mod in chunk_mods.iter() {
-                            self.world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
-                        }
-                        #[cfg(not(target_arch = "wasm32"))]
-                        if VERBOSE_LOGS && update_result.did_move_chunks {
-                            println!(
-                                "Took {}ms to allocate chunks",
-                                chunk_mod_time.elapsed().as_millis()
-                            );
-                        }
-
-                        let new_chunk_datas = chunk_mods
-                            .iter()
-                            .map(|chunk_mod| {
-                                let new_chunk_data =
-                                    self.world_state.compute_chunk_mesh(chunk_mod.new_chunk, &self.camera);
-
-                                let render_descriptor_idx =
-                                    self.world_state.get_render_descriptor_idx(chunk_mod.old_chunk);
-                                if chunk_mod.new_chunk != chunk_mod.old_chunk {
-                                    self.world_state.set_render_descriptor_idx(
-                                        chunk_mod.old_chunk,
-                                        world::NO_RENDER_DESCRIPTOR_INDEX,
-                                    );
-                                    self.world_state.set_render_descriptor_idx(
-                                        chunk_mod.new_chunk,
-                                        render_descriptor_idx,
-                                    );
-                                }
-
-                                (new_chunk_data, render_descriptor_idx)
-                            })
-                            .collect::<Vec<_>>();
-
-                        #[cfg(not(target_arch = "wasm32"))]
-                        if VERBOSE_LOGS && update_result.did_move_chunks {
-                            println!(
-                                "Took {}ms to update chunks",
-                                chunk_mod_time.elapsed().as_millis()
-                            );
-                        }
-
-                        for (new_chunk_data, render_descriptor_idx) in new_chunk_datas.into_iter() {
-                            let chunk_render_descriptor =
-                                &mut self.scene.chunk_render_descriptors[render_descriptor_idx];
-
-                            for typed_instances in new_chunk_data.typed_instances_vec.iter() {
-                                let maybe_instance_buffer = chunk_render_descriptor
-                                    .annotated_instance_buffers
-                                    .iter_mut()
-                                    .find(|ib| ib.data_type == typed_instances.data_type);
-
-                                if let Some(instance_buffer) = maybe_instance_buffer {
-                                    self.queue.write_buffer(
-                                        &instance_buffer.buffer,
-                                        0,
-                                        bytemuck::cast_slice(&typed_instances.instance_data),
-                                    );
-                                    instance_buffer.len = typed_instances.instance_data.len();
-                                }
-                            }
-                        }
-                    }
-
-                    render_scene(&view, &self.device, &self.queue, &self.scene, &self.world_state, &spawner);
-
-                    frame.present();
-                    self.camera_controller.reset_mouse_delta();
                 }
 
-                Event::MainEventsCleared => {
-                    // RedrawRequested will only trigger once, unless we manually
-                    // request it.
-                    self.window.request_redraw();
+                if update_result.did_move_chunks {
+                    let new_chunk_order =
+                        state.world_state.get_chunk_order_by_distance(&state.camera);
+
+                    let new_chunk_order_hashset =
+                        new_chunk_order.iter().cloned().collect::<HashSet<_>>();
+                    let old_chunk_order_hashset = state
+                        .scene
+                        .chunk_order
+                        .iter()
+                        .cloned()
+                        .collect::<HashSet<_>>();
+
+                    let new_chunks = (&new_chunk_order_hashset - &old_chunk_order_hashset)
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let old_chunks = (&old_chunk_order_hashset - &new_chunk_order_hashset)
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let neighbors_to_new_chunks = state
+                        .world_state
+                        .find_chunk_neighbors(&new_chunks, &state.scene.chunk_order);
+
+                    for chunk in neighbors_to_new_chunks {
+                        chunk_mods.push(ChunkModification {
+                            new_chunk: chunk,
+                            old_chunk: chunk,
+                        })
+                    }
+                    for (new_chunk, old_chunk) in izip!(new_chunks, old_chunks) {
+                        chunk_mods.push(ChunkModification {
+                            new_chunk,
+                            old_chunk,
+                        });
+                    }
+
+                    state.scene.chunk_order = new_chunk_order;
+                }
+
+                if !chunk_mods.is_empty() {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let chunk_mod_time = std::time::Instant::now();
+
+                    chunk_mods.dedup();
+
+                    for chunk_mod in chunk_mods.iter() {
+                        state.world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if VERBOSE_LOGS && update_result.did_move_chunks {
+                        println!(
+                            "Took {}ms to allocate chunks",
+                            chunk_mod_time.elapsed().as_millis()
+                        );
+                    }
+
+                    let new_chunk_datas = chunk_mods
+                        .iter()
+                        .map(|chunk_mod| {
+                            let new_chunk_data = state
+                                .world_state
+                                .compute_chunk_mesh(chunk_mod.new_chunk, &state.camera);
+
+                            let render_descriptor_idx = state
+                                .world_state
+                                .get_render_descriptor_idx(chunk_mod.old_chunk);
+                            if chunk_mod.new_chunk != chunk_mod.old_chunk {
+                                state.world_state.set_render_descriptor_idx(
+                                    chunk_mod.old_chunk,
+                                    world::NO_RENDER_DESCRIPTOR_INDEX,
+                                );
+                                state.world_state.set_render_descriptor_idx(
+                                    chunk_mod.new_chunk,
+                                    render_descriptor_idx,
+                                );
+                            }
+
+                            (new_chunk_data, render_descriptor_idx)
+                        })
+                        .collect::<Vec<_>>();
 
                     #[cfg(not(target_arch = "wasm32"))]
-                    spawner.run_until_stalled();
+                    if VERBOSE_LOGS && update_result.did_move_chunks {
+                        println!(
+                            "Took {}ms to update chunks",
+                            chunk_mod_time.elapsed().as_millis()
+                        );
+                    }
+
+                    for (new_chunk_data, render_descriptor_idx) in new_chunk_datas.into_iter() {
+                        let chunk_render_descriptor =
+                            &mut state.scene.chunk_render_descriptors[render_descriptor_idx];
+
+                        for typed_instances in new_chunk_data.typed_instances_vec.iter() {
+                            let maybe_instance_buffer = chunk_render_descriptor
+                                .annotated_instance_buffers
+                                .iter_mut()
+                                .find(|ib| ib.data_type == typed_instances.data_type);
+
+                            if let Some(instance_buffer) = maybe_instance_buffer {
+                                state.queue.write_buffer(
+                                    &instance_buffer.buffer,
+                                    0,
+                                    bytemuck::cast_slice(&typed_instances.instance_data),
+                                );
+                                instance_buffer.len = typed_instances.instance_data.len();
+                            }
+                        }
+                    }
                 }
 
-                _ => (),
+                render_scene(
+                    &view,
+                    &state.device,
+                    &state.queue,
+                    &state.scene,
+                    &state.world_state,
+                    &spawner,
+                );
+
+                frame.present();
+                state.camera_controller.reset_mouse_delta();
             }
-        });
-    }
+
+            Event::MainEventsCleared => {
+                // RedrawRequested will only trigger once, unless we manually
+                // request it.
+                window.request_redraw();
+
+                #[cfg(not(target_arch = "wasm32"))]
+                spawner.run_until_stalled();
+            }
+
+            _ => (),
+        }
+    });
 }
 
 fn setup_scene(
