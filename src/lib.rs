@@ -5,6 +5,7 @@ extern crate bmp;
 
 pub mod camera;
 pub mod color;
+pub mod dom_controls;
 pub mod face;
 pub mod instance;
 pub mod light;
@@ -14,9 +15,9 @@ pub mod texture;
 pub mod vec_extra;
 pub mod vertex;
 pub mod world;
-pub mod dom_controls;
 
 use cgmath::{prelude::*, Point3};
+use dom_controls::DomControlsUserEvent;
 use futures::executor::block_on;
 use itertools::Itertools;
 use palette::Pixel;
@@ -26,10 +27,9 @@ use vertex::QuadListRenderData;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopProxy, EventLoopBuilder},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy},
 };
 use world::{CHUNK_XZ_SIZE, CHUNK_Y_SIZE, VISIBLE_CHUNK_WIDTH};
-use dom_controls::{DomControlsUserEvent};
 
 use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
 
@@ -49,31 +49,8 @@ pub fn run(width: usize, height: usize) {
         }
     }
 
-    let s = block_on(setup(width, height));
-    start(s);
-}
-
-struct Setup {
-    window: winit::window::Window,
-    event_loop: EventLoop<DomControlsUserEvent>,
-    #[allow(dead_code)]
-    instance: wgpu::Instance,
-    size: winit::dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-}
-
-struct AnnotatedInstanceBuffer {
-    buffer: wgpu::Buffer,
-    len: usize,
-    data_type: world::ChunkDataType,
-}
-struct ChunkRenderDescriptor {
-    #[allow(dead_code)]
-    world_chunk_position: [usize; 2],
-    annotated_instance_buffers: Vec<AnnotatedInstanceBuffer>,
+    let mut s = block_on(State::new(width, height));
+    s.run();
 }
 
 struct Scene {
@@ -99,567 +76,574 @@ struct Scene {
     pipeline_wire_no_instancing: Option<wgpu::RenderPipeline>,
 }
 
-async fn setup(width: usize, height: usize) -> Setup {
-    let event_loop = EventLoopBuilder::<DomControlsUserEvent>::with_user_event().build();
-    let mut builder = winit::window::WindowBuilder::new();
-    builder = builder.with_title("Minecrust");
-    builder = builder.with_inner_size(winit::dpi::LogicalSize {
-        width: width as i32,
-        height: height as i32,
-    });
-    let window = builder.build(&event_loop).unwrap();
+struct State {
+    window: winit::window::Window,
+    event_loop: EventLoop<DomControlsUserEvent>,
+    #[allow(dead_code)]
+    instance: wgpu::Instance,
+    size: winit::dpi::PhysicalSize<u32>,
+    surface_config: wgpu::SurfaceConfiguration,
+    surface: wgpu::Surface,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-           let backend = wgpu::Backends::SECONDARY;
-        } else {
-           let backend = wgpu::Backends::PRIMARY;
-        }
-    };
-    let instance = wgpu::Instance::new(backend);
+    camera_controller: camera::CameraController,
+    camera: camera::Camera,
+    camera_uniform: camera::CameraUniform,
+    light_uniform: light::LightUniform,
+    world_state: world::WorldState,
 
-    unsafe {
-    crate::dom_controls::set_global_event_loop_proxy(&event_loop);
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        // Winit prevents sizing with CSS, so we have to set
-        // the size manually when on web.
-        use winit::dpi::LogicalSize;
-        // window.set_inner_size(LogicalSize::new(width as i32, height as i32));
-
-        use winit::platform::web::WindowExtWebSys;
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                let dst = doc.get_element_by_id("wasm-container")?;
-                let canvas = web_sys::Element::from(window.canvas());
-                dst.append_child(&canvas).ok()?;
-                Some(())
-            })
-            .expect("Couldn't append canvas to document body.");
-    }
-
-    let size = window.inner_size();
-    let surface = unsafe {
-        let surface = instance.create_surface(&window);
-        surface
-    };
-
-    log::warn!("WGPU setup");
-    let adapter =
-        wgpu::util::initialize_adapter_from_env_or_default(&instance, backend, Some(&surface))
-            .await
-            .expect("No suitable GPU adapters found on the system!");
-
-    let adapter_info = adapter.get_info();
-    println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
-
-    log::warn!("Requesting device");
-    let trace_dir = std::env::var("WGPU_TRACE");
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                features: adapter.features(),
-                limits: adapter.limits(),
-            },
-            trace_dir.ok().as_ref().map(std::path::Path::new),
-        )
-        .await
-        .expect("Unable to find a suitable GPU adapter!");
-
-    Setup {
-        window,
-        event_loop,
-        instance,
-        size,
-        surface,
-        adapter,
-        device,
-        queue,
-    }
+    scene: Scene,
 }
 
-fn resize(
-    new_size: winit::dpi::PhysicalSize<u32>,
-    device: &wgpu::Device,
-    surface: &wgpu::Surface,
-    window: &winit::window::Window,
-    config: &mut wgpu::SurfaceConfiguration,
-    scene: &mut Scene,
-    camera: &mut camera::Camera,
-) {
-    if new_size.width > 0 && new_size.height > 0 {
-        config.width = new_size.width;
-        config.height = new_size.height;
-        log::info!("Resizing to {}x{}", config.width, config.height);
-        surface.configure(&device, &config);
-        scene.depth_texture = texture::Texture::create_depth_texture(
-            "depth_texture",
-            &device,
-            [config.width, config.height],
-            &wgpu::SamplerDescriptor {
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                compare: Some(wgpu::CompareFunction::LessEqual),
-                lod_min_clamp: -100.0,
-                lod_max_clamp: 100.0,
-                ..Default::default()
-            },
-        );
-        camera.aspect = config.width as f32 / config.height as f32;
+struct AnnotatedInstanceBuffer {
+    buffer: wgpu::Buffer,
+    len: usize,
+    data_type: world::ChunkDataType,
+}
+struct ChunkRenderDescriptor {
+    #[allow(dead_code)]
+    world_chunk_position: [usize; 2],
+    annotated_instance_buffers: Vec<AnnotatedInstanceBuffer>,
+}
+
+impl State {
+    async fn new(width: usize, height: usize) -> Self {
+        let event_loop = EventLoopBuilder::<DomControlsUserEvent>::with_user_event().build();
+        unsafe {
+            crate::dom_controls::set_global_event_loop_proxy(&event_loop);
+        }
+
+        let mut builder = winit::window::WindowBuilder::new();
+        builder = builder.with_title("Minecrust");
+        builder = builder.with_inner_size(winit::dpi::LogicalSize {
+            width: width as i32,
+            height: height as i32,
+        });
+        let window = builder.build(&event_loop).unwrap();
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+               let backend = wgpu::Backends::SECONDARY;
+            } else {
+               let backend = wgpu::Backends::PRIMARY;
+            }
+        };
+        let instance = wgpu::Instance::new(backend);
 
         #[cfg(target_arch = "wasm32")]
         {
-            window.set_inner_size(winit::dpi::PhysicalSize::new(
-                config.width as i32,
-                config.height as i32,
-            ));
+            // Winit prevents sizing with CSS, so we have to set
+            // the size manually when on web.
+            use winit::dpi::LogicalSize;
+            // window.set_inner_size(LogicalSize::new(width as i32, height as i32));
+
+            use winit::platform::web::WindowExtWebSys;
+            web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| {
+                    let dst = doc.get_element_by_id("wasm-container")?;
+                    let canvas = web_sys::Element::from(window.canvas());
+                    dst.append_child(&canvas).ok()?;
+                    Some(())
+                })
+                .expect("Couldn't append canvas to document body.");
+        }
+
+        let size = window.inner_size();
+        let surface = unsafe {
+            let surface = instance.create_surface(&window);
+            surface
+        };
+
+        log::warn!("WGPU setup");
+        let adapter =
+            wgpu::util::initialize_adapter_from_env_or_default(&instance, backend, Some(&surface))
+                .await
+                .expect("No suitable GPU adapters found on the system!");
+
+        let adapter_info = adapter.get_info();
+        println!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
+
+        log::warn!("Requesting device");
+        let trace_dir = std::env::var("WGPU_TRACE");
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    features: adapter.features(),
+                    limits: adapter.limits(),
+                },
+                trace_dir.ok().as_ref().map(std::path::Path::new),
+            )
+            .await
+            .expect("Unable to find a suitable GPU adapter!");
+
+        let supported_formats = surface.get_supported_formats(&adapter);
+        log::warn!("Supported formats: {:?}", supported_formats);
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+               let chosen_format = wgpu::TextureFormat::Rgba8UnormSrgb;
+            } else {
+               let chosen_format = wgpu::TextureFormat::Bgra8UnormSrgb;
+            }
+        };
+
+        assert!(supported_formats.contains(&chosen_format));
+
+        let mut surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: chosen_format,
+            width: size.width,
+            height: size.height,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+        };
+        surface.configure(&device, &surface_config);
+
+        let mut camera_controller = camera::CameraController::new(0.15, 0.01);
+
+        // Start in the center
+        let center = world::get_world_center();
+        let zfar = 250.0;
+        let mut camera = camera::Camera::new(
+            Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
+            // have it look at the origin
+            (0.0, 0.0, 0.0).into(),
+            // which way is "up"
+            cgmath::Vector3::unit_y(),
+            cgmath::Vector3::unit_y(),
+            surface_config.width as f32 / surface_config.height as f32,
+            70.0,
+            0.1,
+            zfar,
+        );
+
+        let sunlight_pos = glam::Vec3::new(40.0, 30.0, 40.0);
+
+        let scale_factor = 1.0;
+        let sunlight_ortho_proj_coords = vertex::CuboidCoords {
+            left: -(CHUNK_XZ_SIZE as f32 * scale_factor * 2.0),
+            right: CHUNK_XZ_SIZE as f32 * scale_factor * 2.0,
+            bottom: -(CHUNK_XZ_SIZE as f32 * scale_factor * 2.0),
+            top: CHUNK_XZ_SIZE as f32 * scale_factor,
+            near: 0.0,
+            // Can't be too far or z-depth values won't have enough precision
+            far: 125.0,
+        };
+
+        // Light
+        let mut light_uniform = light::LightUniform::new(
+            [0.0, 5.0, 0.0].into(),
+            [1.0, 1.0, 1.0].into(),
+            sunlight_pos,
+            sunlight_ortho_proj_coords,
+            [2048, 2048],
+        );
+
+        let mut camera_uniform = camera::CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
+
+        let mut world_state = world::WorldState::new();
+        world_state.initial_setup(&camera);
+
+        let scene = setup_scene(
+            &surface_config,
+            &adapter,
+            &device,
+            &queue,
+            camera_uniform,
+            &light_uniform,
+            &mut world_state,
+            &camera,
+        );
+
+        State {
+            window,
+            event_loop,
+            instance,
+            size,
+            surface_config,
+            surface,
+            adapter,
+            device,
+            queue,
+
+            camera_controller,
+            camera,
+            camera_uniform,
+            light_uniform,
+            world_state,
+
+            scene,
         }
     }
-}
 
-fn start(
-    Setup {
-        window,
-        event_loop,
-        instance: _,
-        size,
-        surface,
-        adapter,
-        device,
-        queue,
-    }: Setup,
-) {
-    let supported_formats = surface.get_supported_formats(&adapter);
-    log::warn!("Supported formats: {:?}", supported_formats);
+    fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.surface_config.width = new_size.width;
+            self.surface_config.height = new_size.height;
+            log::info!(
+                "Resizing to {}x{}",
+                self.surface_config.width,
+                self.surface_config.height
+            );
+            self.surface.configure(&self.device, &self.surface_config);
+            self.scene.depth_texture = texture::Texture::create_depth_texture(
+                "depth_texture",
+                &self.device,
+                [self.surface_config.width, self.surface_config.height],
+                &wgpu::SamplerDescriptor {
+                    address_mode_u: wgpu::AddressMode::ClampToEdge,
+                    address_mode_v: wgpu::AddressMode::ClampToEdge,
+                    address_mode_w: wgpu::AddressMode::ClampToEdge,
+                    mag_filter: wgpu::FilterMode::Linear,
+                    min_filter: wgpu::FilterMode::Linear,
+                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    compare: Some(wgpu::CompareFunction::LessEqual),
+                    lod_min_clamp: -100.0,
+                    lod_max_clamp: 100.0,
+                    ..Default::default()
+                },
+            );
+            self.camera.aspect =
+                self.surface_config.width as f32 / self.surface_config.height as f32;
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-           let chosen_format = wgpu::TextureFormat::Rgba8UnormSrgb;
-        } else {
-           let chosen_format = wgpu::TextureFormat::Bgra8UnormSrgb;
+            #[cfg(target_arch = "wasm32")]
+            {
+                self.window.set_inner_size(winit::dpi::PhysicalSize::new(
+                    self.surface_config.width as i32,
+                    self.surface_config.height as i32,
+                ));
+            }
         }
-    };
-
-    assert!(supported_formats.contains(&chosen_format));
-
-    let mut config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: chosen_format,
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Fifo,
-        alpha_mode: wgpu::CompositeAlphaMode::Opaque,
-    };
-    surface.configure(&device, &config);
-
-    let mut camera_controller = camera::CameraController::new(0.15, 0.01);
-
-    // Start in the center
-    let center = world::get_world_center();
-    let zfar = 250.0;
-    let mut camera = camera::Camera::new(
-        Point3::<f32>::new(center.x as f32, center.y as f32, center.z as f32),
-        // have it look at the origin
-        (0.0, 0.0, 0.0).into(),
-        // which way is "up"
-        cgmath::Vector3::unit_y(),
-        cgmath::Vector3::unit_y(),
-        config.width as f32 / config.height as f32,
-        70.0,
-        0.1,
-        zfar,
-    );
-
-    let sunlight_pos = glam::Vec3::new(40.0, 30.0, 40.0);
-
-    let scale_factor = 1.0;
-    let sunlight_ortho_proj_coords = vertex::CuboidCoords {
-        left: -(CHUNK_XZ_SIZE as f32 * scale_factor * 2.0),
-        right: CHUNK_XZ_SIZE as f32 * scale_factor * 2.0,
-        bottom: -(CHUNK_XZ_SIZE as f32 * scale_factor * 2.0),
-        top: CHUNK_XZ_SIZE as f32 * scale_factor,
-        near: 0.0,
-        // Can't be too far or z-depth values won't have enough precision
-        far: 125.0,
-    };
-
-    // Light
-    let mut light_uniform = light::LightUniform::new(
-        [0.0, 5.0, 0.0].into(),
-        [1.0, 1.0, 1.0].into(),
-        sunlight_pos,
-        sunlight_ortho_proj_coords,
-        [2048, 2048],
-    );
-
-    let mut camera_uniform = camera::CameraUniform::new();
-    camera_uniform.update_view_proj(&camera);
-
-    let mut world_state = world::WorldState::new();
-    world_state.initial_setup(&camera);
-
-    let mut scene = setup_scene(
-        &config,
-        &adapter,
-        &device,
-        &queue,
-        camera_uniform,
-        &light_uniform,
-        &mut world_state,
-        &camera,
-    );
-
-    let mut curr_modifier_state: winit::event::ModifiersState =
-        winit::event::ModifiersState::empty();
-    let mut cursor_grabbed = false;
-
-    let mut left_mouse_clicked = false;
-    let mut right_mouse_clicked = false;
-
-    let spawner = Spawner::new();
-
-    // Remove Loader element from DOM
-    #[cfg(target_arch = "wasm32")]
-    {
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                let loader_elem = doc.get_element_by_id("loader")?;
-                loader_elem.remove();
-                Some(())
-            });
     }
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
+    fn run(&mut self) {
+        let mut curr_modifier_state: winit::event::ModifiersState =
+            winit::event::ModifiersState::empty();
+        let mut cursor_grabbed = false;
 
-        match event {
-            Event::WindowEvent { event, window_id } => match event {
-                WindowEvent::CloseRequested => {
-                    if window_id == window.id() {
-                        *control_flow = ControlFlow::Exit;
+        let mut left_mouse_clicked = false;
+        let mut right_mouse_clicked = false;
+
+        let spawner = Spawner::new();
+
+        // Remove Loader element from DOM
+        #[cfg(target_arch = "wasm32")]
+        {
+            web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| {
+                    let loader_elem = doc.get_element_by_id("loader")?;
+                    loader_elem.remove();
+                    Some(())
+                });
+        }
+
+        self.event_loop.run(move |event, _, control_flow| {
+            *control_flow = ControlFlow::Poll;
+
+            match event {
+                Event::WindowEvent { event, window_id } => match event {
+                    WindowEvent::CloseRequested => {
+                        if window_id == self.window.id() {
+                            *control_flow = ControlFlow::Exit;
+                        }
                     }
-                }
-                WindowEvent::ModifiersChanged(modifiers) => {
-                    curr_modifier_state = modifiers;
-                }
-                WindowEvent::KeyboardInput { input, .. } => {
-                    match (input.virtual_keycode, input.state) {
-                        (Some(VirtualKeyCode::W), ElementState::Pressed) => {
-                            if curr_modifier_state.logo() {
-                                *control_flow = ControlFlow::Exit;
-                                return;
+                    WindowEvent::ModifiersChanged(modifiers) => {
+                        curr_modifier_state = modifiers;
+                    }
+                    WindowEvent::KeyboardInput { input, .. } => {
+                        match (input.virtual_keycode, input.state) {
+                            (Some(VirtualKeyCode::W), ElementState::Pressed) => {
+                                if curr_modifier_state.logo() {
+                                    *control_flow = ControlFlow::Exit;
+                                    return;
+                                }
+                                self.camera_controller.process_window_event(&event);
                             }
-                            camera_controller.process_window_event(&event);
-                        }
-                        (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                            window.set_cursor_visible(true);
-                            window
-                                .set_cursor_grab(winit::window::CursorGrabMode::None)
-                                .expect("Failed to release curosr");
-                            cursor_grabbed = false;
-                        }
-                        _ => {
-                            camera_controller.process_window_event(&event);
-                        }
-                    }
-                }
-                WindowEvent::MouseInput { state, button, .. } => match (state, button) {
-                    (ElementState::Pressed, MouseButton::Left) => {
-                        if !cursor_grabbed {
-                            window
-                                .set_cursor_grab(winit::window::CursorGrabMode::Locked)
-                                .expect("Failed to grab curosr");
-                            window.set_cursor_visible(false);
-                            cursor_grabbed = true;
-                        } else {
-                            left_mouse_clicked = true;
+                            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                                self.window.set_cursor_visible(true);
+                                self.window
+                                    .set_cursor_grab(winit::window::CursorGrabMode::None)
+                                    .expect("Failed to release curosr");
+                                cursor_grabbed = false;
+                            }
+                            _ => {
+                                self.camera_controller.process_window_event(&event);
+                            }
                         }
                     }
-                    (ElementState::Pressed, MouseButton::Right) => {
-                        right_mouse_clicked = true;
+                    WindowEvent::MouseInput { state, button, .. } => match (state, button) {
+                        (ElementState::Pressed, MouseButton::Left) => {
+                            if !cursor_grabbed {
+                                self.window
+                                    .set_cursor_grab(winit::window::CursorGrabMode::Locked)
+                                    .expect("Failed to grab curosr");
+                                self.window.set_cursor_visible(false);
+                                cursor_grabbed = true;
+                            } else {
+                                left_mouse_clicked = true;
+                            }
+                        }
+                        (ElementState::Pressed, MouseButton::Right) => {
+                            right_mouse_clicked = true;
+                        }
+                        _ => (),
+                    },
+
+                    WindowEvent::Resized(physical_size) => {
+                        self.resize(physical_size);
+                    }
+                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                        self.resize(*new_inner_size);
                     }
                     _ => (),
                 },
 
-                WindowEvent::Resized(physical_size) => {
-                    resize(
-                        physical_size,
-                        &device,
-                        &surface,
-                        &window,
-                        &mut config,
-                        &mut scene,
-                        &mut camera,
-                    );
-                }
-                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    resize(
-                        *new_inner_size,
-                        &device,
-                        &surface,
-                        &window,
-                        &mut config,
-                        &mut scene,
-                        &mut camera,
-                    );
-                }
-                _ => (),
-            },
-
-            Event::DeviceEvent { event, .. } => match event {
-                DeviceEvent::MouseMotion { .. } => {
-                    if cursor_grabbed {
-                        camera_controller.process_device_event(&event);
+                Event::DeviceEvent { event, .. } => match event {
+                    DeviceEvent::MouseMotion { .. } => {
+                        if cursor_grabbed {
+                            self.camera_controller.process_device_event(&event);
+                        }
                     }
-                }
-                _ => (),
-            },
+                    _ => (),
+                },
 
-            Event::UserEvent(event) => match event {
-                DomControlsUserEvent::AButtonPressed => {
-                    left_mouse_clicked = true;
-                }
-                DomControlsUserEvent::BButtonPressed => {
-                    right_mouse_clicked = true;
-                }
-                DomControlsUserEvent::WindowResized { size } => {
-                    log::info!("Web window resized: {:?}", size);
-                    resize(
-                        size.to_physical(window.scale_factor()),
-                        &device,
-                        &surface,
-                        &window,
-                        &mut config,
-                        &mut scene,
-                        &mut camera,
-                    );
-                }
-                _ => {
-                    camera_controller.process_web_dom_button_event(&event);
-                }
-            },
-
-            Event::RedrawRequested(_) => {
-                let frame = match surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(_) => {
-                        surface.configure(&device, &config);
-                        surface
-                            .get_current_texture()
-                            .expect("Failed to acquire next surface texture!")
+                Event::UserEvent(event) => match event {
+                    DomControlsUserEvent::AButtonPressed => {
+                        left_mouse_clicked = true;
                     }
-                };
-                let view = frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-
-                let update_result = camera_controller.update_camera(&mut camera, &world_state);
-                camera_uniform.update_view_proj(&camera);
-                queue.write_buffer(
-                    &scene.camera_staging_buf,
-                    0,
-                    bytemuck::cast_slice(&[camera_uniform]),
-                );
-
-                light_uniform.update_light_space_proj(&camera);
-                queue.write_buffer(
-                    &scene.light_buf,
-                    0,
-                    bytemuck::cast_slice(&[light_uniform.to_raw()]),
-                );
-
-                #[derive(PartialEq)]
-                struct ChunkModification {
-                    new_chunk: [usize; 2],
-                    old_chunk: [usize; 2],
-                }
-                let mut chunk_mods: Vec<ChunkModification> = vec![];
-
-                if update_result.did_move {
-                    let chunks_modified = world_state.highlight_colliding_block(&camera);
-                    for chunk_idx in chunks_modified {
-                        chunk_mods.push(ChunkModification {
-                            new_chunk: chunk_idx,
-                            old_chunk: chunk_idx,
-                        });
+                    DomControlsUserEvent::BButtonPressed => {
+                        right_mouse_clicked = true;
                     }
+                    DomControlsUserEvent::WindowResized { size } => {
+                        log::info!("Web window resized: {:?}", size);
+                        self.resize(size.to_physical(self.window.scale_factor()));
+                    }
+                    _ => {
+                        self.camera_controller.process_web_dom_button_event(&event);
+                    }
+                },
 
-                    let sunlight_vtx_data = light_uniform.vertex_data_for_sunlight();
-                    queue.write_buffer(
-                        &scene.vertex_buffers[1],
-                        0,
-                        bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
-                    );
-                }
-
-                if update_result.did_move_blocks {
-                    let chunk_idx = update_result.new_chunk_location;
-                    chunk_mods.push(ChunkModification {
-                        new_chunk: chunk_idx,
-                        old_chunk: chunk_idx,
-                    });
-                }
-
-                // Break a block with the camera!
-                if left_mouse_clicked || right_mouse_clicked {
-                    let chunks_modified = if right_mouse_clicked {
-                        world_state.place_block(&camera, world::BlockType::Sand)
-                    } else {
-                        world_state.break_block(&camera)
+                Event::RedrawRequested(_) => {
+                    let frame = match self.surface.get_current_texture() {
+                        Ok(frame) => frame,
+                        Err(_) => {
+                            self.surface.configure(&self.device, &self.surface_config);
+                            self.surface
+                                .get_current_texture()
+                                .expect("Failed to acquire next surface texture!")
+                        }
                     };
-                    left_mouse_clicked = false;
-                    right_mouse_clicked = false;
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
 
-                    for chunk_idx in chunks_modified {
-                        chunk_mods.push(ChunkModification {
-                            new_chunk: chunk_idx,
-                            old_chunk: chunk_idx,
-                        });
+                    let update_result = self
+                        .camera_controller
+                        .update_camera(&mut self.camera, &self.world_state);
+                    self.camera_uniform.update_view_proj(&self.camera);
+                    self.queue.write_buffer(
+                        &self.scene.camera_staging_buf,
+                        0,
+                        bytemuck::cast_slice(&[self.camera_uniform]),
+                    );
+
+                    self.light_uniform.update_light_space_proj(&self.camera);
+                    self.queue.write_buffer(
+                        &self.scene.light_buf,
+                        0,
+                        bytemuck::cast_slice(&[self.light_uniform.to_raw()]),
+                    );
+
+                    #[derive(PartialEq)]
+                    struct ChunkModification {
+                        new_chunk: [usize; 2],
+                        old_chunk: [usize; 2],
                     }
+                    let mut chunk_mods: Vec<ChunkModification> = vec![];
 
-                    if !update_result.did_move {
-                        let chunks_modified = world_state.highlight_colliding_block(&camera);
+                    if update_result.did_move {
+                        let chunks_modified = self.world_state.highlight_colliding_block(&self.camera);
                         for chunk_idx in chunks_modified {
                             chunk_mods.push(ChunkModification {
                                 new_chunk: chunk_idx,
                                 old_chunk: chunk_idx,
                             });
                         }
+
+                        let sunlight_vtx_data = self.light_uniform.vertex_data_for_sunlight();
+                        self.queue.write_buffer(
+                            &self.scene.vertex_buffers[1],
+                            0,
+                            bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
+                        );
                     }
-                }
 
-                if update_result.did_move_chunks {
-                    let new_chunk_order = world_state.get_chunk_order_by_distance(&camera);
-
-                    let new_chunk_order_hashset =
-                        new_chunk_order.iter().cloned().collect::<HashSet<_>>();
-                    let old_chunk_order_hashset =
-                        scene.chunk_order.iter().cloned().collect::<HashSet<_>>();
-
-                    let new_chunks = (&new_chunk_order_hashset - &old_chunk_order_hashset)
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    let old_chunks = (&old_chunk_order_hashset - &new_chunk_order_hashset)
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    let neighbors_to_new_chunks =
-                        world_state.find_chunk_neighbors(&new_chunks, &scene.chunk_order);
-
-                    for chunk in neighbors_to_new_chunks {
+                    if update_result.did_move_blocks {
+                        let chunk_idx = update_result.new_chunk_location;
                         chunk_mods.push(ChunkModification {
-                            new_chunk: chunk,
-                            old_chunk: chunk,
-                        })
-                    }
-                    for (new_chunk, old_chunk) in izip!(new_chunks, old_chunks) {
-                        chunk_mods.push(ChunkModification {
-                            new_chunk,
-                            old_chunk,
+                            new_chunk: chunk_idx,
+                            old_chunk: chunk_idx,
                         });
                     }
 
-                    scene.chunk_order = new_chunk_order;
-                }
+                    // Break a block with the camera!
+                    if left_mouse_clicked || right_mouse_clicked {
+                        let chunks_modified = if right_mouse_clicked {
+                            self.world_state.place_block(&self.camera, world::BlockType::Sand)
+                        } else {
+                            self.world_state.break_block(&self.camera)
+                        };
+                        left_mouse_clicked = false;
+                        right_mouse_clicked = false;
 
-                if !chunk_mods.is_empty() {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let chunk_mod_time = std::time::Instant::now();
+                        for chunk_idx in chunks_modified {
+                            chunk_mods.push(ChunkModification {
+                                new_chunk: chunk_idx,
+                                old_chunk: chunk_idx,
+                            });
+                        }
 
-                    chunk_mods.dedup();
-
-                    for chunk_mod in chunk_mods.iter() {
-                        world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if VERBOSE_LOGS && update_result.did_move_chunks {
-                        println!(
-                            "Took {}ms to allocate chunks",
-                            chunk_mod_time.elapsed().as_millis()
-                        );
-                    }
-
-                    let new_chunk_datas = chunk_mods
-                        .iter()
-                        .map(|chunk_mod| {
-                            let new_chunk_data =
-                                world_state.compute_chunk_mesh(chunk_mod.new_chunk, &camera);
-
-                            let render_descriptor_idx =
-                                world_state.get_render_descriptor_idx(chunk_mod.old_chunk);
-                            if chunk_mod.new_chunk != chunk_mod.old_chunk {
-                                world_state.set_render_descriptor_idx(
-                                    chunk_mod.old_chunk,
-                                    world::NO_RENDER_DESCRIPTOR_INDEX,
-                                );
-                                world_state.set_render_descriptor_idx(
-                                    chunk_mod.new_chunk,
-                                    render_descriptor_idx,
-                                );
-                            }
-
-                            (new_chunk_data, render_descriptor_idx)
-                        })
-                        .collect::<Vec<_>>();
-
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if VERBOSE_LOGS && update_result.did_move_chunks {
-                        println!(
-                            "Took {}ms to update chunks",
-                            chunk_mod_time.elapsed().as_millis()
-                        );
-                    }
-
-                    for (new_chunk_data, render_descriptor_idx) in new_chunk_datas.into_iter() {
-                        let chunk_render_descriptor =
-                            &mut scene.chunk_render_descriptors[render_descriptor_idx];
-
-                        for typed_instances in new_chunk_data.typed_instances_vec.iter() {
-                            let maybe_instance_buffer = chunk_render_descriptor
-                                .annotated_instance_buffers
-                                .iter_mut()
-                                .find(|ib| ib.data_type == typed_instances.data_type);
-
-                            if let Some(instance_buffer) = maybe_instance_buffer {
-                                queue.write_buffer(
-                                    &instance_buffer.buffer,
-                                    0,
-                                    bytemuck::cast_slice(&typed_instances.instance_data),
-                                );
-                                instance_buffer.len = typed_instances.instance_data.len();
+                        if !update_result.did_move {
+                            let chunks_modified = self.world_state.highlight_colliding_block(&self.camera);
+                            for chunk_idx in chunks_modified {
+                                chunk_mods.push(ChunkModification {
+                                    new_chunk: chunk_idx,
+                                    old_chunk: chunk_idx,
+                                });
                             }
                         }
                     }
+
+                    if update_result.did_move_chunks {
+                        let new_chunk_order = self.world_state.get_chunk_order_by_distance(&self.camera);
+
+                        let new_chunk_order_hashset =
+                            new_chunk_order.iter().cloned().collect::<HashSet<_>>();
+                        let old_chunk_order_hashset =
+                            self.scene.chunk_order.iter().cloned().collect::<HashSet<_>>();
+
+                        let new_chunks = (&new_chunk_order_hashset - &old_chunk_order_hashset)
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        let old_chunks = (&old_chunk_order_hashset - &new_chunk_order_hashset)
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        let neighbors_to_new_chunks =
+                            self.world_state.find_chunk_neighbors(&new_chunks, &self.scene.chunk_order);
+
+                        for chunk in neighbors_to_new_chunks {
+                            chunk_mods.push(ChunkModification {
+                                new_chunk: chunk,
+                                old_chunk: chunk,
+                            })
+                        }
+                        for (new_chunk, old_chunk) in izip!(new_chunks, old_chunks) {
+                            chunk_mods.push(ChunkModification {
+                                new_chunk,
+                                old_chunk,
+                            });
+                        }
+
+                        self.scene.chunk_order = new_chunk_order;
+                    }
+
+                    if !chunk_mods.is_empty() {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let chunk_mod_time = std::time::Instant::now();
+
+                        chunk_mods.dedup();
+
+                        for chunk_mod in chunk_mods.iter() {
+                            self.world_state.maybe_allocate_chunk(chunk_mod.new_chunk);
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if VERBOSE_LOGS && update_result.did_move_chunks {
+                            println!(
+                                "Took {}ms to allocate chunks",
+                                chunk_mod_time.elapsed().as_millis()
+                            );
+                        }
+
+                        let new_chunk_datas = chunk_mods
+                            .iter()
+                            .map(|chunk_mod| {
+                                let new_chunk_data =
+                                    self.world_state.compute_chunk_mesh(chunk_mod.new_chunk, &self.camera);
+
+                                let render_descriptor_idx =
+                                    self.world_state.get_render_descriptor_idx(chunk_mod.old_chunk);
+                                if chunk_mod.new_chunk != chunk_mod.old_chunk {
+                                    self.world_state.set_render_descriptor_idx(
+                                        chunk_mod.old_chunk,
+                                        world::NO_RENDER_DESCRIPTOR_INDEX,
+                                    );
+                                    self.world_state.set_render_descriptor_idx(
+                                        chunk_mod.new_chunk,
+                                        render_descriptor_idx,
+                                    );
+                                }
+
+                                (new_chunk_data, render_descriptor_idx)
+                            })
+                            .collect::<Vec<_>>();
+
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if VERBOSE_LOGS && update_result.did_move_chunks {
+                            println!(
+                                "Took {}ms to update chunks",
+                                chunk_mod_time.elapsed().as_millis()
+                            );
+                        }
+
+                        for (new_chunk_data, render_descriptor_idx) in new_chunk_datas.into_iter() {
+                            let chunk_render_descriptor =
+                                &mut self.scene.chunk_render_descriptors[render_descriptor_idx];
+
+                            for typed_instances in new_chunk_data.typed_instances_vec.iter() {
+                                let maybe_instance_buffer = chunk_render_descriptor
+                                    .annotated_instance_buffers
+                                    .iter_mut()
+                                    .find(|ib| ib.data_type == typed_instances.data_type);
+
+                                if let Some(instance_buffer) = maybe_instance_buffer {
+                                    self.queue.write_buffer(
+                                        &instance_buffer.buffer,
+                                        0,
+                                        bytemuck::cast_slice(&typed_instances.instance_data),
+                                    );
+                                    instance_buffer.len = typed_instances.instance_data.len();
+                                }
+                            }
+                        }
+                    }
+
+                    render_scene(&view, &self.device, &self.queue, &self.scene, &self.world_state, &spawner);
+
+                    frame.present();
+                    self.camera_controller.reset_mouse_delta();
                 }
 
-                render_scene(&view, &device, &queue, &scene, &world_state, &spawner);
+                Event::MainEventsCleared => {
+                    // RedrawRequested will only trigger once, unless we manually
+                    // request it.
+                    self.window.request_redraw();
 
-                frame.present();
-                camera_controller.reset_mouse_delta();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    spawner.run_until_stalled();
+                }
+
+                _ => (),
             }
-
-            Event::MainEventsCleared => {
-                // RedrawRequested will only trigger once, unless we manually
-                // request it.
-                window.request_redraw();
-
-                #[cfg(not(target_arch = "wasm32"))]
-                spawner.run_until_stalled();
-            }
-
-            _ => (),
-        }
-    });
+        });
+    }
 }
 
 fn setup_scene(
