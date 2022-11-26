@@ -62,10 +62,8 @@ struct Scene {
 }
 
 struct State {
-    size: winit::dpi::PhysicalSize<u32>,
     surface_config: wgpu::SurfaceConfiguration,
     surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
 
@@ -99,25 +97,6 @@ impl State {
             }
         };
         let instance = wgpu::Instance::new(backend);
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            // Winit prevents sizing with CSS, so we have to set
-            // the size manually when on web.
-            use winit::dpi::LogicalSize;
-            // window.set_inner_size(LogicalSize::new(width as i32, height as i32));
-
-            use winit::platform::web::WindowExtWebSys;
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| {
-                    let dst = doc.get_element_by_id("wasm-container")?;
-                    let canvas = web_sys::Element::from(window.canvas());
-                    dst.append_child(&canvas).ok()?;
-                    Some(())
-                })
-                .expect("Couldn't append canvas to document body.");
-        }
 
         let size = window.inner_size();
         let surface = unsafe {
@@ -229,10 +208,8 @@ impl State {
         );
 
         State {
-            size,
             surface_config,
             surface,
-            adapter,
             device,
             queue,
 
@@ -295,13 +272,28 @@ pub fn run(width: usize, height: usize) {
         crate::dom_controls::set_global_event_loop_proxy(&event_loop);
     }
 
-    let mut builder = winit::window::WindowBuilder::new();
-    builder = builder.with_title("Minecrust");
-    builder = builder.with_inner_size(winit::dpi::LogicalSize {
-        width: width as i32,
-        height: height as i32,
-    });
-    let mut window = builder.build(&event_loop).unwrap();
+    let mut window = winit::window::WindowBuilder::new()
+        .with_title("Minecrust")
+        .with_inner_size(winit::dpi::LogicalSize {
+            width: width as i32,
+            height: height as i32,
+        })
+        .build(&event_loop)
+        .unwrap();
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::WindowExtWebSys;
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let dst = doc.get_element_by_id("wasm-container")?;
+                let canvas = web_sys::Element::from(window.canvas());
+                dst.append_child(&canvas).ok()?;
+                Some(())
+            })
+            .expect("Couldn't append canvas to document body.");
+    }
 
     let mut state = block_on(State::new(&window));
 
@@ -311,8 +303,6 @@ pub fn run(width: usize, height: usize) {
 
     let mut left_mouse_clicked = false;
     let mut right_mouse_clicked = false;
-
-    let spawner = Spawner::new();
 
     // Remove Loader element from DOM
     #[cfg(target_arch = "wasm32")]
@@ -326,6 +316,7 @@ pub fn run(width: usize, height: usize) {
             });
     }
 
+    let spawner = Spawner::new();
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -406,6 +397,7 @@ pub fn run(width: usize, height: usize) {
                 DomControlsUserEvent::WindowResized { size } => {
                     log::info!("Web window resized: {:?}", size);
 
+                    state.resize(size.to_physical(window.scale_factor()));
                     #[cfg(target_arch = "wasm32")]
                     {
                         window.set_inner_size(winit::dpi::PhysicalSize::new(
@@ -413,7 +405,6 @@ pub fn run(width: usize, height: usize) {
                             state.surface_config.height as i32,
                         ));
                     }
-                    state.resize(size.to_physical(window.scale_factor()));
                 }
                 _ => {
                     state.camera_controller.process_web_dom_button_event(&event);
