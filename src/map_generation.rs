@@ -9,7 +9,7 @@ const NUM_OCTAVES: usize = 4;
 struct WorldNoise {
     noise: Option<noise::OpenSimplex>,
 }
-static mut noise_generator: WorldNoise = WorldNoise { noise: None };
+static mut NOISE_GENERATOR: WorldNoise = WorldNoise { noise: None };
 
 type ChunkElevationMap = [[u16; CHUNK_XZ_SIZE]; CHUNK_XZ_SIZE];
 
@@ -20,12 +20,12 @@ pub fn generate_chunk_elevation_map(
     max_elevation: u16,
 ) -> ChunkElevationMap {
     let noise = unsafe {
-        match noise_generator.noise {
+        match NOISE_GENERATOR.noise {
             None => {
-                noise_generator.noise = Some(noise::OpenSimplex::new());
-                noise_generator.noise.unwrap()
+                NOISE_GENERATOR.noise = Some(noise::OpenSimplex::new());
+                NOISE_GENERATOR.noise.unwrap()
             }
-            _ => noise_generator.noise.unwrap(),
+            _ => NOISE_GENERATOR.noise.unwrap(),
         }
     };
 

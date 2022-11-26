@@ -16,23 +16,21 @@ pub mod vec_extra;
 pub mod vertex;
 pub mod world;
 
-use cgmath::{prelude::*, Point3};
+use cgmath::Point3;
 use dom_controls::DomControlsUserEvent;
 use futures::executor::block_on;
-use itertools::Itertools;
-use palette::Pixel;
 use spawner::Spawner;
 use std::{borrow::Cow, collections::HashSet, future::Future, mem, pin::Pin, task};
-use vertex::QuadListRenderData;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy},
+    event_loop::{ControlFlow, EventLoopBuilder},
 };
-use world::{CHUNK_XZ_SIZE, CHUNK_Y_SIZE, VISIBLE_CHUNK_WIDTH};
+use world::CHUNK_XZ_SIZE;
 
-use crate::world::{Chunk, ChunkDataType, MAX_CHUNK_WORLD_WIDTH};
+use crate::world::ChunkDataType;
 
+#[allow(dead_code)]
 const VERBOSE_LOGS: bool = false;
 
 #[cfg(target_arch = "wasm32")]
@@ -272,7 +270,7 @@ pub fn run(width: usize, height: usize) {
         crate::dom_controls::set_global_event_loop_proxy(&event_loop);
     }
 
-    let mut window = winit::window::WindowBuilder::new()
+    let window = winit::window::WindowBuilder::new()
         .with_title("Minecrust")
         .with_inner_size(winit::dpi::LogicalSize {
             width: width as i32,
@@ -953,7 +951,6 @@ fn setup_scene(
         include_bytes!("../assets/minecruft_atlas.png"),
         device,
         queue,
-        config,
         "Texture Atlas",
     );
 

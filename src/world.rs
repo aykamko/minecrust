@@ -8,10 +8,8 @@ use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point3, Vector3};
 use collision::Continuous;
 use rand::Rng;
-use std::char::MAX;
 use std::collections::HashSet;
 use std::convert::Into;
-use std::ops::Mul;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
@@ -283,14 +281,6 @@ impl WorldState {
     fn get_chunk(&self, chunk_idx: [usize; 2]) -> &Chunk {
         let chunk_idx = self.chunk_indices[chunk_idx];
         &self.chunks[chunk_idx as usize]
-    }
-
-    fn get_block_mut(&mut self, x: usize, y: usize, z: usize) -> &mut Block {
-        let chunk_idx = self.chunk_indices[[x / CHUNK_XZ_SIZE, z / CHUNK_XZ_SIZE]];
-        let chunk = &mut self.chunks[chunk_idx as usize];
-        chunk
-            .blocks
-            .get_unchecked_mut(x % CHUNK_XZ_SIZE, y, z % CHUNK_XZ_SIZE)
     }
 
     fn get_block(&self, x: usize, y: usize, z: usize) -> &Block {
@@ -738,7 +728,7 @@ impl WorldState {
     pub fn compute_chunk_mesh(&mut self, chunk_idx: [usize; 2], camera: &Camera) -> ChunkData {
         self.maybe_allocate_chunk(chunk_idx);
 
-        use cgmath::{Deg, Quaternion, Vector3};
+        use cgmath::{Deg, Quaternion};
 
         let no_rotation: Quaternion<f32> = Quaternion::from_axis_angle(Vector3::unit_y(), Deg(0.0));
         let flip_to_top: Quaternion<f32> =

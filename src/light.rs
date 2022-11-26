@@ -1,7 +1,6 @@
 use crate::camera::Camera;
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use glam::{Mat4, Vec3};
-use wgpu::Origin3d;
 
 pub struct LightUniform {
     pub position: Vec3,
@@ -104,15 +103,15 @@ impl LightUniform {
             &mut sunlight_vertex_data,
         );
 
-        const sunlight_cube_size: f32 = 1.0;
+        const SUNLIGHT_CUBE_SIZE: f32 = 1.0;
         Vertex::generate_quad_data_for_cube(
             &CuboidCoords {
-                left: self.sun_position_camera_adjusted.x - sunlight_cube_size,
-                right: self.sun_position_camera_adjusted.x + sunlight_cube_size,
-                bottom: self.sun_position_camera_adjusted.y - sunlight_cube_size,
-                top: self.sun_position_camera_adjusted.y + sunlight_cube_size,
-                near: self.sun_position_camera_adjusted.z - sunlight_cube_size,
-                far: self.sun_position_camera_adjusted.z + sunlight_cube_size,
+                left: self.sun_position_camera_adjusted.x - SUNLIGHT_CUBE_SIZE,
+                right: self.sun_position_camera_adjusted.x + SUNLIGHT_CUBE_SIZE,
+                bottom: self.sun_position_camera_adjusted.y - SUNLIGHT_CUBE_SIZE,
+                top: self.sun_position_camera_adjusted.y + SUNLIGHT_CUBE_SIZE,
+                near: self.sun_position_camera_adjusted.z - SUNLIGHT_CUBE_SIZE,
+                far: self.sun_position_camera_adjusted.z + SUNLIGHT_CUBE_SIZE,
             },
             None,
             &mut sunlight_vertex_data,
@@ -120,12 +119,12 @@ impl LightUniform {
 
         Vertex::generate_quad_data_for_cube(
             &CuboidCoords {
-                left: self.sun_target_camera_adjusted.x - sunlight_cube_size,
-                right: self.sun_target_camera_adjusted.x + sunlight_cube_size,
-                bottom: self.sun_target_camera_adjusted.y - sunlight_cube_size,
-                top: self.sun_target_camera_adjusted.y + sunlight_cube_size,
-                near: self.sun_target_camera_adjusted.z - sunlight_cube_size,
-                far: self.sun_target_camera_adjusted.z + sunlight_cube_size,
+                left: self.sun_target_camera_adjusted.x - SUNLIGHT_CUBE_SIZE,
+                right: self.sun_target_camera_adjusted.x + SUNLIGHT_CUBE_SIZE,
+                bottom: self.sun_target_camera_adjusted.y - SUNLIGHT_CUBE_SIZE,
+                top: self.sun_target_camera_adjusted.y + SUNLIGHT_CUBE_SIZE,
+                near: self.sun_target_camera_adjusted.z - SUNLIGHT_CUBE_SIZE,
+                far: self.sun_target_camera_adjusted.z + SUNLIGHT_CUBE_SIZE,
             },
             None,
             &mut sunlight_vertex_data,

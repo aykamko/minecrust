@@ -19,19 +19,19 @@ pub enum DomControlsUserEvent {
 struct EventLoopGlobalState {
     event_loop_proxy: Option<EventLoopProxy<DomControlsUserEvent>>,
 }
-static mut event_loop_global_state: EventLoopGlobalState = EventLoopGlobalState {
+static mut EVENT_LOOP_GLOBAL_STATE: EventLoopGlobalState = EventLoopGlobalState {
     event_loop_proxy: None,
 };
 
 pub unsafe fn set_global_event_loop_proxy(event_loop: &EventLoop<DomControlsUserEvent>) {
-    event_loop_global_state.event_loop_proxy = Some(event_loop.create_proxy());
+    EVENT_LOOP_GLOBAL_STATE.event_loop_proxy = Some(event_loop.create_proxy());
 }
 
 fn send_dom_controls_user_event(event: DomControlsUserEvent) {
     let event_loop_proxy = unsafe {
-        match event_loop_global_state.event_loop_proxy {
+        match EVENT_LOOP_GLOBAL_STATE.event_loop_proxy {
             None => return,
-            _ => event_loop_global_state.event_loop_proxy.as_ref().unwrap(),
+            _ => EVENT_LOOP_GLOBAL_STATE.event_loop_proxy.as_ref().unwrap(),
         }
     };
 

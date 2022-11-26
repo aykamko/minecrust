@@ -1,8 +1,6 @@
-use std::f32::consts::PI;
-
 use crate::{world::CHUNK_XZ_SIZE, DomControlsUserEvent};
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
-use collision::{Aabb3, Frustum, Plane};
+use collision::{Frustum, Plane};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
@@ -157,8 +155,6 @@ impl Camera {
             Plane::from_point_normal(self.eye + self.znear * forward_norm, forward_norm);
         self.frustum.far = Plane::from_point_normal(self.eye + forward_zfar, -forward_norm);
     }
-
-    pub fn filter_visible_chunks(&self, mut chunk_geoms: &Vec<Aabb3<f32>>) {}
 }
 
 // We need this for Rust to store our data correctly for the shaders

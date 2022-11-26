@@ -45,7 +45,6 @@ impl Texture {
         image_file_raw_bytes: &[u8],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
         label: &str,
     ) -> Self {
         let dyn_image = image::load_from_memory(image_file_raw_bytes).unwrap();
