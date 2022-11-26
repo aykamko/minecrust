@@ -134,16 +134,6 @@ import("../pkg/index").then((wasmModule) => {
   translationJoystickElem.addEventListener("touchstart", (event) =>
     preventDoubleTapZoom(event)
   );
-  // .on(
-  //   "dir:up plain:up dir:left plain:left dir:down " +
-  //     "plain:down dir:right plain:right",
-  //   function (evt, data) {
-  //     console.log(evt, data);
-  //   }
-  // )
-  // .on("pressure", function (evt, data) {
-  //   console.log(evt, data);
-  // });
 
   window.addEventListener("resize", () => {
     const viewportWidth = document.documentElement.clientWidth;

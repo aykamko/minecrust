@@ -327,6 +327,7 @@ fn start(
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: wgpu::CompositeAlphaMode::Opaque,
     };
     surface.configure(&device, &config);
 
@@ -433,7 +434,7 @@ fn start(
                         (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
                             window.set_cursor_visible(true);
                             window
-                                .set_cursor_grab(false)
+                                .set_cursor_grab(winit::window::CursorGrabMode::None)
                                 .expect("Failed to release curosr");
                             cursor_grabbed = false;
                         }
@@ -445,7 +446,9 @@ fn start(
                 WindowEvent::MouseInput { state, button, .. } => match (state, button) {
                     (ElementState::Pressed, MouseButton::Left) => {
                         if !cursor_grabbed {
-                            window.set_cursor_grab(true).expect("Failed to grab curosr");
+                            window
+                                .set_cursor_grab(winit::window::CursorGrabMode::Locked)
+                                .expect("Failed to grab curosr");
                             window.set_cursor_visible(false);
                             cursor_grabbed = true;
                         } else {
