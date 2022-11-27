@@ -1343,9 +1343,9 @@ impl WorldState {
         {
             // top, left, far corner of a cylinder
             let floored_position = (
-                self.character_entity.position.x.floor() as usize,
+                self.character_entity.position.x.floor() as usize - 1,
                 self.character_entity.position.y.floor() as usize - 1,
-                self.character_entity.position.z.floor() as usize,
+                self.character_entity.position.z.floor() as usize - 1,
             );
             let mut blocks_to_check_collision: Vec<[usize; 3]> = vec![];
             for (dx, dy, dz) in iproduct!(0..2, 0..3, 0..2) {
