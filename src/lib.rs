@@ -1024,6 +1024,14 @@ impl Game {
                 }
             }
         }
+
+        state.world_state.physics_tick();
+        let updated_character_vtx_data = state.world_state.character_entity.vertex_data();
+        state.queue.write_buffer(
+            &scene.vertex_buffers.character_entity,
+            0,
+            bytemuck::cast_slice(&updated_character_vtx_data.vertex_data),
+        );
     }
 
     fn render_chunk<'a>(
