@@ -4,6 +4,7 @@ use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
 use rand::prelude::SliceRandom;
+use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 
 use nalgebra as na;
 use parry3d::shape::{Cuboid, Cylinder};
@@ -275,6 +276,22 @@ impl CharacterEntity {
     }
 }
 
+struct InputState {
+    is_forward_pressed: bool,
+    is_backward_pressed: bool,
+    is_left_pressed: bool,
+    is_right_pressed: bool,
+}
+
+impl InputState {
+    fn clear_state(&mut self) {
+        self.is_forward_pressed = false;
+        self.is_backward_pressed = false;
+        self.is_left_pressed = false;
+        self.is_right_pressed = false;
+    }
+}
+
 pub struct WorldState {
     pub chunk_indices: Vec2d<u32>,
     chunks: Vec<Chunk>,
@@ -282,6 +299,7 @@ pub struct WorldState {
     highlighted_block: Option<[usize; 3]>,
 
     pub character_entity: CharacterEntity,
+    input_state: InputState,
 }
 
 macro_rules! set_block {
@@ -301,9 +319,9 @@ impl WorldState {
 
         let character_entity = CharacterEntity {
             position: glam::Vec3::new(
-                world_center.x as f32 - 15.0,
+                world_center.x as f32 - 20.0,
                 world_center.y as f32 + 10.0,
-                world_center.z as f32 - 15.0,
+                world_center.z as f32 - 20.0,
             ),
             velocity: glam::Vec3::new(0.0, 0.0, 0.0),
             acceleration: glam::Vec3::new(0.0, 0.0, 0.0),
@@ -319,6 +337,12 @@ impl WorldState {
             highlighted_chunk: None,
             highlighted_block: None,
             character_entity,
+            input_state: InputState {
+                is_forward_pressed: false,
+                is_backward_pressed: false,
+                is_left_pressed: false,
+                is_right_pressed: false,
+            },
         }
     }
 
@@ -1339,7 +1363,7 @@ impl WorldState {
     }
 
     pub fn physics_tick(&mut self) {
-        let GRAVITY_ACCELERATION = glam::Vec3::new(0.0, -0.0005, 0.0);
+        const GRAVITY_ACCELERATION: glam::Vec3 = glam::Vec3::new(0.0, -0.0005, 0.0);
 
         // top, left, far corner of character cylinder
         let floored_position = (
@@ -1421,6 +1445,43 @@ impl WorldState {
                 self.character_entity.velocity += self.character_entity.acceleration;
                 self.character_entity.position += self.character_entity.velocity;
             }
+        }
+
+        const MOVEMENT_VELOCITY: f32 = 0.5;
+        if self.input_state.is_forward_pressed {
+            self.character_entity.position += glam::Vec3::new(MOVEMENT_VELOCITY, 0.0, 0.0)
+        }
+        if self.input_state.is_backward_pressed {
+            self.character_entity.position += glam::Vec3::new(-MOVEMENT_VELOCITY, 0.0, 0.0)
+        }
+        if self.input_state.is_left_pressed {
+            self.character_entity.position += glam::Vec3::new(0.0, 0.0, -MOVEMENT_VELOCITY)
+        }
+        if self.input_state.is_right_pressed {
+            self.character_entity.position += glam::Vec3::new(0.0, 0.0, MOVEMENT_VELOCITY)
+        }
+
+        self.input_state.clear_state()
+    }
+
+    pub fn process_window_event(&mut self, event: &WindowEvent) {
+        match event {
+            WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
+                Some(VirtualKeyCode::I) => {
+                    self.input_state.is_forward_pressed = input.state == ElementState::Pressed;
+                }
+                Some(VirtualKeyCode::J) => {
+                    self.input_state.is_left_pressed = input.state == ElementState::Pressed;
+                }
+                Some(VirtualKeyCode::K) => {
+                    self.input_state.is_backward_pressed = input.state == ElementState::Pressed;
+                }
+                Some(VirtualKeyCode::L) => {
+                    self.input_state.is_right_pressed = input.state == ElementState::Pressed;
+                }
+                _ => (),
+            },
+            _ => (),
         }
     }
 }
