@@ -1265,8 +1265,8 @@ pub fn run(width: usize, height: usize) {
                     #[cfg(target_arch = "wasm32")]
                     {
                         window.set_inner_size(winit::dpi::PhysicalSize::new(
-                            state.surface_config.width as i32,
-                            state.surface_config.height as i32,
+                            game.state.surface_config.width as i32,
+                            game.state.surface_config.height as i32,
                         ));
                     }
                 }
