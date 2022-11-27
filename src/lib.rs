@@ -1336,6 +1336,7 @@ pub fn run(width: usize, height: usize) {
                         }
                         _ => {
                             game.state.camera_controller.process_window_event(&event);
+                            game.state.world_state.process_window_event(&event);
                         }
                     }
                 }
