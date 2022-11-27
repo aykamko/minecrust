@@ -4,7 +4,6 @@ use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
 use rand::prelude::SliceRandom;
-use winit::dpi::Position;
 
 use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point3, Vector3};
@@ -295,21 +294,11 @@ impl WorldState {
         let world_center = get_world_center();
 
         let character_entity = CharacterEntity {
-            // position: glam::Vec3::new(
-            //     world_center.x as f32 + 15.0,
-            //     world_center.y as f32 + 35.0,
-            //     world_center.z as f32 + 35.0,
-            // ),
             position: glam::Vec3::new(
-                world_center.x as f32,
-                world_center.y as f32,
-                world_center.z as f32,
+                world_center.x as f32 - 15.0,
+                world_center.y as f32 + 10.0,
+                world_center.z as f32 - 15.0,
             ),
-            // position: glam::Vec3::new(
-            //     -15.0,
-            //     10.0,
-            //     -15.0,
-            // ),
             velocity: glam::Vec2::new(0.0, 0.0),
             acceleration: glam::Vec2::new(0.0, 0.0),
         };
