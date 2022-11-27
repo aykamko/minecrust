@@ -32,6 +32,7 @@ use crate::world::ChunkDataType;
 
 static RENDER_WIREFRAME: bool = false;
 static RENDER_LIGHT_DEBUG_DATA: bool = false;
+static RENDER_CHARACTER_ENTITY: bool = true;
 
 #[allow(dead_code)]
 const VERBOSE_LOGS: bool = false;
@@ -52,19 +53,19 @@ struct State {
 struct VertexBufers {
     blocks: wgpu::Buffer,
     light_volume: wgpu::Buffer,
-    // character_entity: wgpu::Buffer,
+    character_entity: wgpu::Buffer,
 }
 
 struct IndexBufers {
     blocks: wgpu::Buffer,
     light_volume: wgpu::Buffer,
-    // character_entity: wgpu::Buffer,
+    character_entity: wgpu::Buffer,
 }
 
 struct IndexCounts {
     blocks: usize,
     light_volume: usize,
-    // character_entity: usize,
+    character_entity: usize,
 }
 
 struct Scene {
@@ -88,6 +89,7 @@ struct Scene {
 
     pipeline_wire: Option<wgpu::RenderPipeline>,
     pipeline_wire_no_instancing: Option<wgpu::RenderPipeline>,
+    pipeline_solid_color: Option<wgpu::RenderPipeline>,
 }
 
 struct Game {
@@ -438,6 +440,51 @@ impl Scene {
             multiview: None,
         });
 
+        let pipeline_solid_color = if RENDER_CHARACTER_ENTITY {
+            Some(
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: None,
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: "vs_main",
+                        buffers: vertex_buffer_layouts,
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: "fs_solid_color",
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: surface_config.format,
+                            blend: Some(wgpu::BlendState {
+                                color: wgpu::BlendComponent {
+                                    operation: wgpu::BlendOperation::Add,
+                                    src_factor: wgpu::BlendFactor::SrcAlpha,
+                                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                },
+                                alpha: wgpu::BlendComponent::REPLACE,
+                            }),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        cull_mode: Some(wgpu::Face::Back),
+                        ..Default::default()
+                    },
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: texture::Texture::DEPTH_FORMAT,
+                        depth_write_enabled: true,
+                        depth_compare: wgpu::CompareFunction::Less,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }),
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                }),
+            )
+        } else {
+            None
+        };
+
         let create_wire_pipeline = |vtx_shader_entry_point: &str, cull_mode: Option<wgpu::Face>| {
             if device
                 .features()
@@ -500,8 +547,8 @@ impl Scene {
         });
 
         let face = face::Face::new();
-
         let sunlight_vtx_data = light_uniform.vertex_data_for_sunlight();
+        let character_vtx_data = world_state.character_entity.vertex_data();
 
         let vertex_buffers = VertexBufers {
             blocks: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -514,9 +561,14 @@ impl Scene {
                 contents: bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             }),
+            character_entity: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Character Entity Vertex Buffer"),
+                contents: bytemuck::cast_slice(&character_vtx_data.vertex_data),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            }),
         };
 
-        let index_buffers = IndexBufers { 
+        let index_buffers = IndexBufers {
             blocks: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Main Index Buffer"),
                 contents: bytemuck::cast_slice(&face.index_data),
@@ -527,11 +579,17 @@ impl Scene {
                 contents: bytemuck::cast_slice(&sunlight_vtx_data.index_data),
                 usage: wgpu::BufferUsages::INDEX,
             }),
+            character_entity: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Character Entity Index Buffer"),
+                contents: bytemuck::cast_slice(&character_vtx_data.index_data),
+                usage: wgpu::BufferUsages::INDEX,
+            }),
         };
 
         let index_counts = IndexCounts {
-            blocks: face.index_data.len(), 
+            blocks: face.index_data.len(),
             light_volume: sunlight_vtx_data.index_data.len(),
+            character_entity: character_vtx_data.index_data.len(),
         };
 
         let texture_atlas = texture::Texture::create_pixel_art_image_texture(
@@ -729,6 +787,7 @@ impl Scene {
 
             pipeline_wire,
             pipeline_wire_no_instancing,
+            pipeline_solid_color,
         }
     }
 }
@@ -1058,12 +1117,24 @@ impl Game {
             rpass.set_bind_group(1, &scene.light_bind_group, &[]);
             rpass.set_bind_group(2, &scene.albedo_only_texture_bind_group, &[]);
             rpass.set_vertex_buffer(0, scene.vertex_buffers.blocks.slice(..));
-            rpass.set_index_buffer(scene.index_buffers.blocks.slice(..), wgpu::IndexFormat::Uint16);
+            rpass.set_index_buffer(
+                scene.index_buffers.blocks.slice(..),
+                wgpu::IndexFormat::Uint16,
+            );
 
             for data_type in [ChunkDataType::Opaque, ChunkDataType::SemiTransluscent] {
                 for chunk_idx in scene.chunk_order.iter().rev() {
                     self.render_chunk(&mut rpass, *chunk_idx, data_type);
                 }
+            }
+
+            if RENDER_CHARACTER_ENTITY {
+                rpass.set_vertex_buffer(0, scene.vertex_buffers.character_entity.slice(..));
+                rpass.set_index_buffer(
+                    scene.index_buffers.character_entity.slice(..),
+                    wgpu::IndexFormat::Uint16,
+                );
+                rpass.draw_indexed(0..scene.index_counts.character_entity as u32, 0, 0..1);
             }
         }
 
@@ -1099,7 +1170,10 @@ impl Game {
             rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
             rpass.set_bind_group(2, &scene.light_bind_group, &[]);
             rpass.set_vertex_buffer(0, scene.vertex_buffers.blocks.slice(..));
-            rpass.set_index_buffer(scene.index_buffers.blocks.slice(..), wgpu::IndexFormat::Uint16);
+            rpass.set_index_buffer(
+                scene.index_buffers.blocks.slice(..),
+                wgpu::IndexFormat::Uint16,
+            );
 
             for data_type in [
                 ChunkDataType::Opaque,
@@ -1122,6 +1196,19 @@ impl Game {
                     );
                     rpass.draw_indexed(0..scene.index_counts.light_volume as u32, 0, 0..1);
 
+                    rpass.set_pipeline(&scene.pipeline);
+                }
+            }
+
+            if RENDER_CHARACTER_ENTITY {
+                if let Some(ref pipe) = &scene.pipeline_solid_color {
+                    rpass.set_pipeline(pipe);
+                    rpass.set_vertex_buffer(0, scene.vertex_buffers.character_entity.slice(..));
+                    rpass.set_index_buffer(
+                        scene.index_buffers.character_entity.slice(..),
+                        wgpu::IndexFormat::Uint16,
+                    );
+                    rpass.draw_indexed(0..scene.index_counts.character_entity as u32, 0, 0..1);
                     rpass.set_pipeline(&scene.pipeline);
                 }
             }

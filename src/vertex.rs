@@ -87,7 +87,7 @@ impl Vertex {
         }
     }
 
-    pub fn generate_quad_data_for_cube(
+    pub fn generate_quad_data_for_cuboid(
         cc: &CuboidCoords,
         maybe_projection: Option<glam::Mat4>,
         quad_data_out: &mut QuadListRenderData,
