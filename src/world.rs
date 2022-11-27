@@ -3,7 +3,11 @@ use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
+use parry3d::math::PrincipalAngularInertia;
 use rand::prelude::SliceRandom;
+
+use nalgebra as na;
+use parry3d::shape::{Cuboid, Cylinder};
 
 use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point3, Vector3};
@@ -244,7 +248,7 @@ pub struct Chunk {
 }
 
 pub struct CharacterEntity {
-    position: glam::Vec3,
+    position: glam::Vec3, // center of the cylinder
     velocity: glam::Vec3,
     acceleration: glam::Vec3,
 }
@@ -259,8 +263,8 @@ impl CharacterEntity {
             &CuboidCoords {
                 left: self.position.x - 0.5,
                 right: self.position.x + 0.5,
-                bottom: self.position.y - 2.0,
-                top: self.position.y,
+                bottom: self.position.y - 1.0,
+                top: self.position.y + 1.0,
                 near: self.position.z - 0.5,
                 far: self.position.z + 0.5,
             },
@@ -1336,5 +1340,75 @@ impl WorldState {
     pub fn physics_tick(&mut self) {
         self.character_entity.velocity += self.character_entity.acceleration;
         self.character_entity.position += self.character_entity.velocity;
+
+        // TODO: collision
+        {
+            // top, left, far corner of a cylinder
+            let floored_position = (
+                self.character_entity.position.x.floor() as usize,
+                self.character_entity.position.y.floor() as usize - 1,
+                self.character_entity.position.z.floor() as usize,
+            );
+            let mut blocks_to_check_collision: Vec<[usize; 3]> = vec![];
+            for (dx, dy, dz) in iproduct!(0..2, 0..3, 0..2) {
+                if self
+                    .get_block(
+                        floored_position.0 + dx,
+                        floored_position.1 + dy,
+                        floored_position.2 + dz,
+                    )
+                    .block_type
+                    .is_collidable()
+                {
+                    blocks_to_check_collision.push([
+                        floored_position.0 + dx,
+                        floored_position.1 + dy,
+                        floored_position.2 + dz,
+                    ])
+                }
+            }
+
+            let character_collider = Cylinder::new(1.0, 0.5);
+            let character_pos = na::Isometry3::new(
+                na::vector![
+                    self.character_entity.position.x,
+                    self.character_entity.position.y,
+                    self.character_entity.position.z
+                ],
+                na::zero(),
+            );
+
+            let mut does_collide = false;
+            for block_pos in blocks_to_check_collision {
+                let block_collider = Cuboid::new(na::vector![0.5, 0.5, 0.5]);
+                let block_pos = na::Isometry3::new(
+                    na::vector![
+                        block_pos[0] as f32 + 0.5,
+                        block_pos[1] as f32 + 0.5,
+                        block_pos[2] as f32 + 0.5
+                    ],
+                    na::zero(),
+                );
+
+                let contact = parry3d::query::contact(
+                    &character_pos,
+                    &character_collider,
+                    &block_pos,
+                    &block_collider,
+                    0.01,
+                )
+                .unwrap();
+
+                if contact.is_some() {
+                    does_collide = true;
+                }
+            }
+
+            if does_collide {
+                // println!("character is colliding");
+                self.character_entity.acceleration = glam::Vec3::new(0.0, 0.0, 0.0);
+                self.character_entity.velocity = glam::Vec3::new(0.0, 0.0, 0.0);
+            }
+        }
     }
 }
