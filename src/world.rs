@@ -250,6 +250,7 @@ pub struct CharacterEntity {
     position: glam::Vec3, // center of the cylinder
     velocity: glam::Vec3,
     acceleration: glam::Vec3,
+    contacting_floor: bool,
 }
 
 impl CharacterEntity {
@@ -296,16 +297,17 @@ impl WorldState {
     pub fn new() -> Self {
         let world_center = get_world_center();
 
-        let GRAVITY_ACCELERATION = glam::Vec3::new(0.0, -0.0005, 0.0);
+        // let GRAVITY_ACCELERATION = glam::Vec3::new(0.0, -0.0005, 0.0);
 
         let character_entity = CharacterEntity {
             position: glam::Vec3::new(
-                world_center.x as f32 - 20.0,
+                world_center.x as f32 - 15.0,
                 world_center.y as f32 + 10.0,
-                world_center.z as f32 - 20.0,
+                world_center.z as f32 - 15.0,
             ),
             velocity: glam::Vec3::new(0.0, 0.0, 0.0),
-            acceleration: GRAVITY_ACCELERATION,
+            acceleration: glam::Vec3::new(0.0, 0.0, 0.0),
+            contacting_floor: false,
         };
 
         Self {
@@ -1337,83 +1339,88 @@ impl WorldState {
     }
 
     pub fn physics_tick(&mut self) {
-        self.character_entity.velocity += self.character_entity.acceleration;
-        let mut new_position = self.character_entity.position + self.character_entity.velocity;
+        let GRAVITY_ACCELERATION = glam::Vec3::new(0.0, -0.0005, 0.0);
 
-        {
-            // top, left, far corner of a cylinder
-            let floored_position = (
-                self.character_entity.position.x.floor() as usize - 1,
-                self.character_entity.position.y.floor() as usize - 1,
-                self.character_entity.position.z.floor() as usize - 1,
-            );
-            let mut blocks_to_check_collision: Vec<[usize; 3]> = vec![];
-            for (dx, dy, dz) in iproduct!(0..2, 0..3, 0..2) {
-                if self
-                    .get_block(
-                        floored_position.0 + dx,
-                        floored_position.1 + dy,
-                        floored_position.2 + dz,
-                    )
-                    .block_type
-                    .is_collidable()
-                {
-                    blocks_to_check_collision.push([
-                        floored_position.0 + dx,
-                        floored_position.1 + dy,
-                        floored_position.2 + dz,
-                    ])
-                }
+        // top, left, far corner of character cylinder
+        let floored_position = (
+            self.character_entity.position.x.floor() as usize - 1,
+            self.character_entity.position.y.floor() as usize + 1,
+            self.character_entity.position.z.floor() as usize - 1,
+        );
+        let mut floor_blocks_to_check_collision: Vec<[usize; 3]> = vec![];
+        for (dx, dz) in iproduct!(0..2, 0..2) {
+            if self
+                .get_block(
+                    floored_position.0 + dx,
+                    floored_position.1 - 2,
+                    floored_position.2 + dz,
+                )
+                .block_type
+                .is_collidable()
+            {
+                floor_blocks_to_check_collision.push([
+                    floored_position.0 + dx,
+                    floored_position.1 - 2,
+                    floored_position.2 + dz,
+                ])
             }
+        }
+        let character_collider = Cylinder::new(1.0, 0.5);
+        let character_pos = na::Isometry3::new(
+            na::vector![
+                self.character_entity.position.x,
+                self.character_entity.position.y,
+                self.character_entity.position.z
+            ],
+            na::zero(),
+        );
 
-            let character_collider = Cylinder::new(1.0, 0.5);
-            let character_pos = na::Isometry3::new(
+        let mut floor_contact: Option<parry3d::query::Contact> = None;
+        for block_pos in floor_blocks_to_check_collision {
+            let block_collider = Cuboid::new(na::vector![0.5, 0.5, 0.5]);
+            let block_pos = na::Isometry3::new(
                 na::vector![
-                    self.character_entity.position.x,
-                    self.character_entity.position.y,
-                    self.character_entity.position.z
+                    block_pos[0] as f32 + 0.5,
+                    block_pos[1] as f32 + 0.5,
+                    block_pos[2] as f32 + 0.5
                 ],
                 na::zero(),
             );
 
-            let mut does_collide = false;
-            for block_pos in blocks_to_check_collision {
-                let block_collider = Cuboid::new(na::vector![0.5, 0.5, 0.5]);
-                let block_pos = na::Isometry3::new(
-                    na::vector![
-                        block_pos[0] as f32 + 0.5,
-                        block_pos[1] as f32 + 0.5,
-                        block_pos[2] as f32 + 0.5
-                    ],
-                    na::zero(),
-                );
+            let maybe_contact = parry3d::query::contact(
+                &character_pos,
+                &character_collider,
+                &block_pos,
+                &block_collider,
+                0.01,
+            )
+            .unwrap();
 
-                let maybe_contact = parry3d::query::contact(
-                    &character_pos,
-                    &character_collider,
-                    &block_pos,
-                    &block_collider,
-                    0.01,
-                )
-                .unwrap();
+            if maybe_contact.is_some() {
+                floor_contact = maybe_contact;
+                break;
+            }
+        }
 
-                if let Some(ref contact) = maybe_contact {
+        match floor_contact {
+            Some(contact) => {
+                self.character_entity.acceleration = glam::Vec3::new(0.0, 0.0, 0.0);
+                self.character_entity.velocity = glam::Vec3::new(0.0, 0.0, 0.0);
+
+                if !self.character_entity.contacting_floor {
                     let adjust_vec =
                         glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
                             * contact.dist;
-                    new_position += adjust_vec;
-
-                    does_collide = true;
-                    break;
+                    self.character_entity.position += adjust_vec;
                 }
+                self.character_entity.contacting_floor = true;
             }
-
-            if does_collide {
-                // println!("character is colliding");
-                self.character_entity.acceleration = glam::Vec3::new(0.0, 0.0, 0.0);
-                self.character_entity.velocity = glam::Vec3::new(0.0, 0.0, 0.0);
+            None => {
+                self.character_entity.acceleration = GRAVITY_ACCELERATION;
+                self.character_entity.contacting_floor = false;
+                self.character_entity.velocity += self.character_entity.acceleration;
+                self.character_entity.position += self.character_entity.velocity;
             }
-            self.character_entity.position = new_position;
         }
     }
 }
