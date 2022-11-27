@@ -3,7 +3,6 @@ use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
-use parry3d::math::PrincipalAngularInertia;
 use rand::prelude::SliceRandom;
 
 use nalgebra as na;
@@ -301,9 +300,9 @@ impl WorldState {
 
         let character_entity = CharacterEntity {
             position: glam::Vec3::new(
-                world_center.x as f32 - 15.0,
+                world_center.x as f32 - 20.0,
                 world_center.y as f32 + 10.0,
-                world_center.z as f32 - 15.0,
+                world_center.z as f32 - 20.0,
             ),
             velocity: glam::Vec3::new(0.0, 0.0, 0.0),
             acceleration: GRAVITY_ACCELERATION,
@@ -1339,9 +1338,8 @@ impl WorldState {
 
     pub fn physics_tick(&mut self) {
         self.character_entity.velocity += self.character_entity.acceleration;
-        self.character_entity.position += self.character_entity.velocity;
+        let mut new_position = self.character_entity.position + self.character_entity.velocity;
 
-        // TODO: collision
         {
             // top, left, far corner of a cylinder
             let floored_position = (
@@ -1390,7 +1388,7 @@ impl WorldState {
                     na::zero(),
                 );
 
-                let contact = parry3d::query::contact(
+                let maybe_contact = parry3d::query::contact(
                     &character_pos,
                     &character_collider,
                     &block_pos,
@@ -1399,8 +1397,14 @@ impl WorldState {
                 )
                 .unwrap();
 
-                if contact.is_some() {
+                if let Some(ref contact) = maybe_contact {
+                    let adjust_vec =
+                        glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
+                            * contact.dist;
+                    new_position += adjust_vec;
+
                     does_collide = true;
+                    break;
                 }
             }
 
@@ -1409,6 +1413,7 @@ impl WorldState {
                 self.character_entity.acceleration = glam::Vec3::new(0.0, 0.0, 0.0);
                 self.character_entity.velocity = glam::Vec3::new(0.0, 0.0, 0.0);
             }
+            self.character_entity.position = new_position;
         }
     }
 }
