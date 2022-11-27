@@ -1182,11 +1182,33 @@ impl Game {
                 wgpu::IndexFormat::Uint16,
             );
 
-            for data_type in [
-                ChunkDataType::Opaque,
-                ChunkDataType::Transluscent,
-                ChunkDataType::SemiTransluscent,
-            ] {
+            for chunk_idx in scene.chunk_order.iter().rev() {
+                self.render_chunk(&mut rpass, *chunk_idx, ChunkDataType::Opaque);
+            }
+
+            if RENDER_CHARACTER_ENTITY {
+                if let Some(ref pipe) = &scene.pipeline_solid_color {
+                    rpass.set_pipeline(pipe);
+                    rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
+                    rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
+                    rpass.set_bind_group(2, &scene.light_bind_group, &[]);
+                    rpass.set_vertex_buffer(0, scene.vertex_buffers.character_entity.slice(..));
+                    rpass.set_index_buffer(
+                        scene.index_buffers.character_entity.slice(..),
+                        wgpu::IndexFormat::Uint16,
+                    );
+                    rpass.draw_indexed(0..scene.index_counts.character_entity as u32, 0, 0..1);
+
+                    rpass.set_pipeline(&scene.pipeline);
+                    rpass.set_vertex_buffer(0, scene.vertex_buffers.blocks.slice(..));
+                    rpass.set_index_buffer(
+                        scene.index_buffers.blocks.slice(..),
+                        wgpu::IndexFormat::Uint16,
+                    );
+                }
+            }
+
+            for data_type in [ChunkDataType::Transluscent, ChunkDataType::SemiTransluscent] {
                 for chunk_idx in scene.chunk_order.iter().rev() {
                     self.render_chunk(&mut rpass, *chunk_idx, data_type);
                 }
@@ -1203,22 +1225,6 @@ impl Game {
                     );
                     rpass.draw_indexed(0..scene.index_counts.light_volume as u32, 0, 0..1);
 
-                    rpass.set_pipeline(&scene.pipeline);
-                }
-            }
-
-            if RENDER_CHARACTER_ENTITY {
-                if let Some(ref pipe) = &scene.pipeline_solid_color {
-                    rpass.set_pipeline(pipe);
-                    rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
-                    rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
-                    rpass.set_bind_group(2, &scene.light_bind_group, &[]);
-                    rpass.set_vertex_buffer(0, scene.vertex_buffers.character_entity.slice(..));
-                    rpass.set_index_buffer(
-                        scene.index_buffers.character_entity.slice(..),
-                        wgpu::IndexFormat::Uint16,
-                    );
-                    rpass.draw_indexed(0..scene.index_counts.character_entity as u32, 0, 0..1);
                     rpass.set_pipeline(&scene.pipeline);
                 }
             }
