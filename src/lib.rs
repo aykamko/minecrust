@@ -49,10 +49,28 @@ struct State {
     world_state: world::WorldState,
 }
 
+struct VertexBufers {
+    blocks: wgpu::Buffer,
+    light_volume: wgpu::Buffer,
+    // character_entity: wgpu::Buffer,
+}
+
+struct IndexBufers {
+    blocks: wgpu::Buffer,
+    light_volume: wgpu::Buffer,
+    // character_entity: wgpu::Buffer,
+}
+
+struct IndexCounts {
+    blocks: usize,
+    light_volume: usize,
+    // character_entity: usize,
+}
+
 struct Scene {
-    vertex_buffers: [wgpu::Buffer; 2],
-    index_buffers: [wgpu::Buffer; 2],
-    index_counts: [usize; 2],
+    vertex_buffers: VertexBufers,
+    index_buffers: IndexBufers,
+    index_counts: IndexCounts,
     albedo_only_texture_bind_group: wgpu::BindGroup,
     texture_bind_group: wgpu::BindGroup,
     camera_bind_group: wgpu::BindGroup,
@@ -485,33 +503,36 @@ impl Scene {
 
         let sunlight_vtx_data = light_uniform.vertex_data_for_sunlight();
 
-        let vertex_buffers = [
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_buffers = VertexBufers {
+            blocks: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Main Vertex Buffer"),
                 contents: bytemuck::cast_slice(&face.vertex_data),
                 usage: wgpu::BufferUsages::VERTEX,
             }),
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            light_volume: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Light Volume Vertex Buffer"),
                 contents: bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             }),
-        ];
+        };
 
-        let index_buffers = [
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buffers = IndexBufers { 
+            blocks: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Main Index Buffer"),
                 contents: bytemuck::cast_slice(&face.index_data),
                 usage: wgpu::BufferUsages::INDEX,
             }),
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            light_volume: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Light Volume Index Buffer"),
                 contents: bytemuck::cast_slice(&sunlight_vtx_data.index_data),
                 usage: wgpu::BufferUsages::INDEX,
             }),
-        ];
+        };
 
-        let index_counts = [face.index_data.len(), sunlight_vtx_data.index_data.len()];
+        let index_counts = IndexCounts {
+            blocks: face.index_data.len(), 
+            light_volume: sunlight_vtx_data.index_data.len(),
+        };
 
         let texture_atlas = texture::Texture::create_pixel_art_image_texture(
             include_bytes!("../assets/minecruft_atlas.png"),
@@ -796,7 +817,7 @@ impl Game {
 
             let sunlight_vtx_data = state.light_uniform.vertex_data_for_sunlight();
             state.queue.write_buffer(
-                &scene.vertex_buffers[1],
+                &scene.vertex_buffers.light_volume,
                 0,
                 bytemuck::cast_slice(&sunlight_vtx_data.vertex_data),
             );
@@ -967,7 +988,7 @@ impl Game {
         if let Some(ref instance_buffer) = maybe_instance_buffer {
             rpass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
             rpass.draw_indexed(
-                0..self.scene.index_counts[0] as u32,
+                0..self.scene.index_counts.blocks as u32,
                 0,
                 0..instance_buffer.len as _,
             );
@@ -976,7 +997,7 @@ impl Game {
                 if let Some(ref pipe) = &self.scene.pipeline_wire {
                     rpass.set_pipeline(pipe);
                     rpass.draw_indexed(
-                        0..self.scene.index_counts[0] as u32,
+                        0..self.scene.index_counts.blocks as u32,
                         0,
                         0..instance_buffer.len as _,
                     );
@@ -1036,8 +1057,8 @@ impl Game {
             rpass.set_bind_group(0, &scene.camera_bind_group, &[]);
             rpass.set_bind_group(1, &scene.light_bind_group, &[]);
             rpass.set_bind_group(2, &scene.albedo_only_texture_bind_group, &[]);
-            rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
-            rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
+            rpass.set_vertex_buffer(0, scene.vertex_buffers.blocks.slice(..));
+            rpass.set_index_buffer(scene.index_buffers.blocks.slice(..), wgpu::IndexFormat::Uint16);
 
             for data_type in [ChunkDataType::Opaque, ChunkDataType::SemiTransluscent] {
                 for chunk_idx in scene.chunk_order.iter().rev() {
@@ -1077,8 +1098,8 @@ impl Game {
             rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
             rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
             rpass.set_bind_group(2, &scene.light_bind_group, &[]);
-            rpass.set_vertex_buffer(0, scene.vertex_buffers[0].slice(..));
-            rpass.set_index_buffer(scene.index_buffers[0].slice(..), wgpu::IndexFormat::Uint16);
+            rpass.set_vertex_buffer(0, scene.vertex_buffers.blocks.slice(..));
+            rpass.set_index_buffer(scene.index_buffers.blocks.slice(..), wgpu::IndexFormat::Uint16);
 
             for data_type in [
                 ChunkDataType::Opaque,
@@ -1094,12 +1115,12 @@ impl Game {
                 // Draw light volume wireframe
                 if let Some(ref pipe) = &scene.pipeline_wire_no_instancing {
                     rpass.set_pipeline(pipe);
-                    rpass.set_vertex_buffer(0, scene.vertex_buffers[1].slice(..));
+                    rpass.set_vertex_buffer(0, scene.vertex_buffers.light_volume.slice(..));
                     rpass.set_index_buffer(
-                        scene.index_buffers[1].slice(..),
+                        scene.index_buffers.light_volume.slice(..),
                         wgpu::IndexFormat::Uint16,
                     );
-                    rpass.draw_indexed(0..scene.index_counts[1] as u32, 0, 0..1);
+                    rpass.draw_indexed(0..scene.index_counts.light_volume as u32, 0, 0..1);
 
                     rpass.set_pipeline(&scene.pipeline);
                 }

@@ -89,20 +89,7 @@ impl BlockType {
         .choose(&mut rand::thread_rng())
         .unwrap()
     }
-}
 
-#[derive(Clone, Copy, PartialEq)]
-#[repr(usize)]
-enum Face {
-    Top = 0,
-    Bottom = 1,
-    Left = 2,
-    Right = 3,
-    Front = 4,
-    Back = 5,
-}
-
-impl BlockType {
     // top, bottom, sides
     fn texture_atlas_offsets(&self) -> [[f32; 2]; 3] {
         match self {
@@ -121,6 +108,17 @@ impl BlockType {
             _ => [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]],
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+#[repr(usize)]
+enum Face {
+    Top = 0,
+    Bottom = 1,
+    Left = 2,
+    Right = 3,
+    Front = 4,
+    Back = 5,
 }
 
 pub struct BlockCollision {
@@ -171,7 +169,7 @@ cfg_if::cfg_if! {
 // The largest the world can be in xz dimension
 pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 // How many chunks are visible in xz dimension
-pub const VISIBLE_CHUNK_WIDTH: usize = 8;
+pub const VISIBLE_CHUNK_WIDTH: usize = 16;
     } else {
 // The largest the world can be in xz dimension
 pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
@@ -244,11 +242,19 @@ pub struct Chunk {
     pub render_descriptor_idx: usize,
 }
 
+struct CharacterEntity {
+    position: glam::UVec3,
+    velocity: glam::Vec2,
+    acceleration: glam::Vec2,
+}
+
 pub struct WorldState {
     pub chunk_indices: Vec2d<u32>,
     chunks: Vec<Chunk>,
     highlighted_chunk: Option<[usize; 2]>,
     highlighted_block: Option<[usize; 3]>,
+
+    character_entity: CharacterEntity,
 }
 
 macro_rules! set_block {
@@ -262,6 +268,14 @@ macro_rules! set_block {
 
 impl WorldState {
     pub fn new() -> Self {
+        let world_center = get_world_center();
+
+        let character_entity = CharacterEntity {
+            position: glam::UVec3::new(world_center.x as u32 + 15, world_center.y as u32 + 35, world_center.z as u32 + 35),
+            velocity: glam::Vec2::new(0.0, 0.0),
+            acceleration: glam::Vec2::new(0.0, 0.0),
+        };
+
         Self {
             chunk_indices: Vec2d::new(
                 vec![CHUNK_DOES_NOT_EXIST_VALUE; MAX_CHUNK_WORLD_WIDTH * MAX_CHUNK_WORLD_WIDTH],
@@ -270,6 +284,7 @@ impl WorldState {
             chunks: vec![],
             highlighted_chunk: None,
             highlighted_block: None,
+            character_entity,
         }
     }
 
