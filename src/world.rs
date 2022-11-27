@@ -263,7 +263,7 @@ impl CharacterEntity {
                 bottom: self.position.y - 2.0,
                 top: self.position.y,
                 near: self.position.z - 0.5,
-                far: self.position.z - 0.5,
+                far: self.position.z + 0.5,
             },
             None,
             &mut result_vertex_data,
