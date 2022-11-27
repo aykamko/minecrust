@@ -245,8 +245,8 @@ pub struct Chunk {
 
 pub struct CharacterEntity {
     position: glam::Vec3,
-    velocity: glam::Vec2,
-    acceleration: glam::Vec2,
+    velocity: glam::Vec3,
+    acceleration: glam::Vec3,
 }
 
 impl CharacterEntity {
@@ -293,14 +293,16 @@ impl WorldState {
     pub fn new() -> Self {
         let world_center = get_world_center();
 
+        let GRAVITY_ACCELERATION = glam::Vec3::new(0.0, -0.0005, 0.0);
+
         let character_entity = CharacterEntity {
             position: glam::Vec3::new(
                 world_center.x as f32 - 15.0,
                 world_center.y as f32 + 10.0,
                 world_center.z as f32 - 15.0,
             ),
-            velocity: glam::Vec2::new(0.0, 0.0),
-            acceleration: glam::Vec2::new(0.0, 0.0),
+            velocity: glam::Vec3::new(0.0, 0.0, 0.0),
+            acceleration: GRAVITY_ACCELERATION,
         };
 
         Self {
@@ -1329,5 +1331,10 @@ impl WorldState {
         } else {
             vec![]
         }
+    }
+
+    pub fn physics_tick(&mut self) {
+        self.character_entity.velocity += self.character_entity.acceleration;
+        self.character_entity.position += self.character_entity.velocity;
     }
 }
