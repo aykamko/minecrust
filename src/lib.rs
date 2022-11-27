@@ -1133,7 +1133,7 @@ pub fn run(width: usize, height: usize) {
 
     let event_loop = EventLoopBuilder::<DomControlsUserEvent>::with_user_event().build();
     unsafe {
-        crate::dom_controls::set_global_event_loop_proxy(&event_loop);
+        dom_controls::set_global_event_loop_proxy(&event_loop);
     }
 
     let window = winit::window::WindowBuilder::new()
@@ -1264,6 +1264,7 @@ pub fn run(width: usize, height: usize) {
                     game.resize(size.to_physical(window.scale_factor()));
                     #[cfg(target_arch = "wasm32")]
                     {
+                        // Web <canvas> element must be resized explicitly, can't use CSS rules
                         window.set_inner_size(winit::dpi::PhysicalSize::new(
                             game.state.surface_config.width as i32,
                             game.state.surface_config.height as i32,
