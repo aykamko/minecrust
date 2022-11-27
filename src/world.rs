@@ -1,8 +1,10 @@
 use crate::camera::Camera;
 use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
+use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
 use rand::prelude::SliceRandom;
+use winit::dpi::Position;
 
 use super::instance::InstanceRaw;
 use cgmath::{prelude::*, MetricSpace, Point3, Vector3};
@@ -242,10 +244,32 @@ pub struct Chunk {
     pub render_descriptor_idx: usize,
 }
 
-struct CharacterEntity {
-    position: glam::UVec3,
+pub struct CharacterEntity {
+    position: glam::Vec3,
     velocity: glam::Vec2,
     acceleration: glam::Vec2,
+}
+
+impl CharacterEntity {
+    pub fn vertex_data(&self) -> QuadListRenderData {
+        let mut result_vertex_data = QuadListRenderData {
+            vertex_data: vec![],
+            index_data: vec![],
+        };
+        Vertex::generate_quad_data_for_cuboid(
+            &CuboidCoords {
+                left: self.position.x - 0.5,
+                right: self.position.x + 0.5,
+                bottom: self.position.y - 2.0,
+                top: self.position.y,
+                near: self.position.z - 0.5,
+                far: self.position.z - 0.5,
+            },
+            None,
+            &mut result_vertex_data,
+        );
+        return result_vertex_data;
+    }
 }
 
 pub struct WorldState {
@@ -254,7 +278,7 @@ pub struct WorldState {
     highlighted_chunk: Option<[usize; 2]>,
     highlighted_block: Option<[usize; 3]>,
 
-    character_entity: CharacterEntity,
+    pub character_entity: CharacterEntity,
 }
 
 macro_rules! set_block {
@@ -271,7 +295,21 @@ impl WorldState {
         let world_center = get_world_center();
 
         let character_entity = CharacterEntity {
-            position: glam::UVec3::new(world_center.x as u32 + 15, world_center.y as u32 + 35, world_center.z as u32 + 35),
+            // position: glam::Vec3::new(
+            //     world_center.x as f32 + 15.0,
+            //     world_center.y as f32 + 35.0,
+            //     world_center.z as f32 + 35.0,
+            // ),
+            position: glam::Vec3::new(
+                world_center.x as f32,
+                world_center.y as f32,
+                world_center.z as f32,
+            ),
+            // position: glam::Vec3::new(
+            //     -15.0,
+            //     10.0,
+            //     -15.0,
+            // ),
             velocity: glam::Vec2::new(0.0, 0.0),
             acceleration: glam::Vec2::new(0.0, 0.0),
         };

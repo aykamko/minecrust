@@ -97,14 +97,14 @@ impl LightUniform {
         // with what I see on screen...
         let mut ortho_coords = self.sunlight_ortho_proj_coords.clone();
         (ortho_coords.near, ortho_coords.far) = (-ortho_coords.far, ortho_coords.near);
-        Vertex::generate_quad_data_for_cube(
+        Vertex::generate_quad_data_for_cuboid(
             &ortho_coords,
             Some(self.get_light_view_proj().inverse()),
             &mut sunlight_vertex_data,
         );
 
         const SUNLIGHT_CUBE_SIZE: f32 = 1.0;
-        Vertex::generate_quad_data_for_cube(
+        Vertex::generate_quad_data_for_cuboid(
             &CuboidCoords {
                 left: self.sun_position_camera_adjusted.x - SUNLIGHT_CUBE_SIZE,
                 right: self.sun_position_camera_adjusted.x + SUNLIGHT_CUBE_SIZE,
@@ -117,7 +117,7 @@ impl LightUniform {
             &mut sunlight_vertex_data,
         );
 
-        Vertex::generate_quad_data_for_cube(
+        Vertex::generate_quad_data_for_cuboid(
             &CuboidCoords {
                 left: self.sun_target_camera_adjusted.x - SUNLIGHT_CUBE_SIZE,
                 right: self.sun_target_camera_adjusted.x + SUNLIGHT_CUBE_SIZE,
