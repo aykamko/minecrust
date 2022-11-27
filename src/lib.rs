@@ -447,8 +447,8 @@ impl Scene {
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &shader,
-                        entry_point: "vs_main",
-                        buffers: vertex_buffer_layouts,
+                        entry_point: "vs_camera_translate_no_instancing",
+                        buffers: &[vertex_buffer_layouts[0].clone()],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
@@ -1138,14 +1138,13 @@ impl Game {
             }
         }
 
+        let sky_color = wgpu::Color {
+            r: color::srgb_to_rgb(120.0 / 255.0),
+            g: color::srgb_to_rgb(167.0 / 255.0),
+            b: color::srgb_to_rgb(255.0 / 255.0),
+            a: 1.0,
+        };
         {
-            let sky_color = wgpu::Color {
-                r: color::srgb_to_rgb(120.0 / 255.0),
-                g: color::srgb_to_rgb(167.0 / 255.0),
-                b: color::srgb_to_rgb(255.0 / 255.0),
-                a: 1.0,
-            };
-
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1203,6 +1202,9 @@ impl Game {
             if RENDER_CHARACTER_ENTITY {
                 if let Some(ref pipe) = &scene.pipeline_solid_color {
                     rpass.set_pipeline(pipe);
+                    rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
+                    rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
+                    rpass.set_bind_group(2, &scene.light_bind_group, &[]);
                     rpass.set_vertex_buffer(0, scene.vertex_buffers.character_entity.slice(..));
                     rpass.set_index_buffer(
                         scene.index_buffers.character_entity.slice(..),

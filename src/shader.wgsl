@@ -108,6 +108,25 @@ fn vs_main(
 }
 
 @vertex
+fn vs_camera_translate_no_instancing(
+    vertex: VertexInput,
+) -> VertexOutput {
+    var translated_instance_pos = -camera_position.eye_position;
+    translated_instance_pos.w = 1.0;
+
+    var translate_matrix = mat4_from_position(translated_instance_pos);
+
+    var out: VertexOutput;
+    out.tex_coord = vertex.tex_coord;
+    out.world_position = translate_matrix * vertex.position;
+    out.clip_position = camera_position.view_proj * out.world_position;
+
+    out.light_space_position = light.light_space_matrix * out.world_position;
+
+    return out;
+}
+
+@vertex
 fn vs_wire_no_instancing(
     vertex: VertexInput,
 ) -> VertexOutput {

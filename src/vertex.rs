@@ -97,37 +97,37 @@ impl Vertex {
                 // left face
                 [
                     Vec3::new(cc.left, cc.top, cc.near),
-                    Vec3::new(cc.left, cc.top, cc.far),
-                    Vec3::new(cc.left, cc.bottom, cc.far),
                     Vec3::new(cc.left, cc.bottom, cc.near),
+                    Vec3::new(cc.left, cc.bottom, cc.far),
+                    Vec3::new(cc.left, cc.top, cc.far),
                 ],
                 // right face
                 [
                     Vec3::new(cc.right, cc.top, cc.far),
-                    Vec3::new(cc.right, cc.top, cc.near),
-                    Vec3::new(cc.right, cc.bottom, cc.near),
                     Vec3::new(cc.right, cc.bottom, cc.far),
+                    Vec3::new(cc.right, cc.bottom, cc.near),
+                    Vec3::new(cc.right, cc.top, cc.near),
                 ],
                 // bottom face
                 [
                     Vec3::new(cc.left, cc.bottom, cc.near),
-                    Vec3::new(cc.left, cc.bottom, cc.far),
-                    Vec3::new(cc.right, cc.bottom, cc.far),
                     Vec3::new(cc.right, cc.bottom, cc.near),
+                    Vec3::new(cc.right, cc.bottom, cc.far),
+                    Vec3::new(cc.left, cc.bottom, cc.far),
                 ],
                 // top face
                 [
                     Vec3::new(cc.right, cc.top, cc.near),
-                    Vec3::new(cc.right, cc.top, cc.far),
-                    Vec3::new(cc.left, cc.top, cc.far),
                     Vec3::new(cc.left, cc.top, cc.near),
+                    Vec3::new(cc.left, cc.top, cc.far),
+                    Vec3::new(cc.right, cc.top, cc.far),
                 ],
                 // near face
                 [
                     Vec3::new(cc.right, cc.top, cc.near),
-                    Vec3::new(cc.left, cc.top, cc.near),
-                    Vec3::new(cc.left, cc.bottom, cc.near),
                     Vec3::new(cc.right, cc.bottom, cc.near),
+                    Vec3::new(cc.left, cc.bottom, cc.near),
+                    Vec3::new(cc.left, cc.top, cc.near),
                 ],
                 // far face
                 [
