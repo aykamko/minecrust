@@ -1446,35 +1446,59 @@ impl WorldState {
             }
         }
 
-        const MAX_ACCEL: f32 = 0.003;
-        const ACCEL_DELTA: f32 = 0.00005;
-        const FRICTION: f32 = 0.00015;
+        const MAX_VELOCITY: f32 = 0.1;
+        const ACCEL_DELTA: f32 = 0.010;
+        const FRICTION: f32 = 0.005;
         if self.input_state.is_forward_pressed {
-            self.character_entity.acceleration.x += ACCEL_DELTA;
-            self.character_entity.acceleration.x = f32::max(self.character_entity.acceleration.x, MAX_ACCEL);
-        } else if self.character_entity.velocity.x > 0.0 {
-            // friction
-            self.character_entity.acceleration.x -= FRICTION;
+            self.character_entity.velocity.x += ACCEL_DELTA;
+            self.character_entity.velocity.x =
+                f32::min(self.character_entity.velocity.x, MAX_VELOCITY);
         }
         if self.input_state.is_backward_pressed {
-            self.character_entity.acceleration.x -= ACCEL_DELTA;
-            self.character_entity.acceleration.x = f32::min(self.character_entity.acceleration.x, -MAX_ACCEL);
-        } else if self.character_entity.velocity.x < 0.0 {
-            self.character_entity.acceleration.x += FRICTION;
-        }
-        if self.input_state.is_left_pressed {
-            self.character_entity.acceleration.z += ACCEL_DELTA;
-            self.character_entity.acceleration.z = f32::max(self.character_entity.acceleration.z, MAX_ACCEL);
+            self.character_entity.velocity.x -= ACCEL_DELTA;
+            self.character_entity.velocity.x =
+                f32::max(self.character_entity.velocity.x, -MAX_VELOCITY);
         }
         if self.input_state.is_right_pressed {
-            self.character_entity.acceleration.z -= ACCEL_DELTA;
-            self.character_entity.acceleration.z = f32::min(self.character_entity.acceleration.z, -MAX_ACCEL);
+            self.character_entity.velocity.z += ACCEL_DELTA;
+            self.character_entity.velocity.z =
+                f32::min(self.character_entity.velocity.z, MAX_VELOCITY);
+        }
+        if self.input_state.is_left_pressed {
+            self.character_entity.velocity.z -= ACCEL_DELTA;
+            self.character_entity.velocity.z =
+                f32::max(self.character_entity.velocity.z, -MAX_VELOCITY);
         }
 
         self.character_entity.velocity += self.character_entity.acceleration;
         self.character_entity.position += self.character_entity.velocity;
 
-        self.input_state.clear_state()
+        if !self.input_state.is_forward_pressed
+            && !self.input_state.is_backward_pressed
+            && !self.character_entity.velocity.x.is_zero()
+        {
+            self.character_entity.velocity.x +=
+                -self.character_entity.velocity.x.signum() * FRICTION;
+        }
+        if self.character_entity.velocity.x >= -FRICTION
+            && self.character_entity.velocity.x <= FRICTION
+        {
+            self.character_entity.velocity.x = 0.0;
+        }
+        if !self.input_state.is_right_pressed
+            && !self.input_state.is_left_pressed
+            && !self.character_entity.velocity.z.is_zero()
+        {
+            self.character_entity.velocity.z +=
+                -self.character_entity.velocity.z.signum() * FRICTION;
+        }
+        if self.character_entity.velocity.z >= -FRICTION
+            && self.character_entity.velocity.z <= FRICTION
+        {
+            self.character_entity.velocity.z = 0.0;
+        }
+
+        // self.input_state.clear_state()
     }
 
     pub fn process_window_event(&mut self, event: &WindowEvent) {
