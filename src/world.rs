@@ -283,15 +283,6 @@ struct InputState {
     is_right_pressed: bool,
 }
 
-impl InputState {
-    fn clear_state(&mut self) {
-        self.is_forward_pressed = false;
-        self.is_backward_pressed = false;
-        self.is_left_pressed = false;
-        self.is_right_pressed = false;
-    }
-}
-
 pub struct WorldState {
     pub chunk_indices: Vec2d<u32>,
     chunks: Vec<Chunk>,
@@ -1453,52 +1444,44 @@ impl WorldState {
             self.character_entity.velocity.x += ACCEL_DELTA;
             self.character_entity.velocity.x =
                 f32::min(self.character_entity.velocity.x, MAX_VELOCITY);
+        } else if self.character_entity.velocity.x > 0.0 {
+            self.character_entity.velocity.x -= FRICTION;
         }
         if self.input_state.is_backward_pressed {
             self.character_entity.velocity.x -= ACCEL_DELTA;
             self.character_entity.velocity.x =
                 f32::max(self.character_entity.velocity.x, -MAX_VELOCITY);
+        } else if self.character_entity.velocity.x < 0.0 {
+            self.character_entity.velocity.x += FRICTION;
         }
         if self.input_state.is_right_pressed {
             self.character_entity.velocity.z += ACCEL_DELTA;
             self.character_entity.velocity.z =
                 f32::min(self.character_entity.velocity.z, MAX_VELOCITY);
+        } else if self.character_entity.velocity.z > 0.0 {
+            self.character_entity.velocity.z -= FRICTION;
         }
         if self.input_state.is_left_pressed {
             self.character_entity.velocity.z -= ACCEL_DELTA;
             self.character_entity.velocity.z =
                 f32::max(self.character_entity.velocity.z, -MAX_VELOCITY);
+        } else if self.character_entity.velocity.z < 0.0 {
+            self.character_entity.velocity.z += FRICTION;
         }
 
         self.character_entity.velocity += self.character_entity.acceleration;
         self.character_entity.position += self.character_entity.velocity;
 
-        if !self.input_state.is_forward_pressed
-            && !self.input_state.is_backward_pressed
-            && !self.character_entity.velocity.x.is_zero()
-        {
-            self.character_entity.velocity.x +=
-                -self.character_entity.velocity.x.signum() * FRICTION;
-        }
         if self.character_entity.velocity.x >= -FRICTION
             && self.character_entity.velocity.x <= FRICTION
         {
             self.character_entity.velocity.x = 0.0;
-        }
-        if !self.input_state.is_right_pressed
-            && !self.input_state.is_left_pressed
-            && !self.character_entity.velocity.z.is_zero()
-        {
-            self.character_entity.velocity.z +=
-                -self.character_entity.velocity.z.signum() * FRICTION;
         }
         if self.character_entity.velocity.z >= -FRICTION
             && self.character_entity.velocity.z <= FRICTION
         {
             self.character_entity.velocity.z = 0.0;
         }
-
-        // self.input_state.clear_state()
     }
 
     pub fn process_window_event(&mut self, event: &WindowEvent) {
