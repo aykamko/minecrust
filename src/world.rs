@@ -1363,6 +1363,7 @@ impl WorldState {
     }
 
     pub fn physics_tick(&mut self) {
+        const GRAVITY_Y_ACCEL: f32 = -0.0005;
         const GRAVITY_ACCELERATION: glam::Vec3 = glam::Vec3::new(0.0, -0.0005, 0.0);
 
         // top, left, far corner of character cylinder
@@ -1428,8 +1429,8 @@ impl WorldState {
 
         match floor_contact {
             Some(contact) => {
-                self.character_entity.acceleration = glam::Vec3::new(0.0, 0.0, 0.0);
-                self.character_entity.velocity = glam::Vec3::new(0.0, 0.0, 0.0);
+                self.character_entity.acceleration.y = 0.0;
+                self.character_entity.velocity.y = 0.0;
 
                 if !self.character_entity.contacting_floor {
                     let adjust_vec =
@@ -1440,26 +1441,38 @@ impl WorldState {
                 self.character_entity.contacting_floor = true;
             }
             None => {
-                self.character_entity.acceleration = GRAVITY_ACCELERATION;
+                self.character_entity.acceleration.y = GRAVITY_Y_ACCEL;
                 self.character_entity.contacting_floor = false;
-                self.character_entity.velocity += self.character_entity.acceleration;
-                self.character_entity.position += self.character_entity.velocity;
             }
         }
 
-        const MOVEMENT_VELOCITY: f32 = 0.5;
+        const MAX_ACCEL: f32 = 0.003;
+        const ACCEL_DELTA: f32 = 0.00005;
+        const FRICTION: f32 = 0.00015;
         if self.input_state.is_forward_pressed {
-            self.character_entity.position += glam::Vec3::new(MOVEMENT_VELOCITY, 0.0, 0.0)
+            self.character_entity.acceleration.x += ACCEL_DELTA;
+            self.character_entity.acceleration.x = f32::max(self.character_entity.acceleration.x, MAX_ACCEL);
+        } else if self.character_entity.velocity.x > 0.0 {
+            // friction
+            self.character_entity.acceleration.x -= FRICTION;
         }
         if self.input_state.is_backward_pressed {
-            self.character_entity.position += glam::Vec3::new(-MOVEMENT_VELOCITY, 0.0, 0.0)
+            self.character_entity.acceleration.x -= ACCEL_DELTA;
+            self.character_entity.acceleration.x = f32::min(self.character_entity.acceleration.x, -MAX_ACCEL);
+        } else if self.character_entity.velocity.x < 0.0 {
+            self.character_entity.acceleration.x += FRICTION;
         }
         if self.input_state.is_left_pressed {
-            self.character_entity.position += glam::Vec3::new(0.0, 0.0, -MOVEMENT_VELOCITY)
+            self.character_entity.acceleration.z += ACCEL_DELTA;
+            self.character_entity.acceleration.z = f32::max(self.character_entity.acceleration.z, MAX_ACCEL);
         }
         if self.input_state.is_right_pressed {
-            self.character_entity.position += glam::Vec3::new(0.0, 0.0, MOVEMENT_VELOCITY)
+            self.character_entity.acceleration.z -= ACCEL_DELTA;
+            self.character_entity.acceleration.z = f32::min(self.character_entity.acceleration.z, -MAX_ACCEL);
         }
+
+        self.character_entity.velocity += self.character_entity.acceleration;
+        self.character_entity.position += self.character_entity.velocity;
 
         self.input_state.clear_state()
     }
