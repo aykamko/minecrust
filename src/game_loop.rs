@@ -77,8 +77,8 @@ impl<T: TimeTrait> GameLoop<T> {
 
     pub fn next_frame<U, R>(&mut self, mut update: U, mut render: R)
     where
-        U: FnMut(),
-        R: FnMut(),
+        U: FnMut(&mut GameLoop<T>),
+        R: FnMut(&mut GameLoop<T>),
     {
         let mut g = self;
 
@@ -95,7 +95,7 @@ impl<T: TimeTrait> GameLoop<T> {
         g.accumulated_time += elapsed;
 
         while g.accumulated_time >= g.fixed_time_step {
-            update();
+            update(&mut g);
 
             g.accumulated_time -= g.fixed_time_step;
             g.number_of_updates += 1;
@@ -103,7 +103,7 @@ impl<T: TimeTrait> GameLoop<T> {
 
         g.blending_factor = g.accumulated_time / g.fixed_time_step;
 
-        render();
+        render(&mut g);
 
         g.number_of_renders += 1;
         g.previous_instant = g.current_instant;
