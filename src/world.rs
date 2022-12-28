@@ -1,4 +1,5 @@
 use crate::camera::Camera;
+use crate::game_loop::GameLoop;
 use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
@@ -1353,9 +1354,8 @@ impl WorldState {
         }
     }
 
-    pub fn physics_tick(&mut self) {
-        const GRAVITY_Y_ACCEL: f32 = -0.0005;
-        const GRAVITY_ACCELERATION: glam::Vec3 = glam::Vec3::new(0.0, -0.0005, 0.0);
+    pub fn physics_tick(&mut self, game_loop: &mut GameLoop) {
+        let GRAVITY_Y_ACCEL: f32 = (game_loop.fixed_time_step().powi(2) * -9.807) as f32;
 
         // top, left, far corner of character cylinder
         let floored_position = (
@@ -1408,7 +1408,7 @@ impl WorldState {
                 &character_collider,
                 &block_pos,
                 &block_collider,
-                0.01,
+                0.01, // tolerance
             )
             .unwrap();
 
@@ -1437,49 +1437,51 @@ impl WorldState {
             }
         }
 
-        const MAX_VELOCITY: f32 = 0.1;
-        const ACCEL_DELTA: f32 = 0.010;
-        const FRICTION: f32 = 0.005;
-        if self.input_state.is_forward_pressed {
-            self.character_entity.velocity.x += ACCEL_DELTA;
-            self.character_entity.velocity.x =
-                f32::min(self.character_entity.velocity.x, MAX_VELOCITY);
+        const MAX_XZ_VELOCITY: f32 = 0.1;
+        const XZ_ACCEL: f32 = 0.010;
+        const XZ_FRICTION: f32 = 0.004;
+
+        self.character_entity.acceleration.x = 0.;
+        self.character_entity.acceleration.x += if self.input_state.is_forward_pressed {
+            XZ_ACCEL
         } else if self.character_entity.velocity.x > 0.0 {
-            self.character_entity.velocity.x -= FRICTION;
-        }
-        if self.input_state.is_backward_pressed {
-            self.character_entity.velocity.x -= ACCEL_DELTA;
-            self.character_entity.velocity.x =
-                f32::max(self.character_entity.velocity.x, -MAX_VELOCITY);
+            -XZ_FRICTION
+        } else {
+            0.0
+        };
+        self.character_entity.acceleration.x += if self.input_state.is_backward_pressed {
+            -XZ_ACCEL
         } else if self.character_entity.velocity.x < 0.0 {
-            self.character_entity.velocity.x += FRICTION;
-        }
-        if self.input_state.is_right_pressed {
-            self.character_entity.velocity.z += ACCEL_DELTA;
-            self.character_entity.velocity.z =
-                f32::min(self.character_entity.velocity.z, MAX_VELOCITY);
+            XZ_FRICTION
+        } else {
+            0.0
+        };
+
+        self.character_entity.acceleration.z = 0.;
+        self.character_entity.acceleration.z += if self.input_state.is_right_pressed {
+            XZ_ACCEL
         } else if self.character_entity.velocity.z > 0.0 {
-            self.character_entity.velocity.z -= FRICTION;
-        }
-        if self.input_state.is_left_pressed {
-            self.character_entity.velocity.z -= ACCEL_DELTA;
-            self.character_entity.velocity.z =
-                f32::max(self.character_entity.velocity.z, -MAX_VELOCITY);
+            -XZ_FRICTION
+        } else {
+            0.0
+        };
+        self.character_entity.acceleration.z += if self.input_state.is_left_pressed {
+            -XZ_ACCEL
         } else if self.character_entity.velocity.z < 0.0 {
-            self.character_entity.velocity.z += FRICTION;
-        }
+            XZ_FRICTION
+        } else {
+            0.0
+        };
 
         self.character_entity.velocity += self.character_entity.acceleration;
+        self.character_entity.velocity.x = self.character_entity.velocity.x.clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
+        self.character_entity.velocity.z = self.character_entity.velocity.z.clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
         self.character_entity.position += self.character_entity.velocity;
 
-        if self.character_entity.velocity.x >= -FRICTION
-            && self.character_entity.velocity.x <= FRICTION
-        {
+        if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.x) {
             self.character_entity.velocity.x = 0.0;
         }
-        if self.character_entity.velocity.z >= -FRICTION
-            && self.character_entity.velocity.z <= FRICTION
-        {
+        if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.z) {
             self.character_entity.velocity.z = 0.0;
         }
     }

@@ -852,7 +852,12 @@ impl Game {
         }
     }
 
-    pub fn update_tick(&mut self, left_mouse_clicked: &mut bool, right_mouse_clicked: &mut bool) {
+    pub fn update_tick(
+        &mut self,
+        game_loop: &mut game_loop::GameLoop,
+        left_mouse_clicked: &mut bool,
+        right_mouse_clicked: &mut bool,
+    ) {
         let state = &mut self.state;
         let scene = &mut self.scene;
 
@@ -1040,7 +1045,7 @@ impl Game {
             }
         }
 
-        state.world_state.physics_tick();
+        state.world_state.physics_tick(game_loop);
         let updated_character_vtx_data = state.world_state.character_entity.vertex_data();
         state.queue.write_buffer(
             &scene.vertex_buffers.character_entity,
@@ -1428,11 +1433,11 @@ pub fn run(width: usize, height: usize) {
                 let game_cell = RefCell::new(&mut game);
 
                 game_loop.next_frame(
-                    |_g| {
+                    |g| {
                         let mut game = game_cell.borrow_mut();
-                        game.update_tick(&mut left_mouse_clicked, &mut right_mouse_clicked);
+                        game.update_tick(g, &mut left_mouse_clicked, &mut right_mouse_clicked);
                     },
-                    |_g| {
+                    |_| {
                         let mut game = game_cell.borrow_mut();
                         let frame = game.render_frame(&spawner);
                         frame.present();
