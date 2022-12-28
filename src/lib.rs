@@ -21,7 +21,7 @@ use cgmath::Point3;
 use dom_controls::DomControlsUserEvent;
 use futures::executor::block_on;
 use spawner::Spawner;
-use std::{borrow::Cow, collections::HashSet, future::Future, mem, pin::Pin, task};
+use std::{borrow::Cow, cell::RefCell, collections::HashSet, future::Future, mem, pin::Pin, task};
 use wgpu::{util::DeviceExt, SurfaceTexture};
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
@@ -97,6 +97,20 @@ struct Game {
     state: State,
     scene: Scene,
 }
+
+// impl Deref for Game {
+//     type Target = Self;
+
+//     fn deref(&self) -> &Self::Target {
+//         return self;
+//     }
+// }
+
+// impl DerefMut for Game {
+//     fn deref_mut(&mut self) -> &mut Self::Target {
+//         return self;
+//     }
+// }
 
 struct AnnotatedInstanceBuffer {
     buffer: wgpu::Buffer,
@@ -1411,17 +1425,20 @@ pub fn run(width: usize, height: usize) {
             },
 
             Event::RedrawRequested(_) => {
-                game_loop.next_frame(
-                    || {
-                        game.update_tick(&mut left_mouse_clicked, &mut right_mouse_clicked);
-                    },
-                    || {
-                        let frame = game.render_frame(&spawner);
-                        frame.present();
+                let game_cell = RefCell::new(&mut game);
 
-                        game.state.camera_controller.reset_mouse_delta();
-                    },
-                );
+                let update = || {
+                    let mut game = game_cell.borrow_mut();
+                    game.update_tick(&mut left_mouse_clicked, &mut right_mouse_clicked);
+                };
+                let render = || {
+                    let mut game = game_cell.borrow_mut();
+                    let frame = game.render_frame(&spawner);
+                    frame.present();
+
+                    game.state.camera_controller.reset_mouse_delta();
+                };
+                game_loop.next_frame(update, render);
             }
 
             Event::MainEventsCleared => {
