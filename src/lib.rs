@@ -1427,18 +1427,19 @@ pub fn run(width: usize, height: usize) {
             Event::RedrawRequested(_) => {
                 let game_cell = RefCell::new(&mut game);
 
-                let update = || {
-                    let mut game = game_cell.borrow_mut();
-                    game.update_tick(&mut left_mouse_clicked, &mut right_mouse_clicked);
-                };
-                let render = || {
-                    let mut game = game_cell.borrow_mut();
-                    let frame = game.render_frame(&spawner);
-                    frame.present();
+                game_loop.next_frame(
+                    |_g| {
+                        let mut game = game_cell.borrow_mut();
+                        game.update_tick(&mut left_mouse_clicked, &mut right_mouse_clicked);
+                    },
+                    |_g| {
+                        let mut game = game_cell.borrow_mut();
+                        let frame = game.render_frame(&spawner);
+                        frame.present();
 
-                    game.state.camera_controller.reset_mouse_delta();
-                };
-                game_loop.next_frame(update, render);
+                        game.state.camera_controller.reset_mouse_delta();
+                    },
+                );
             }
 
             Event::MainEventsCleared => {
