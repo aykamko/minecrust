@@ -7,6 +7,7 @@ pub mod camera;
 pub mod color;
 pub mod dom_controls;
 pub mod face;
+pub mod game_loop;
 pub mod instance;
 pub mod light;
 pub mod map_generation;
@@ -1304,7 +1305,13 @@ pub fn run(width: usize, height: usize) {
             });
     }
 
+    let updates_per_second = 100;
+    let max_frame_time = 1.0 / 60.0;
+    let mut game_loop: game_loop::GameLoop =
+        game_loop::GameLoop::new(updates_per_second, max_frame_time);
+
     let spawner = Spawner::new();
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -1404,12 +1411,17 @@ pub fn run(width: usize, height: usize) {
             },
 
             Event::RedrawRequested(_) => {
-                game.update_tick(&mut left_mouse_clicked, &mut right_mouse_clicked);
+                game_loop.next_frame(
+                    || {
+                        game.update_tick(&mut left_mouse_clicked, &mut right_mouse_clicked);
+                    },
+                    || {
+                        let frame = game.render_frame(&spawner);
+                        frame.present();
 
-                let frame = game.render_frame(&spawner);
-                frame.present();
-
-                game.state.camera_controller.reset_mouse_delta();
+                        game.state.camera_controller.reset_mouse_delta();
+                    },
+                );
             }
 
             Event::MainEventsCleared => {
