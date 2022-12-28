@@ -4,6 +4,7 @@ use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
+use na::RealField;
 use rand::prelude::SliceRandom;
 use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 
@@ -277,11 +278,20 @@ impl CharacterEntity {
     }
 }
 
+#[derive(PartialEq)]
+enum ButtonState {
+    Pressed,
+    Held,
+    Released,
+    Idle,
+}
+
 struct InputState {
     is_forward_pressed: bool,
     is_backward_pressed: bool,
     is_left_pressed: bool,
     is_right_pressed: bool,
+    jump_button_state: ButtonState,
 }
 
 pub struct WorldState {
@@ -334,6 +344,7 @@ impl WorldState {
                 is_backward_pressed: false,
                 is_left_pressed: false,
                 is_right_pressed: false,
+                jump_button_state: ButtonState::Idle,
             },
         }
     }
@@ -1473,9 +1484,23 @@ impl WorldState {
             0.0
         };
 
+        if self.input_state.jump_button_state == ButtonState::Pressed
+            && self.character_entity.contacting_floor
+        {
+            self.character_entity.acceleration.y += 0.05;
+        }
+
         self.character_entity.velocity += self.character_entity.acceleration;
-        self.character_entity.velocity.x = self.character_entity.velocity.x.clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
-        self.character_entity.velocity.z = self.character_entity.velocity.z.clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
+        self.character_entity.velocity.x = self
+            .character_entity
+            .velocity
+            .x
+            .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
+        self.character_entity.velocity.z = self
+            .character_entity
+            .velocity
+            .z
+            .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
         self.character_entity.position += self.character_entity.velocity;
 
         if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.x) {
@@ -1500,6 +1525,21 @@ impl WorldState {
                 }
                 Some(VirtualKeyCode::L) => {
                     self.input_state.is_right_pressed = input.state == ElementState::Pressed;
+                }
+                Some(VirtualKeyCode::Z) => {
+                    let pressed = input.state == ElementState::Pressed;
+                    self.input_state.jump_button_state = match pressed {
+                        true => match self.input_state.jump_button_state {
+                            ButtonState::Pressed => ButtonState::Held,
+                            ButtonState::Held => ButtonState::Held,
+                            _ => ButtonState::Pressed,
+                        },
+                        false => match self.input_state.jump_button_state {
+                            ButtonState::Pressed => ButtonState::Released,
+                            ButtonState::Held => ButtonState::Released,
+                            _ => ButtonState::Idle,
+                        },
+                    }
                 }
                 _ => (),
             },
