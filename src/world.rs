@@ -1403,7 +1403,8 @@ impl WorldState {
                 {
                     let contact_normal =
                         glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z);
-                    if contact_normal.dot(direction) > 0.0 && contact.dist.abs() > contact_tolerance {
+                    if contact_normal.dot(direction) > 0.0 && contact.dist.abs() > contact_tolerance
+                    {
                         return Some(contact);
                     }
                 }
@@ -1411,31 +1412,7 @@ impl WorldState {
             None
         }
 
-        //// top, left, far corner of character cylinder
-        //let floored_position = (
-        //    self.character_entity.position.x.floor() as usize - 1,
-        //    self.character_entity.position.y.floor() as usize + 1,
-        //    self.character_entity.position.z.floor() as usize - 1,
-        //);
-        //let mut floor_blocks_to_check_collision: Vec<[usize; 3]> = vec![];
-        //// collect all collidable blocks underneath the character
-        //for (dx, dz) in iproduct!(0..2, 0..2) {
-        //    let block_pos = [
-        //        floored_position.0 + dx,
-        //        floored_position.1 - 2,
-        //        floored_position.2 + dz,
-        //    ];
-        //    if self
-        //        .get_block(block_pos[0], block_pos[1], block_pos[2])
-        //        .block_type
-        //        .is_collidable()
-        //    {
-        //        floor_blocks_to_check_collision.push(block_pos);
-        //    }
-        //}
-
         // First, check if the character entity is touching the floor. This determines if we should apply gravity and whether the character can jump.
-
         let curr_character_pos = na::Isometry3::new(
             na::vector![
                 self.character_entity.position.x,
@@ -1476,16 +1453,15 @@ impl WorldState {
             &floor_blocks_to_check_collision,
             DEFAULT_CONTACT_TOLERANCE / 4.0, // lower tolerance
         ) {
-            println!("Is contacting floor");
             is_contacting_floor = true;
         }
 
         let GRAVITY_Y_ACCEL: f32 = (game_loop.fixed_time_step().powi(2) * -9.807) as f32;
 
+        // Apply gravity if not contacting floor
         if is_contacting_floor {
             if self.input_state.jump_button_state == ButtonState::Pressed {
                 self.character_entity.acceleration.y = 0.05;
-                println!("Is jumping");
             } else {
                 self.character_entity.acceleration.y = 0.0;
             }
@@ -1493,14 +1469,74 @@ impl WorldState {
             self.character_entity.acceleration.y = GRAVITY_Y_ACCEL;
         }
 
+        const MAX_XZ_VELOCITY: f32 = 0.1;
+        const XZ_ACCEL: f32 = 0.010;
+        const XZ_FRICTION: f32 = 0.004;
+
+        self.character_entity.acceleration.x = 0.0;
+        self.character_entity.acceleration.x += if self.input_state.is_forward_pressed {
+            XZ_ACCEL
+        } else if self.character_entity.velocity.x > 0.0 {
+            -XZ_FRICTION
+        } else {
+            0.0
+        };
+        self.character_entity.acceleration.x += if self.input_state.is_backward_pressed {
+            -XZ_ACCEL
+        } else if self.character_entity.velocity.x < 0.0 {
+            XZ_FRICTION
+        } else {
+            0.0
+        };
+
+        self.character_entity.acceleration.z = 0.0;
+        self.character_entity.acceleration.z += if self.input_state.is_right_pressed {
+            XZ_ACCEL
+        } else if self.character_entity.velocity.z > 0.0 {
+            -XZ_FRICTION
+        } else {
+            0.0
+        };
+        self.character_entity.acceleration.z += if self.input_state.is_left_pressed {
+            -XZ_ACCEL
+        } else if self.character_entity.velocity.z < 0.0 {
+            XZ_FRICTION
+        } else {
+            0.0
+        };
+
         // Update velocity based on acceleration
         self.character_entity.velocity += self.character_entity.acceleration;
+
+        // Clamp XZ velocity
+        self.character_entity.velocity.x = self
+            .character_entity
+            .velocity
+            .x
+            .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
+        self.character_entity.velocity.z = self
+            .character_entity
+            .velocity
+            .z
+            .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
+
+        // Apply friction
+        if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.x) {
+            self.character_entity.velocity.x = 0.0;
+        }
+        if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.z) {
+            self.character_entity.velocity.z = 0.0;
+        }
 
         let mut potential_new_pos = self.character_entity.position + self.character_entity.velocity;
 
         // Update character_pos with the potential new position for collision checks
         let next_character_pos = na::Isometry3::new(
-            na::vector![potential_new_pos.x, potential_new_pos.y, potential_new_pos.z],
+            na::vector![
+                potential_new_pos.x,
+                potential_new_pos.y,
+                potential_new_pos.z
+            ],
             na::zero(),
         );
 
@@ -1535,6 +1571,27 @@ impl WorldState {
             }
         }
 
+        // Check for X-axis collisions
+        let x_direction = if self.character_entity.velocity.x > 0.0 {
+            glam::Vec3::X
+        } else {
+            -glam::Vec3::X
+        };
+        if let Some(contact) = check_collision_in_direction(
+            &next_character_pos,
+            &character_collider,
+            x_direction,
+            &blocks_to_check_collision,
+            DEFAULT_CONTACT_TOLERANCE,
+        ) {
+            // Resolve X-axis collision
+            self.character_entity.velocity.x = 0.0;
+            let adjust_vec =
+                glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
+                    * contact.dist;
+            potential_new_pos.x += adjust_vec.x;
+        }
+
         // Check for Y-axis collisions, special case for gravity
         let y_direction = if self.character_entity.velocity.y > 0.0 {
             glam::Vec3::Y
@@ -1553,8 +1610,29 @@ impl WorldState {
             let adjust_vec =
                 glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
                     * contact.dist;
-            println!("Contact dist: {}", contact.dist);
-            potential_new_pos.y += adjust_vec.y + (DEFAULT_CONTACT_TOLERANCE / 2.0 * -adjust_vec.y.signum());
+            potential_new_pos.y +=
+                adjust_vec.y + (DEFAULT_CONTACT_TOLERANCE / 2.0 * -adjust_vec.y.signum());
+        }
+
+        // Check for Z-axis collisions
+        let z_direction = if self.character_entity.velocity.z > 0.0 {
+            glam::Vec3::Z
+        } else {
+            -glam::Vec3::Z
+        };
+        if let Some(contact) = check_collision_in_direction(
+            &next_character_pos,
+            &character_collider,
+            z_direction,
+            &blocks_to_check_collision,
+            DEFAULT_CONTACT_TOLERANCE,
+        ) {
+            // Resolve Z-axis collision
+            self.character_entity.velocity.z = 0.0;
+            let adjust_vec =
+                glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
+                    * contact.dist;
+            potential_new_pos.z += adjust_vec.z;
         }
 
         // Apply the final position and velocity to the character
