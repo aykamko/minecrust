@@ -1452,7 +1452,6 @@ impl WorldState {
             }
         }
 
-        // TODO(aleks): this causes me to get stuck in walls
         let mut is_contacting_floor = false;
         if let Some(_contact) = check_collision_in_direction(
             &curr_character_pos,
