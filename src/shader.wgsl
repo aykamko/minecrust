@@ -415,5 +415,6 @@ fn fs_wire(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_solid_color(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    var color_offset = vertex.tex_coord.x * 0.15;
+    return vec4<f32>(1.0, 1.0, color_offset, 1.0);
 }
