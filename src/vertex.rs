@@ -30,10 +30,10 @@ impl Vertex {
         }
     }
 
-    pub fn new_from_vec(pos: glam::Vec4) -> Self {
+    pub fn new_from_vec(pos: glam::Vec4, tc: [i8; 2]) -> Self {
         Self {
             pos: pos.into(),
-            tex_coord: [0.0, 0.0],
+            tex_coord: [tc[0] as f32, tc[1] as f32],
         }
     }
 
@@ -72,13 +72,13 @@ impl Vertex {
             None => glam::Mat4::IDENTITY,
         };
 
-        for quad in quads {
+        for (i, quad) in quads.iter().enumerate() {
             let index_offset = quad_data_out.vertex_data.len();
             quad_data_out.vertex_data.extend([
-                Vertex::new_from_vec(proj * glam::Vec4::new(quad[0].x, quad[0].y, quad[0].z, 1.0)),
-                Vertex::new_from_vec(proj * glam::Vec4::new(quad[1].x, quad[1].y, quad[1].z, 1.0)),
-                Vertex::new_from_vec(proj * glam::Vec4::new(quad[2].x, quad[2].y, quad[2].z, 1.0)),
-                Vertex::new_from_vec(proj * glam::Vec4::new(quad[3].x, quad[3].y, quad[3].z, 1.0)),
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[0].x, quad[0].y, quad[0].z, 1.0), [i as i8, 0]),
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[1].x, quad[1].y, quad[1].z, 1.0), [i as i8, 0]),
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[2].x, quad[2].y, quad[2].z, 1.0), [i as i8, 0]),
+                Vertex::new_from_vec(proj * glam::Vec4::new(quad[3].x, quad[3].y, quad[3].z, 1.0), [i as i8, 0]),
             ]);
 
             quad_data_out
