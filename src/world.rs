@@ -1371,12 +1371,15 @@ impl WorldState {
         let character_half_height = character_height / 2.0;
         let character_collider = Cylinder::new(character_half_height, character_half_extent);
 
+        const DEFAULT_CONTACT_TOLERANCE: f32 = 0.001;
+
         // Define a helper function to check for collisions in a given direction
         fn check_collision_in_direction(
             character_pos: &na::Isometry3<f32>,
             character_collider: &Cylinder,
             direction: glam::Vec3,
             blocks: &Vec<[usize; 3]>,
+            contact_tolerance: f32,
         ) -> Option<parry3d::query::Contact> {
             for block_pos in blocks {
                 let block_collider = Cuboid::new(na::vector![0.5, 0.5, 0.5]);
@@ -1400,7 +1403,7 @@ impl WorldState {
                 {
                     let contact_normal =
                         glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z);
-                    if contact_normal.dot(direction) > 0.0 {
+                    if contact_normal.dot(direction) > 0.0 && contact.dist.abs() > contact_tolerance {
                         return Some(contact);
                     }
                 }
@@ -1471,7 +1474,9 @@ impl WorldState {
             &character_collider,
             -glam::Vec3::Y,
             &floor_blocks_to_check_collision,
+            DEFAULT_CONTACT_TOLERANCE / 4.0, // lower tolerance
         ) {
+            println!("Is contacting floor");
             is_contacting_floor = true;
         }
 
@@ -1541,15 +1546,15 @@ impl WorldState {
             &character_collider,
             y_direction,
             &blocks_to_check_collision,
+            DEFAULT_CONTACT_TOLERANCE,
         ) {
             // Resolve Y-axis collision
             self.character_entity.velocity.y = 0.0;
             let adjust_vec =
                 glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
                     * contact.dist;
-            // println!("prev_pos: {:?}, direction: {:?}, normal: {:?}", potential_new_pos, y_direction, contact.normal1);
-            potential_new_pos.y += adjust_vec.y;
-            // println!("adjust_vec: {:?}, new_pos: {:?}", adjust_vec, potential_new_pos);
+            println!("Contact dist: {}", contact.dist);
+            potential_new_pos.y += adjust_vec.y + (DEFAULT_CONTACT_TOLERANCE / 2.0 * -adjust_vec.y.signum());
         }
 
         // Apply the final position and velocity to the character
