@@ -4,6 +4,7 @@ use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
+use futures::io::SeeKRelative;
 use na::RealField;
 use rand::prelude::SliceRandom;
 use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
@@ -250,10 +251,10 @@ pub struct Chunk {
 }
 
 pub struct CharacterEntity {
-    position: glam::Vec3, // center of the cylinder
+    pub position: glam::Vec3, // center of the cylinder
     velocity: glam::Vec3,
     acceleration: glam::Vec3,
-    contacting_floor: bool,
+    pub prev_position: glam::Vec3,
 }
 
 impl CharacterEntity {
@@ -275,6 +276,10 @@ impl CharacterEntity {
             &mut result_vertex_data,
         );
         return result_vertex_data;
+    }
+    
+    pub fn did_move(&self) -> bool {
+        self.position != self.prev_position
     }
 }
 
@@ -319,15 +324,17 @@ impl WorldState {
 
         // let GRAVITY_ACCELERATION = glam::Vec3::new(0.0, -0.0005, 0.0);
 
+        let initial_pos = glam::Vec3::new(
+            world_center.x as f32 - 20.0,
+            world_center.y as f32 + 10.0,
+            world_center.z as f32 - 20.0,
+        );
+
         let character_entity = CharacterEntity {
-            position: glam::Vec3::new(
-                world_center.x as f32 - 20.0,
-                world_center.y as f32 + 10.0,
-                world_center.z as f32 - 20.0,
-            ),
+            position: initial_pos,
             velocity: glam::Vec3::new(0.0, 0.0, 0.0),
             acceleration: glam::Vec3::new(0.0, 0.0, 0.0),
-            contacting_floor: false,
+            prev_position: initial_pos,
         };
 
         Self {
@@ -1406,12 +1413,15 @@ impl WorldState {
                         glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z);
 
                     // Project the normal onto the plane perpendicular to the direction
-                    let normal_on_plane = contact_normal - direction * contact_normal.dot(direction);
+                    let normal_on_plane =
+                        contact_normal - direction * contact_normal.dot(direction);
 
                     // If true, the normal does not have significant components in directions other than `direction`
                     let is_normal_mostly_parallel_to_direction = normal_on_plane.length() < 0.5;
 
-                    if is_normal_mostly_parallel_to_direction && contact.dist.abs() > contact_tolerance {
+                    if is_normal_mostly_parallel_to_direction
+                        && contact.dist.abs() > contact_tolerance
+                    {
                         return Some(contact);
                     }
                 }
@@ -1661,6 +1671,7 @@ impl WorldState {
         }
 
         // Apply the final position and velocity to the character
+        self.character_entity.prev_position = self.character_entity.position;
         self.character_entity.position = potential_new_pos.into();
     }
 
