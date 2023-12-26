@@ -861,7 +861,7 @@ impl Game {
         let state = &mut self.state;
         let scene = &mut self.scene;
 
-        state.world_state.physics_tick(game_loop);
+        state.world_state.physics_tick(game_loop, &state.camera);
 
         let update_result = state
             .camera_controller
