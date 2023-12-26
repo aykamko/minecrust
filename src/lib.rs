@@ -887,7 +887,7 @@ impl Game {
         }
         let mut chunk_mods: Vec<ChunkModification> = vec![];
 
-        if update_result.did_move {
+        if update_result.did_translate {
             let chunks_modified = state.world_state.highlight_colliding_block(&state.camera);
             for chunk_idx in chunks_modified {
                 chunk_mods.push(ChunkModification {

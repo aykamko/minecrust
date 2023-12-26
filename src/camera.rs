@@ -207,6 +207,7 @@ pub struct CameraController {
 
 pub struct CameraUpdateResult {
     pub did_move: bool,
+    pub did_translate: bool,
     pub did_move_blocks: bool,
     pub did_move_chunks: bool,
     pub new_block_location: cgmath::Point3<usize>,
@@ -515,6 +516,7 @@ impl CameraController {
 
         CameraUpdateResult {
             did_move,
+            did_translate,
             did_move_blocks: pre_update_block_location != post_update_block_location,
             did_move_chunks: pre_update_chunk_location != post_update_chunk_location,
             new_block_location: post_update_block_location,
