@@ -1375,21 +1375,19 @@ impl WorldState {
             self.character_entity.position.z.floor() as usize - 1,
         );
         let mut floor_blocks_to_check_collision: Vec<[usize; 3]> = vec![];
+        // collect all collidable blocks underneath the character
         for (dx, dz) in iproduct!(0..2, 0..2) {
+            let block_pos = [
+                floored_position.0 + dx,
+                floored_position.1 - 2,
+                floored_position.2 + dz,
+            ];
             if self
-                .get_block(
-                    floored_position.0 + dx,
-                    floored_position.1 - 2,
-                    floored_position.2 + dz,
-                )
+                .get_block(block_pos[0], block_pos[1], block_pos[2])
                 .block_type
                 .is_collidable()
             {
-                floor_blocks_to_check_collision.push([
-                    floored_position.0 + dx,
-                    floored_position.1 - 2,
-                    floored_position.2 + dz,
-                ])
+                floor_blocks_to_check_collision.push(block_pos);
             }
         }
         let character_collider = Cylinder::new(1.0, 0.5);
@@ -1508,6 +1506,76 @@ impl WorldState {
         }
         if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.z) {
             self.character_entity.velocity.z = 0.0;
+        }
+
+        // Check for horizontal collisions
+        let mut horizontal_collision: Option<parry3d::query::Contact> = None;
+        let character_half_extent = 0.5; // Assuming the character is 1 voxel wide
+        let horizontal_check_offsets = [
+            (-character_half_extent, 0.0, -character_half_extent),
+            (-character_half_extent, 0.0, character_half_extent),
+            (character_half_extent, 0.0, -character_half_extent),
+            (character_half_extent, 0.0, character_half_extent),
+        ];
+
+        // Collect all collidable blocks around the character
+        for &(dx, dy, dz) in &horizontal_check_offsets {
+            let check_x = self.character_entity.position.x + dx + self.character_entity.velocity.x;
+            let check_y = self.character_entity.position.y + dy; // Check at character's base and top
+            let check_z = self.character_entity.position.z + dz + self.character_entity.velocity.z;
+        
+            for y_offset in 0..2 { // Check at character's base and top
+                let block_pos = [
+                    check_x.floor() as usize,
+                    (check_y.floor() as usize) + y_offset,
+                    check_z.floor() as usize,
+                ];
+                if self
+                    .get_block(block_pos[0], block_pos[1], block_pos[2])
+                    .block_type
+                    .is_collidable()
+                {
+                    let block_collider = Cuboid::new(na::vector![0.5, 0.5, 0.5]);
+                    let block_pos = na::Isometry3::new(
+                        na::vector![
+                            block_pos[0] as f32 + 0.5,
+                            block_pos[1] as f32 + 0.5,
+                            block_pos[2] as f32 + 0.5
+                        ],
+                        na::zero(),
+                    );
+                
+                    if let Some(contact) = parry3d::query::contact(
+                        &character_pos,
+                        &character_collider,
+                        &block_pos,
+                        &block_collider,
+                        0.01, // tolerance
+                    )
+                    .unwrap()
+                    {
+                        horizontal_collision = Some(contact);
+                        break;
+                    }
+                }
+            }
+        
+            if horizontal_collision.is_some() {
+                break;
+            }
+        }
+
+        // Resolve horizontal collisions
+        if let Some(contact) = horizontal_collision {
+            // Calculate the adjustment vector based on the collision normal and penetration depth
+            let adjust_vec = glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z) * contact.dist;
+        
+            // Apply the adjustment to the character's position
+            self.character_entity.position += adjust_vec;
+        
+            // Zero out the character's velocity in the direction of the collision normal
+            let normal = glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z);
+            self.character_entity.velocity -= normal * self.character_entity.velocity.dot(normal);
         }
     }
 
