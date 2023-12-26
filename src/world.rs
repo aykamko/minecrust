@@ -1690,7 +1690,6 @@ impl WorldState {
         match event {
             WindowEvent::KeyboardInput { input, .. } => {
                 let mut forward_pressed = || {
-                    println!("forward pressed");
                     self.input_state.is_forward_pressed = input.state == ElementState::Pressed;
                 };
                 let mut left_pressed = || {
