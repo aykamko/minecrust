@@ -60,14 +60,18 @@
       color: white;
     }
 
+    .y-button {
+      margin-left: 96px;
+    }
+
     .b-button {
       margin: 0 0 15px 0;
     }
 
     .button-container {
       position: absolute;
-      right: 102px;
-      bottom: 40px;
+      right: 45px;
+      bottom: 90px;
       transform: rotate(13deg);
       height: 100%;
       display: flex;

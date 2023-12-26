@@ -442,7 +442,7 @@ impl CameraController {
 
         let (x_delta, y_delta) =
             if self.last_joystick_vector.0 != 0.0 || self.last_joystick_vector.1 != 0.0 {
-                self.last_joystick_vector
+                (self.last_joystick_vector.0 * 0.75, self.last_joystick_vector.1 * 0.75) // lower sensitivity
             } else {
                 self.last_mouse_delta
             };

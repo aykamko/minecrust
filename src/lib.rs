@@ -1427,6 +1427,9 @@ pub fn run(width: usize, height: usize) {
                     game.state
                         .camera_controller
                         .process_web_dom_button_event(&event);
+                    game.state
+                        .world_state
+                        .process_web_dom_button_event(&event);
                 }
             },
 

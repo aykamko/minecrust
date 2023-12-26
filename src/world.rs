@@ -3,6 +3,7 @@ use crate::game_loop::GameLoop;
 use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
+use crate::DomControlsUserEvent;
 use bitmaps::Bitmap;
 use rand::prelude::SliceRandom;
 use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
@@ -175,7 +176,7 @@ cfg_if::cfg_if! {
 // The largest the world can be in xz dimension
 pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 // How many chunks are visible in xz dimension
-pub const VISIBLE_CHUNK_WIDTH: usize = 16;
+pub const VISIBLE_CHUNK_WIDTH: usize = 8;
     } else {
 // The largest the world can be in xz dimension
 pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
@@ -295,6 +296,8 @@ struct InputState {
     is_left_pressed: bool,
     is_right_pressed: bool,
     jump_button_state: ButtonState,
+    last_joystick_vector: (f64, f64),
+    last_translation_joystick_vector: (f64, f64),
 }
 
 const DEFAULT_IS_FLYING: bool = false;
@@ -353,6 +356,8 @@ impl WorldState {
                 is_left_pressed: false,
                 is_right_pressed: false,
                 jump_button_state: ButtonState::Idle,
+                last_joystick_vector: (0.0, 0.0),
+                last_translation_joystick_vector: (0.0, 0.0),
             },
             is_flying: DEFAULT_IS_FLYING,
         }
@@ -1519,6 +1524,17 @@ impl WorldState {
             self.character_entity.acceleration -= camera_right_xz * XZ_ACCEL;
         }
 
+        // Handle translation joystick
+        let (joystick_z, joystick_x) = self.input_state.last_translation_joystick_vector;
+        // lower sensitivity
+        let (joystick_z, joystick_x) = (joystick_z * 0.75, joystick_x * 0.75);
+        if joystick_x != 0.0 {
+            self.character_entity.acceleration += camera_forward_xz * (joystick_x as f32) * XZ_ACCEL;
+        }
+        if joystick_z != 0.0 {
+            self.character_entity.acceleration += camera_right_xz * (joystick_z as f32) * XZ_ACCEL;
+        }
+
         let curr_velocity_xz = glam::Vec3::new(
             self.character_entity.velocity.x,
             0.0,
@@ -1738,6 +1754,44 @@ impl WorldState {
                 }
             }
             _ => (),
+        }
+    }
+
+    pub fn process_web_dom_button_event(&mut self, event: &DomControlsUserEvent) {
+        match event {
+            DomControlsUserEvent::PitchYawJoystickMoved { vector } => {
+                const PITCH_YAW_JOYSTICK_SCALE_FACTOR: f64 = 2.5;
+                self.input_state.last_joystick_vector = (
+                    vector.0 * PITCH_YAW_JOYSTICK_SCALE_FACTOR,
+                    vector.1 * PITCH_YAW_JOYSTICK_SCALE_FACTOR,
+                );
+            }
+            DomControlsUserEvent::PitchYawJoystickReleased => {
+                self.input_state.last_joystick_vector = (0.0, 0.0);
+            }
+            DomControlsUserEvent::TranslationJoystickMoved { vector } => {
+                self.input_state.last_translation_joystick_vector = *vector;
+            }
+            DomControlsUserEvent::TranslationJoystickReleased => {
+                self.input_state.last_translation_joystick_vector = (0.0, 0.0);
+            }
+            DomControlsUserEvent::YButtonPressed => {
+                self.input_state.jump_button_state = match self.input_state.jump_button_state {
+                    ButtonState::Pressed => ButtonState::Held,
+                    ButtonState::Held => ButtonState::Held,
+                    _ => ButtonState::Pressed,
+                }
+            }
+            DomControlsUserEvent::YButtonReleased => {
+                self.input_state.jump_button_state = match self.input_state.jump_button_state {
+                    ButtonState::Pressed => ButtonState::Released,
+                    ButtonState::Held => ButtonState::Released,
+                    _ => ButtonState::Idle,
+                }
+            }
+            _ => {
+                log::info!("got some other user event: {:?}", event);
+            }
         }
     }
 }

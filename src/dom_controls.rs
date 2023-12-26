@@ -9,6 +9,8 @@ pub enum DomControlsUserEvent {
     AButtonReleased,
     BButtonPressed,
     BButtonReleased,
+    YButtonPressed,
+    YButtonReleased,
     PitchYawJoystickMoved { vector: (f64, f64) },
     PitchYawJoystickReleased,
     TranslationJoystickMoved { vector: (f64, f64) },
@@ -55,6 +57,14 @@ pub fn b_button_pressed() {
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn b_button_released() {
     send_dom_controls_user_event(DomControlsUserEvent::BButtonReleased);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn y_button_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::YButtonPressed);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn y_button_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::YButtonReleased);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn pitch_yaw_joystick_moved(x: f64, y: f64) {

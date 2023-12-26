@@ -52,6 +52,7 @@ function isTouchDevice() {
 function registerDomButtonEventListeners(wasmModule: any) {
   const aButton = document.getElementById("a-button");
   const bButton = document.getElementById("b-button");
+  const yButton = document.getElementById("y-button");
 
   const startEvent = isTouchDevice() ? "touchstart" : "mousedown";
   aButton.addEventListener(startEvent, () => {
@@ -60,13 +61,18 @@ function registerDomButtonEventListeners(wasmModule: any) {
   bButton.addEventListener(startEvent, () => {
     wasmModule.b_button_pressed();
   });
+  yButton.addEventListener(startEvent, () => {
+    wasmModule.y_button_pressed();
+  });
   for (const event of ["touchend", "touchcancel", "mouseup", "mouseleave"]) {
     aButton.addEventListener(event, () => {
-      console.log("up released");
       wasmModule.a_button_released();
     });
     bButton.addEventListener(event, () => {
       wasmModule.b_button_released();
+    });
+    yButton.addEventListener(event, () => {
+      wasmModule.y_button_released();
     });
   }
 }
