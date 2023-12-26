@@ -1368,96 +1368,18 @@ impl WorldState {
     pub fn physics_tick(&mut self, game_loop: &mut GameLoop) {
         let GRAVITY_Y_ACCEL: f32 = (game_loop.fixed_time_step().powi(2) * -9.807) as f32;
 
-        // top, left, far corner of character cylinder
-        let floored_position = (
-            self.character_entity.position.x.floor() as usize - 1,
-            self.character_entity.position.y.floor() as usize + 1,
-            self.character_entity.position.z.floor() as usize - 1,
-        );
-        let mut floor_blocks_to_check_collision: Vec<[usize; 3]> = vec![];
-        // collect all collidable blocks underneath the character
-        for (dx, dz) in iproduct!(0..2, 0..2) {
-            let block_pos = [
-                floored_position.0 + dx,
-                floored_position.1 - 2,
-                floored_position.2 + dz,
-            ];
-            if self
-                .get_block(block_pos[0], block_pos[1], block_pos[2])
-                .block_type
-                .is_collidable()
-            {
-                floor_blocks_to_check_collision.push(block_pos);
-            }
-        }
-        let character_collider = Cylinder::new(1.0, 0.5);
-        let character_pos = na::Isometry3::new(
-            na::vector![
-                self.character_entity.position.x,
-                self.character_entity.position.y,
-                self.character_entity.position.z
-            ],
-            na::zero(),
-        );
-
-        let mut floor_contact: Option<parry3d::query::Contact> = None;
-        for block_pos in floor_blocks_to_check_collision {
-            let block_collider = Cuboid::new(na::vector![0.5, 0.5, 0.5]);
-            let block_pos = na::Isometry3::new(
-                na::vector![
-                    block_pos[0] as f32 + 0.5,
-                    block_pos[1] as f32 + 0.5,
-                    block_pos[2] as f32 + 0.5
-                ],
-                na::zero(),
-            );
-
-            let maybe_contact = parry3d::query::contact(
-                &character_pos,
-                &character_collider,
-                &block_pos,
-                &block_collider,
-                0.01, // tolerance
-            )
-            .unwrap();
-
-            if maybe_contact.is_some() {
-                floor_contact = maybe_contact;
-                break;
-            }
-        }
-
-        match floor_contact {
-            Some(contact) => {
-                self.character_entity.acceleration.y = 0.0;
-                self.character_entity.velocity.y = 0.0;
-
-                if !self.character_entity.contacting_floor {
-                    let adjust_vec =
-                        glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
-                            * contact.dist;
-                    self.character_entity.position += adjust_vec;
-                }
-                self.character_entity.contacting_floor = true;
-            }
-            None => {
-                self.character_entity.acceleration.y = GRAVITY_Y_ACCEL;
-                self.character_entity.contacting_floor = false;
-            }
-        }
-
+        // TODO(aleks): this is probably buggy, because contacting_floor is computed on the previous tick
         if self.input_state.jump_button_state == ButtonState::Pressed
             && self.character_entity.contacting_floor
         {
             self.character_entity.acceleration.y += 0.05;
         }
-        self.character_entity.position.y += self.character_entity.velocity.y;
 
         const MAX_XZ_VELOCITY: f32 = 0.1;
         const XZ_ACCEL: f32 = 0.010;
         const XZ_FRICTION: f32 = 0.004;
 
-        self.character_entity.acceleration.x = 0.;
+        self.character_entity.acceleration.x = 0.0;
         self.character_entity.acceleration.x += if self.input_state.is_forward_pressed {
             XZ_ACCEL
         } else if self.character_entity.velocity.x > 0.0 {
@@ -1473,7 +1395,7 @@ impl WorldState {
             0.0
         };
 
-        self.character_entity.acceleration.z = 0.;
+        self.character_entity.acceleration.z = 0.0;
         self.character_entity.acceleration.z += if self.input_state.is_right_pressed {
             XZ_ACCEL
         } else if self.character_entity.velocity.z > 0.0 {
@@ -1489,7 +1411,10 @@ impl WorldState {
             0.0
         };
 
+        // Update velocity based on acceleration
         self.character_entity.velocity += self.character_entity.acceleration;
+
+        // Clamp XZ velocity
         self.character_entity.velocity.x = self
             .character_entity
             .velocity
@@ -1501,6 +1426,7 @@ impl WorldState {
             .z
             .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
 
+        // Apply friction
         if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.x) {
             self.character_entity.velocity.x = 0.0;
         }
@@ -1508,38 +1434,6 @@ impl WorldState {
             self.character_entity.velocity.z = 0.0;
         }
 
-        // Prepare for X-axis and Z-axis collision detection
-        let character_half_extent = 0.5; // Assuming the character is 1 voxel wide
-        let character_height = 2.0; // Assuming the character is 2 voxels tall
-        let character_collider = Cylinder::new(1.0, character_half_extent);
-
-        // Collect horizontal blocks to check for collision
-        let mut horizontal_blocks_to_check_collision: Vec<[usize; 3]> = vec![];
-            
-        // Calculate the bounds of the character's current and next position
-        let min_x = (self.character_entity.position.x - character_half_extent).floor() as isize;
-        let max_x = (self.character_entity.position.x + character_half_extent + self.character_entity.velocity.x.signum()).ceil() as isize;
-        let min_y = self.character_entity.position.y.floor() as isize;
-        let max_y = (self.character_entity.position.y + character_height).ceil() as isize;
-        let min_z = (self.character_entity.position.z - character_half_extent).floor() as isize;
-        let max_z = (self.character_entity.position.z + character_half_extent + self.character_entity.velocity.z.signum()).ceil() as isize;
-
-        // Iterate over the blocks in the range and collect the ones that are collidable
-        for x in min_x..=max_x {
-            for y in min_y..max_y {
-                for z in min_z..=max_z {
-                    if x < 0 || y < 0 || z < 0 {
-                        // Skip blocks with negative indices, if your world has no blocks at negative coordinates
-                        continue;
-                    }
-                    let block_pos = [x as usize, y as usize, z as usize];
-                    if self.get_block(block_pos[0], block_pos[1], block_pos[2]).block_type.is_collidable() {
-                        horizontal_blocks_to_check_collision.push(block_pos);
-                    }
-                }
-            }
-        }
-            
         // Define a helper function to check for collisions in a given direction
         fn check_collision_in_direction(
             character_pos: &na::Isometry3<f32>,
@@ -1575,40 +1469,108 @@ impl WorldState {
             }
             None
         }
+
+        let mut potential_new_pos = self.character_entity.position + self.character_entity.velocity;
+
+        // Update character_pos with the potential new position for collision checks
+        let next_character_pos = na::Isometry3::new(
+            na::vector![
+                self.character_entity.position.x + self.character_entity.velocity.x,
+                self.character_entity.position.y + self.character_entity.velocity.x,
+                self.character_entity.position.z + self.character_entity.velocity.x
+            ],
+            na::zero(),
+        );
+
+        // Prepare for X-axis and Z-axis collision detection
+        let character_half_extent = 0.5; // Assuming the character is 1 voxel wide
+        let character_height = 2.0; // Assuming the character is 2 voxels tall
+        let character_half_height = character_height / 2.0;
+        let character_collider = Cylinder::new(character_half_height, character_half_extent);
+
+        // Collect blocks to check for collision in all directions
+        let mut blocks_to_check_collision: Vec<[usize; 3]> = vec![];
+
+        // Calculate the bounds of the character's current and next position
+        let min_x = (self.character_entity.position.x - character_half_extent).floor() as isize;
+        let max_x = (potential_new_pos.x + character_half_extent).ceil() as isize;
+        let min_y = (self.character_entity.position.y - character_half_extent).floor() as isize; // Adjusted for Y-axis
+        let max_y = (potential_new_pos.y + character_height).ceil() as isize; // Adjusted for Y-axis
+        let min_z = (self.character_entity.position.z - character_half_extent).floor() as isize;
+        let max_z = (potential_new_pos.z + character_half_extent).ceil() as isize;
+
+        // Iterate over the blocks in the range and collect the ones that are collidable
+        for x in min_x..=max_x {
+            for y in min_y..=max_y { 
+                for z in min_z..=max_z {
+                    if x < 0 || y < 0 || z < 0 {
+                        // Skip blocks with negative indices, if your world has no blocks at negative coordinates
+                        continue;
+                    }
+                    let block_pos = [x as usize, y as usize, z as usize];
+                    if self.get_block(block_pos[0], block_pos[1], block_pos[2]).block_type.is_collidable() {
+                        blocks_to_check_collision.push(block_pos);
+                    }
+                }
+            }
+        }
         
         // Check for X-axis collisions
         let x_direction = if self.character_entity.velocity.x > 0.0 { glam::Vec3::X } else { -glam::Vec3::X };
         if let Some(contact) = check_collision_in_direction(
-            &character_pos,
+            &next_character_pos,
             &character_collider,
             x_direction,
-            &horizontal_blocks_to_check_collision,
+            &blocks_to_check_collision,
         ) {
             // Resolve X-axis collision
             self.character_entity.velocity.x = 0.0;
             let adjust_vec = glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z) * contact.dist;
-            self.character_entity.position += adjust_vec;
+            potential_new_pos += adjust_vec;
         }
-        
-        // Apply X-axis velocity and position changes
-        self.character_entity.position.x += self.character_entity.velocity.x;
+
+        // Check for Y-axis collisions, special case for gravity
+        let y_direction = if self.character_entity.velocity.y > 0.0 { glam::Vec3::Y } else { -glam::Vec3::Y };
+        let y_contact = check_collision_in_direction(
+            &next_character_pos,
+            &character_collider,
+            y_direction,
+            &blocks_to_check_collision,
+        );
+        match y_contact {
+            Some(contact) => {
+                // Resolve Y-axis collision
+                self.character_entity.velocity.y = 0.0;
+                let adjust_vec = glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z) * contact.dist;
+                potential_new_pos += adjust_vec;
+                
+                if y_direction == -glam::Vec3::Y {
+                    self.character_entity.acceleration.y = 0.0;
+                    self.character_entity.contacting_floor = true;
+                }
+            }
+            None => {
+                self.character_entity.acceleration.y = GRAVITY_Y_ACCEL;
+                self.character_entity.contacting_floor = false;
+            }
+        }
         
         // Check for Z-axis collisions
         let z_direction = if self.character_entity.velocity.z > 0.0 { glam::Vec3::Z } else { -glam::Vec3::Z };
         if let Some(contact) = check_collision_in_direction(
-            &character_pos,
+            &next_character_pos,
             &character_collider,
             z_direction,
-            &horizontal_blocks_to_check_collision,
+            &blocks_to_check_collision,
         ) {
             // Resolve Z-axis collision
             self.character_entity.velocity.z = 0.0;
             let adjust_vec = glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z) * contact.dist;
-            self.character_entity.position += adjust_vec;
+            potential_new_pos += adjust_vec;
         }
         
-        // Apply Z-axis velocity and position changes
-        self.character_entity.position.z += self.character_entity.velocity.z;
+        // Apply the final position and velocity to the character
+        self.character_entity.position = potential_new_pos.into();
     }
 
     pub fn process_window_event(&mut self, event: &WindowEvent) {
