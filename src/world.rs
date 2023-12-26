@@ -4,8 +4,6 @@ use crate::map_generation::{self};
 use crate::vec_extra::{self, Vec2d, Vec3d};
 use crate::vertex::{CuboidCoords, QuadListRenderData, Vertex};
 use bitmaps::Bitmap;
-use futures::io::SeeKRelative;
-use na::RealField;
 use rand::prelude::SliceRandom;
 use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 
@@ -299,6 +297,8 @@ struct InputState {
     jump_button_state: ButtonState,
 }
 
+const DEFAULT_IS_FLYING: bool = false;
+
 pub struct WorldState {
     pub chunk_indices: Vec2d<u32>,
     chunks: Vec<Chunk>,
@@ -307,6 +307,7 @@ pub struct WorldState {
 
     pub character_entity: CharacterEntity,
     input_state: InputState,
+    pub is_flying: bool,
 }
 
 macro_rules! set_block {
@@ -353,6 +354,7 @@ impl WorldState {
                 is_right_pressed: false,
                 jump_button_state: ButtonState::Idle,
             },
+            is_flying: DEFAULT_IS_FLYING,
         }
     }
 
@@ -1530,8 +1532,7 @@ impl WorldState {
             let friction_dir = curr_velocity_xz.normalize();
             let friction = friction_dir * XZ_FRICTION;
             // Apply friction but don't reverse the direction
-            self.character_entity.acceleration -=
-                friction.min(curr_velocity_xz.abs());
+            self.character_entity.acceleration -= friction.min(curr_velocity_xz.abs());
         }
 
         // Apply acceleration to velocity
@@ -1687,20 +1688,21 @@ impl WorldState {
 
     pub fn process_window_event(&mut self, event: &WindowEvent) {
         match event {
-            WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-                Some(VirtualKeyCode::I) => {
+            WindowEvent::KeyboardInput { input, .. } => {
+                let mut forward_pressed = || {
+                    println!("forward pressed");
                     self.input_state.is_forward_pressed = input.state == ElementState::Pressed;
-                }
-                Some(VirtualKeyCode::J) => {
+                };
+                let mut left_pressed = || {
                     self.input_state.is_left_pressed = input.state == ElementState::Pressed;
-                }
-                Some(VirtualKeyCode::K) => {
+                };
+                let mut backward_pressed = || {
                     self.input_state.is_backward_pressed = input.state == ElementState::Pressed;
-                }
-                Some(VirtualKeyCode::L) => {
+                };
+                let mut right_pressed = || {
                     self.input_state.is_right_pressed = input.state == ElementState::Pressed;
-                }
-                Some(VirtualKeyCode::Z) => {
+                };
+                let mut jump_pressed = || {
                     let pressed = input.state == ElementState::Pressed;
                     self.input_state.jump_button_state = match pressed {
                         true => match self.input_state.jump_button_state {
@@ -1714,9 +1716,28 @@ impl WorldState {
                             _ => ButtonState::Idle,
                         },
                     }
+                };
+
+                if self.is_flying {
+                    match input.virtual_keycode {
+                        Some(VirtualKeyCode::I) => forward_pressed(),
+                        Some(VirtualKeyCode::J) => left_pressed(),
+                        Some(VirtualKeyCode::K) => backward_pressed(),
+                        Some(VirtualKeyCode::L) => right_pressed(),
+                        Some(VirtualKeyCode::Z) => jump_pressed(),
+                        _ => (),
+                    }
+                } else {
+                    match input.virtual_keycode {
+                        Some(VirtualKeyCode::W) => forward_pressed(),
+                        Some(VirtualKeyCode::A) => left_pressed(),
+                        Some(VirtualKeyCode::S) => backward_pressed(),
+                        Some(VirtualKeyCode::D) => right_pressed(),
+                        Some(VirtualKeyCode::Space) => jump_pressed(),
+                        _ => (),
+                    }
                 }
-                _ => (),
-            },
+            }
             _ => (),
         }
     }

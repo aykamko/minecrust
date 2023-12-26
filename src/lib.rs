@@ -1347,13 +1347,13 @@ pub fn run(width: usize, height: usize) {
                 }
                 WindowEvent::KeyboardInput { input, .. } => {
                     match (input.virtual_keycode, input.state) {
-                        (Some(VirtualKeyCode::W), ElementState::Pressed) => {
-                            if curr_modifier_state.logo() {
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                            game.state.camera_controller.process_window_event(&event);
-                        }
+                        // (Some(VirtualKeyCode::W), ElementState::Pressed) => {
+                        //     if curr_modifier_state.logo() {
+                        //         *control_flow = ControlFlow::Exit;
+                        //         return;
+                        //     }
+                        //     game.state.camera_controller.process_window_event(&event);
+                        // }
                         (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
                             window.set_cursor_visible(true);
                             window
