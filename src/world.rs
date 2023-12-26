@@ -277,7 +277,7 @@ impl CharacterEntity {
         );
         return result_vertex_data;
     }
-    
+
     pub fn did_move(&self) -> bool {
         self.position != self.prev_position
     }
@@ -1372,7 +1372,7 @@ impl WorldState {
         }
     }
 
-    pub fn physics_tick(&mut self, game_loop: &mut GameLoop) {
+    pub fn physics_tick(&mut self, game_loop: &mut GameLoop, camera: &Camera) {
         let character_half_extent = 0.5; // Assuming the character is 1 voxel wide
         let character_height = 2.0; // Assuming the character is 2 voxels tall
         let character_half_height = character_height / 2.0;
@@ -1487,69 +1487,78 @@ impl WorldState {
         }
 
         const MAX_XZ_VELOCITY: f32 = 0.1;
-        const MAX_POS_Y_VELOCITY: f32 = 0.1;
         const XZ_ACCEL: f32 = 0.010;
         const XZ_FRICTION: f32 = 0.004;
 
+        // Get the camera's forward normal and ignore the Y component for XZ plane movement
+        let camera_forward_normal = camera.forward_normal();
+        let camera_forward_xz =
+            glam::Vec3::new(camera_forward_normal.x, 0.0, camera_forward_normal.z).normalize();
+
+        // Reset acceleration
         self.character_entity.acceleration.x = 0.0;
-        self.character_entity.acceleration.x += if self.input_state.is_forward_pressed {
-            XZ_ACCEL
-        } else if self.character_entity.velocity.x > 0.0 {
-            -XZ_FRICTION
-        } else {
-            0.0
-        };
-        self.character_entity.acceleration.x += if self.input_state.is_backward_pressed {
-            -XZ_ACCEL
-        } else if self.character_entity.velocity.x < 0.0 {
-            XZ_FRICTION
-        } else {
-            0.0
-        };
-
         self.character_entity.acceleration.z = 0.0;
-        self.character_entity.acceleration.z += if self.input_state.is_right_pressed {
-            XZ_ACCEL
-        } else if self.character_entity.velocity.z > 0.0 {
-            -XZ_FRICTION
-        } else {
-            0.0
-        };
-        self.character_entity.acceleration.z += if self.input_state.is_left_pressed {
-            -XZ_ACCEL
-        } else if self.character_entity.velocity.z < 0.0 {
-            XZ_FRICTION
-        } else {
-            0.0
-        };
 
-        // Update velocity based on acceleration
+        // Apply acceleration based on input
+        if self.input_state.is_forward_pressed {
+            self.character_entity.acceleration += camera_forward_xz * XZ_ACCEL;
+        }
+        if self.input_state.is_backward_pressed {
+            self.character_entity.acceleration -= camera_forward_xz * XZ_ACCEL;
+        }
+
+        // For right and left movement, we need the rightward normal on the XZ plane
+        let camera_right_xz = glam::Vec3::new(-camera_forward_xz.z, 0.0, camera_forward_xz.x); // Rotate 90 degrees on the Y axis
+
+        if self.input_state.is_right_pressed {
+            self.character_entity.acceleration += camera_right_xz * XZ_ACCEL;
+        }
+        if self.input_state.is_left_pressed {
+            self.character_entity.acceleration -= camera_right_xz * XZ_ACCEL;
+        }
+
+        let mut velocity_xz = glam::Vec3::new(
+            self.character_entity.velocity.x,
+            0.0,
+            self.character_entity.velocity.z,
+        );
+        let is_no_input_given = self.character_entity.acceleration.x == 0.0
+            && self.character_entity.acceleration.z == 0.0;
+
+        // Apply friction to decelerate the character when no input is given
+        if velocity_xz.length_squared() > 0.0 && is_no_input_given {
+            let friction_dir = velocity_xz.normalize();
+            let friction = friction_dir * XZ_FRICTION;
+            // Apply friction but don't reverse the direction
+            self.character_entity.acceleration -=
+                friction.min(velocity_xz.abs());
+        }
+
+
         self.character_entity.velocity += self.character_entity.acceleration;
 
-        // Clamp XZ velocity
-        self.character_entity.velocity.x = self
-            .character_entity
-            .velocity
-            .x
-            .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
-        self.character_entity.velocity.z = self
-            .character_entity
-            .velocity
-            .z
-            .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
+        let mut velocity_xz = glam::Vec3::new(
+            self.character_entity.velocity.x,
+            0.0,
+            self.character_entity.velocity.z,
+        );
+
+        // Clamp XZ velocity if it's to high
+        if velocity_xz.length().abs() > MAX_XZ_VELOCITY {
+            velocity_xz = velocity_xz.normalize() * MAX_XZ_VELOCITY;
+            self.character_entity.velocity.x = velocity_xz.x;
+            self.character_entity.velocity.z = velocity_xz.z;
+        } else if (-XZ_FRICTION..XZ_FRICTION).contains(&velocity_xz.length().abs()) {
+            self.character_entity.velocity.x = 0.0;
+            self.character_entity.velocity.z = 0.0;
+        }
+
+        const MAX_POS_Y_VELOCITY: f32 = 0.1;
         self.character_entity.velocity.y = self
             .character_entity
             .velocity
             .y
             .clamp(-1000.0, MAX_POS_Y_VELOCITY);
-
-        // Apply friction
-        if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.x) {
-            self.character_entity.velocity.x = 0.0;
-        }
-        if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.z) {
-            self.character_entity.velocity.z = 0.0;
-        }
 
         let mut potential_new_pos = self.character_entity.position + self.character_entity.velocity;
 

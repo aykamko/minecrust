@@ -95,6 +95,10 @@ impl Camera {
         partial_self
     }
 
+    pub fn forward_normal(&self) -> cgmath::Vector3<f32> {
+        (self.target - self.eye).normalize()
+    }
+
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         // 1. The view matrix moves the world to be at the position and rotation of the camera. It's
         // essentially an inverse of whatever the transform matrix of the camera would be.
@@ -376,7 +380,7 @@ impl CameraController {
             if world_state.character_entity.did_move() {
                 next_eye = cgmath::Point3::<f32>::new(
                     world_state.character_entity.position.x,
-                    world_state.character_entity.position.y + 1.0,
+                    world_state.character_entity.position.y + 0.5,
                     world_state.character_entity.position.z
                 );
                 next_target = next_eye + forward_norm;
