@@ -1400,7 +1400,7 @@ impl WorldState {
                 {
                     let contact_normal =
                         glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z);
-                    if contact_normal.dot(direction) < 0.0 {
+                    if contact_normal.dot(direction) > 0.0 {
                         return Some(contact);
                     }
                 }
@@ -1547,7 +1547,9 @@ impl WorldState {
             let adjust_vec =
                 glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
                     * contact.dist;
-            potential_new_pos += adjust_vec;
+            // println!("prev_pos: {:?}, direction: {:?}, normal: {:?}", potential_new_pos, y_direction, contact.normal1);
+            potential_new_pos.y += adjust_vec.y;
+            // println!("adjust_vec: {:?}, new_pos: {:?}", adjust_vec, potential_new_pos);
         }
 
         // Apply the final position and velocity to the character
