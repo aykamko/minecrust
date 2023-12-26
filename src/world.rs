@@ -1517,7 +1517,7 @@ impl WorldState {
             self.character_entity.acceleration -= camera_right_xz * XZ_ACCEL;
         }
 
-        let mut velocity_xz = glam::Vec3::new(
+        let curr_velocity_xz = glam::Vec3::new(
             self.character_entity.velocity.x,
             0.0,
             self.character_entity.velocity.z,
@@ -1526,33 +1526,34 @@ impl WorldState {
             && self.character_entity.acceleration.z == 0.0;
 
         // Apply friction to decelerate the character when no input is given
-        if velocity_xz.length_squared() > 0.0 && is_no_input_given {
-            let friction_dir = velocity_xz.normalize();
+        if curr_velocity_xz.length().abs() > 0.0 && is_no_input_given {
+            let friction_dir = curr_velocity_xz.normalize();
             let friction = friction_dir * XZ_FRICTION;
             // Apply friction but don't reverse the direction
             self.character_entity.acceleration -=
-                friction.min(velocity_xz.abs());
+                friction.min(curr_velocity_xz.abs());
         }
 
-
+        // Apply acceleration to velocity
         self.character_entity.velocity += self.character_entity.acceleration;
 
-        let mut velocity_xz = glam::Vec3::new(
+        let next_velocity_xz = glam::Vec3::new(
             self.character_entity.velocity.x,
             0.0,
             self.character_entity.velocity.z,
         );
 
         // Clamp XZ velocity if it's to high
-        if velocity_xz.length().abs() > MAX_XZ_VELOCITY {
-            velocity_xz = velocity_xz.normalize() * MAX_XZ_VELOCITY;
-            self.character_entity.velocity.x = velocity_xz.x;
-            self.character_entity.velocity.z = velocity_xz.z;
-        } else if (-XZ_FRICTION..XZ_FRICTION).contains(&velocity_xz.length().abs()) {
+        if next_velocity_xz.length().abs() > MAX_XZ_VELOCITY {
+            let clamped_next_velocity_xz = next_velocity_xz.normalize() * MAX_XZ_VELOCITY;
+            self.character_entity.velocity.x = clamped_next_velocity_xz.x;
+            self.character_entity.velocity.z = clamped_next_velocity_xz.z;
+        } else if (-XZ_FRICTION..XZ_FRICTION).contains(&next_velocity_xz.length().abs()) {
             self.character_entity.velocity.x = 0.0;
             self.character_entity.velocity.z = 0.0;
         }
 
+        // Clamp Y velocity
         const MAX_POS_Y_VELOCITY: f32 = 0.1;
         self.character_entity.velocity.y = self
             .character_entity
