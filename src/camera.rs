@@ -1,4 +1,4 @@
-use crate::{world::CHUNK_XZ_SIZE, DomControlsUserEvent};
+use crate::{world::{CHUNK_XZ_SIZE, self}, DomControlsUserEvent};
 use cgmath::{prelude::*, Matrix4, Point3, Vector3};
 use collision::{Frustum, Plane};
 use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
@@ -373,44 +373,55 @@ impl CameraController {
             next_target += y as f32 * forward_norm * self.speed();
             next_target += x as f32 * right_norm * self.speed();
         } else {
-            if self.is_forward_pressed {
+            if world_state.character_entity.did_move() {
+                next_eye = cgmath::Point3::<f32>::new(
+                    world_state.character_entity.position.x,
+                    world_state.character_entity.position.y + 1.0,
+                    world_state.character_entity.position.z
+                );
+                next_target = next_eye + forward_norm;
                 did_move = true;
                 did_translate = true;
-                next_eye += forward_norm * self.speed();
-                next_target += forward_norm * self.speed();
             }
-            if self.is_backward_pressed {
-                did_move = true;
-                did_translate = true;
-                next_eye -= forward_norm * self.speed();
-                next_target -= forward_norm * self.speed();
-            }
-            if self.is_right_pressed {
-                did_move = true;
-                did_translate = true;
-                next_eye += right_norm * self.speed();
-                next_target += right_norm * self.speed();
-            }
-            if self.is_left_pressed {
-                did_move = true;
-                did_translate = true;
-                next_eye -= right_norm * self.speed();
-                next_target -= right_norm * self.speed();
-            }
+
+            // if self.is_forward_pressed {
+            //     did_move = true;
+            //     did_translate = true;
+            //     next_eye += forward_norm * self.speed();
+            //     next_target += forward_norm * self.speed();
+            // }
+            // if self.is_backward_pressed {
+            //     did_move = true;
+            //     did_translate = true;
+            //     next_eye -= forward_norm * self.speed();
+            //     next_target -= forward_norm * self.speed();
+            // }
+            // if self.is_right_pressed {
+            //     did_move = true;
+            //     did_translate = true;
+            //     next_eye += right_norm * self.speed();
+            //     next_target += right_norm * self.speed();
+            // }
+            // if self.is_left_pressed {
+            //     did_move = true;
+            //     did_translate = true;
+            //     next_eye -= right_norm * self.speed();
+            //     next_target -= right_norm * self.speed();
+            // }
         }
 
-        if self.is_space_pressed {
-            did_move = true;
-            did_translate = true;
-            next_eye += camera.world_up * self.speed();
-            next_target += camera.world_up * self.speed();
-        }
-        if self.is_shift_pressed {
-            did_move = true;
-            did_translate = true;
-            next_eye -= camera.world_up * self.speed();
-            next_target -= camera.world_up * self.speed();
-        }
+        // if self.is_space_pressed {
+        //     did_move = true;
+        //     did_translate = true;
+        //     next_eye += camera.world_up * self.speed();
+        //     next_target += camera.world_up * self.speed();
+        // }
+        // if self.is_shift_pressed {
+        //     did_move = true;
+        //     did_translate = true;
+        //     next_eye -= camera.world_up * self.speed();
+        //     next_target -= camera.world_up * self.speed();
+        // }
 
         // "Vertical" strafing vector
         let up_norm = right_norm.cross(forward).normalize();
@@ -438,29 +449,29 @@ impl CameraController {
             next_target += forward_diff;
         }
 
-        if did_move {
-            let maybe_collision_normal =
-                world_state.collision_normal_from_ray_2(&camera, &next_eye);
-            if let Some(collision_normal) = maybe_collision_normal {
-                if collision_normal.x != 0.0 {
-                    next_eye.x = camera.eye.x;
-                    next_target.x = camera.target.x;
-                }
-                if collision_normal.y != 0.0 {
-                    next_eye.y = camera.eye.y;
-                    next_target.y = camera.target.y;
-                }
-                if collision_normal.z != 0.0 {
-                    next_eye.z = camera.eye.z;
-                    next_target.z = camera.target.z;
-                }
-            }
-            if world_state.block_collidable_at_point(&next_eye) {
-                // Scoot camera backwards if there's a collision after sliding
-                let translate_vector = next_eye - camera.eye;
-                next_eye = camera.eye - translate_vector;
-            }
-        }
+        // if did_move {
+        //     let maybe_collision_normal =
+        //         world_state.collision_normal_from_ray_2(&camera, &next_eye);
+        //     if let Some(collision_normal) = maybe_collision_normal {
+        //         if collision_normal.x != 0.0 {
+        //             next_eye.x = camera.eye.x;
+        //             next_target.x = camera.target.x;
+        //         }
+        //         if collision_normal.y != 0.0 {
+        //             next_eye.y = camera.eye.y;
+        //             next_target.y = camera.target.y;
+        //         }
+        //         if collision_normal.z != 0.0 {
+        //             next_eye.z = camera.eye.z;
+        //             next_target.z = camera.target.z;
+        //         }
+        //     }
+        //     if world_state.block_collidable_at_point(&next_eye) {
+        //         // Scoot camera backwards if there's a collision after sliding
+        //         let translate_vector = next_eye - camera.eye;
+        //         next_eye = camera.eye - translate_vector;
+        //     }
+        // }
 
         if did_move {
             camera.eye = next_eye;

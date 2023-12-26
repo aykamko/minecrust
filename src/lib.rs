@@ -861,6 +861,8 @@ impl Game {
         let state = &mut self.state;
         let scene = &mut self.scene;
 
+        state.world_state.physics_tick(game_loop);
+
         let update_result = state
             .camera_controller
             .update_camera(&mut state.camera, &state.world_state);
@@ -1045,7 +1047,6 @@ impl Game {
             }
         }
 
-        state.world_state.physics_tick(game_loop);
         let updated_character_vtx_data = state.world_state.character_entity.vertex_data();
         state.queue.write_buffer(
             &scene.vertex_buffers.character_entity,
