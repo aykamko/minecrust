@@ -1372,7 +1372,7 @@ impl WorldState {
         let character_collider = Cylinder::new(character_half_height, character_half_extent);
 
         const FLOOR_CONTACT_TOLERANCE: f32 = 0.001;
-        const WALL_CONTANT_TOLERANCE: f32 = 0.01;
+        const WALL_CONTACT_TOLERANCE: f32 = 0.01;
 
         // Define a helper function to check for collisions in a given direction
         fn check_collision_in_direction(
@@ -1404,8 +1404,14 @@ impl WorldState {
                 {
                     let contact_normal =
                         glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z);
-                    if contact_normal.dot(direction) > 0.0 && contact.dist.abs() > contact_tolerance
-                    {
+
+                    // Project the normal onto the plane perpendicular to the direction
+                    let normal_on_plane = contact_normal - direction * contact_normal.dot(direction);
+
+                    // If true, the normal does not have significant components in directions other than `direction`
+                    let is_normal_mostly_parallel_to_direction = normal_on_plane.length() < 0.5;
+
+                    if is_normal_mostly_parallel_to_direction && contact.dist.abs() > contact_tolerance {
                         return Some(contact);
                     }
                 }
@@ -1446,6 +1452,7 @@ impl WorldState {
             }
         }
 
+        // TODO(aleks): this causes me to get stuck in walls
         let mut is_contacting_floor = false;
         if let Some(_contact) = check_collision_in_direction(
             &curr_character_pos,
@@ -1471,6 +1478,7 @@ impl WorldState {
         }
 
         const MAX_XZ_VELOCITY: f32 = 0.1;
+        const MAX_POS_Y_VELOCITY: f32 = 0.1;
         const XZ_ACCEL: f32 = 0.010;
         const XZ_FRICTION: f32 = 0.004;
 
@@ -1520,6 +1528,11 @@ impl WorldState {
             .velocity
             .z
             .clamp(-MAX_XZ_VELOCITY, MAX_XZ_VELOCITY);
+        self.character_entity.velocity.y = self
+            .character_entity
+            .velocity
+            .y
+            .clamp(-1000.0, MAX_POS_Y_VELOCITY);
 
         // Apply friction
         if (-XZ_FRICTION..XZ_FRICTION).contains(&self.character_entity.velocity.x) {
@@ -1590,10 +1603,12 @@ impl WorldState {
             let adjust_vec =
                 glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
                     * contact.dist;
-            let prev_pos = potential_new_pos.clone();
+            // let prev_pos = potential_new_pos.clone();
             potential_new_pos.x += adjust_vec.x;
-            println!("X-axis collision, prev_pos: {:?}, new_pos: {:?}, adjust_vec: {:?}, contact: {:?}",
-                prev_pos, potential_new_pos, adjust_vec, contact);
+            // println!(
+            //     "X-axis collision, prev_pos: {:?}, new_pos: {:?}, adjust_vec: {:?}, contact: {:?}",
+            //     prev_pos, potential_new_pos, adjust_vec, contact
+            // );
         }
 
         // Check for Y-axis collisions, special case for gravity
@@ -1638,10 +1653,12 @@ impl WorldState {
             let adjust_vec =
                 glam::Vec3::new(contact.normal1.x, contact.normal1.y, contact.normal1.z)
                     * contact.dist;
-            let prev_pos = potential_new_pos.clone();
+            // let prev_pos = potential_new_pos.clone();
             potential_new_pos.z += adjust_vec.z;
-            println!("Z-axis collision, prev_pos: {:?}, new_pos: {:?}, adjust_vec: {:?}, contact: {:?}",
-                prev_pos, potential_new_pos, adjust_vec, contact);
+            // println!(
+            //     "Z-axis collision, prev_pos: {:?}, new_pos: {:?}, adjust_vec: {:?}, contact: {:?}",
+            //     prev_pos, potential_new_pos, adjust_vec, contact
+            // );
         }
 
         // Apply the final position and velocity to the character
