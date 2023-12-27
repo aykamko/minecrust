@@ -1279,6 +1279,8 @@ pub fn run(width: usize, height: usize) {
     let event_loop = EventLoopBuilder::<DomControlsUserEvent>::with_user_event().build();
     unsafe {
         dom_controls::set_global_event_loop_proxy(&event_loop);
+        #[cfg(target_arch = "wasm32")]
+        dom_controls::place_block_type_changed(&world::BlockType::DEFAULT_PLACE_BLOCK_TYPE.to_string());
     }
 
     let window = winit::window::WindowBuilder::new()

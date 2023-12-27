@@ -11,6 +11,8 @@ pub enum DomControlsUserEvent {
     BButtonReleased,
     YButtonPressed,
     YButtonReleased,
+    BlockPreviewPressed,
+    BlockPreviewReleased,
     PitchYawJoystickMoved { vector: (f64, f64) },
     PitchYawJoystickReleased,
     TranslationJoystickMoved { vector: (f64, f64) },
@@ -67,6 +69,14 @@ pub fn y_button_released() {
     send_dom_controls_user_event(DomControlsUserEvent::YButtonReleased);
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn block_preview_pressed() {
+    send_dom_controls_user_event(DomControlsUserEvent::BlockPreviewPressed);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn block_preview_released() {
+    send_dom_controls_user_event(DomControlsUserEvent::BlockPreviewReleased);
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub fn pitch_yaw_joystick_moved(x: f64, y: f64) {
     send_dom_controls_user_event(DomControlsUserEvent::PitchYawJoystickMoved { vector: (x, y) });
 }
@@ -97,5 +107,10 @@ extern "C" {
     // Define the JavaScript function signature
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen(js_namespace = window)]
-    pub fn handlePlaceBlockChanged(eventData: &JsValue);
+    fn handlePlaceBlockTypeChanged(eventData: &JsValue);
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn place_block_type_changed(block_type: &str) {
+    handlePlaceBlockTypeChanged(&JsValue::from_str(block_type));
 }

@@ -22,8 +22,6 @@ use std::fmt;
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use crate::dom_controls;
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsValue;
 
 const VERBOSE_LOGS: bool = false;
 macro_rules! vprintln {
@@ -77,6 +75,8 @@ impl fmt::Display for BlockType {
 }
 
 impl BlockType {
+    pub const DEFAULT_PLACE_BLOCK_TYPE: BlockType = BlockType::Stone;
+
     pub fn is_semi_transluscent(&self) -> bool {
         match *self {
             BlockType::TreeLeaves1 => true,
@@ -382,7 +382,7 @@ impl WorldState {
             highlighted_chunk: None,
             highlighted_block: None,
             character_entity,
-            place_block_type: BlockType::Sand,
+            place_block_type: BlockType::DEFAULT_PLACE_BLOCK_TYPE,
             input_state: InputState {
                 is_forward_pressed: false,
                 is_backward_pressed: false,
@@ -1789,8 +1789,8 @@ impl WorldState {
 
                 let prev_place_block_type = self.place_block_type;
                 match input.virtual_keycode {
-                    Some(VirtualKeyCode::Key1) => self.place_block_type = BlockType::Dirt,
-                    Some(VirtualKeyCode::Key2) => self.place_block_type = BlockType::Stone,
+                    Some(VirtualKeyCode::Key1) => self.place_block_type = BlockType::Stone,
+                    Some(VirtualKeyCode::Key2) => self.place_block_type = BlockType::Dirt,
                     Some(VirtualKeyCode::Key3) => self.place_block_type = BlockType::OakPlank,
                     Some(VirtualKeyCode::Key4) => self.place_block_type = BlockType::Glass,
                     Some(VirtualKeyCode::Key5) => self.place_block_type = BlockType::Sand,
@@ -1799,8 +1799,7 @@ impl WorldState {
 
                 #[cfg(target_arch = "wasm32")]
                 if prev_place_block_type != self.place_block_type {
-                    let block_type = JsValue::from_str(&self.place_block_type.to_string());
-                    dom_controls::handlePlaceBlockChanged(&block_type);
+                    dom_controls::place_block_type_changed(&self.place_block_type.to_string());
                 }
             }
             _ => (),
@@ -1808,6 +1807,13 @@ impl WorldState {
     }
 
     pub fn process_web_dom_button_event(&mut self, event: &DomControlsUserEvent) {
+        const BLOCK_ORDER: [BlockType; 5] = [
+            BlockType::Stone,
+            BlockType::Dirt,
+            BlockType::OakPlank,
+            BlockType::Glass,
+            BlockType::Sand,
+        ];
         match event {
             DomControlsUserEvent::PitchYawJoystickMoved { vector } => {
                 const PITCH_YAW_JOYSTICK_SCALE_FACTOR: f64 = 2.5;
@@ -1839,9 +1845,18 @@ impl WorldState {
                     _ => ButtonState::Idle,
                 }
             }
-            _ => {
-                log::info!("got some other user event: {:?}", event);
-            }
+            DomControlsUserEvent::BlockPreviewPressed => {
+                let current_block_type_idx = BLOCK_ORDER
+                    .iter()
+                    .position(|&block_type| block_type == self.place_block_type)
+                    .unwrap();
+                let next_block_type_idx = (current_block_type_idx + 1) % BLOCK_ORDER.len();
+                let next_block_type = BLOCK_ORDER[next_block_type_idx];
+                self.place_block_type = next_block_type;
+                #[cfg(target_arch = "wasm32")]
+                dom_controls::place_block_type_changed(&self.place_block_type.to_string());
+            },
+            _ => ()
         }
     }
 }

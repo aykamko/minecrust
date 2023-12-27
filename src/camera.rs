@@ -332,7 +332,6 @@ impl CameraController {
                 true
             }
             _ => {
-                log::info!("got some other user event: {:?}", event);
                 false
             }
         }
