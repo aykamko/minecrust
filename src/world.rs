@@ -309,7 +309,9 @@ pub struct WorldState {
     highlighted_block: Option<[usize; 3]>,
 
     pub character_entity: CharacterEntity,
+    pub place_block_type: BlockType,
     input_state: InputState,
+
     pub is_flying: bool,
 }
 
@@ -350,6 +352,7 @@ impl WorldState {
             highlighted_chunk: None,
             highlighted_block: None,
             character_entity,
+            place_block_type: BlockType::Sand,
             input_state: InputState {
                 is_forward_pressed: false,
                 is_backward_pressed: false,
@@ -1751,6 +1754,19 @@ impl WorldState {
                         Some(VirtualKeyCode::Space) => jump_pressed(),
                         _ => (),
                     }
+                }
+
+                match input.virtual_keycode {
+                    Some(VirtualKeyCode::Key1) => {
+                        self.place_block_type = BlockType::Dirt;
+                    }
+                    Some(VirtualKeyCode::Key2) => {
+                        self.place_block_type = BlockType::Stone;
+                    }
+                    Some(VirtualKeyCode::Key3) => {
+                        self.place_block_type = BlockType::Sand;
+                    },
+                    _ => ()
                 }
             }
             _ => (),

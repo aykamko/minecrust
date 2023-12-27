@@ -917,7 +917,7 @@ impl Game {
             let chunks_modified = if *right_mouse_clicked {
                 state
                     .world_state
-                    .place_block(&state.camera, world::BlockType::Sand)
+                    .place_block(&state.camera, state.world_state.place_block_type)
             } else {
                 state.world_state.break_block(&state.camera)
             };
