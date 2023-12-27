@@ -46,6 +46,7 @@ pub enum BlockType {
     TreeLeaves3,
     TreeLeaves4,
     RedFlower,
+    OakPlank,
 }
 
 impl BlockType {
@@ -104,6 +105,8 @@ impl BlockType {
             BlockType::Dirt => [[2.0, 0.0], [2.0, 0.0], [2.0, 0.0]],
             BlockType::Debug => [[3.0, 0.0], [3.0, 0.0], [3.0, 0.0]],
             BlockType::Sand => [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
+            BlockType::Stone => [[2.0, 3.0], [2.0, 3.0], [2.0, 3.0]],
+            BlockType::OakPlank => [[2.0, 4.0], [2.0, 4.0], [2.0, 4.0]],
             BlockType::Water => [[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]],
             BlockType::Glass => [[2.0, 1.0], [2.0, 1.0], [2.0, 1.0]],
             BlockType::Tree => [[1.0, 2.0], [1.0, 2.0], [0.0, 2.0]],
@@ -1764,6 +1767,12 @@ impl WorldState {
                         self.place_block_type = BlockType::Stone;
                     }
                     Some(VirtualKeyCode::Key3) => {
+                        self.place_block_type = BlockType::OakPlank;
+                    },
+                    Some(VirtualKeyCode::Key4) => {
+                        self.place_block_type = BlockType::Glass;
+                    },
+                    Some(VirtualKeyCode::Key5) => {
                         self.place_block_type = BlockType::Sand;
                     },
                     _ => ()
