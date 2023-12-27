@@ -11,6 +11,8 @@
     <style>
       body {
         position: fixed;
+        width: 100%;
+        height: 100%;
         overflow: hidden;
         /* disable all zooming, panning, etc. on mobile */
         touch-action: none;
@@ -46,7 +48,7 @@
     <div class="gameboy">
       <div class="controls">
         <div id="translation-joystick" class="joystick"></div>
-        <div class="block-preview-container">
+        <div id="block-preview" class="block-preview-container">
           <canvas id="block-preview-canvas"></canvas>
         </div>
         <div class="right-side">

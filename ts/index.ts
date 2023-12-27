@@ -55,9 +55,9 @@ function isTouchDevice() {
 }
 
 // Called from Rust code when the user chooses a different block to place
-function handlePlaceBlockChanged(blockTypeStr: string) {
+function handlePlaceBlockTypeChanged(blockTypeStr: string) {
   if (!atlasImage) return;
-  console.log("Block type changed to: " + blockTypeStr);
+  // console.log("Block type changed to: " + blockTypeStr);
 
   let atlasIdxByBlockType: { [key: string]: [number, number] } = {
     "Dirt": [2, 0],
@@ -73,12 +73,13 @@ function handlePlaceBlockChanged(blockTypeStr: string) {
     document.getElementById("block-preview-canvas").replaceWith(blockPreviewCanvas);
   }
 }
-(window as any).handlePlaceBlockChanged = handlePlaceBlockChanged;
+(window as any).handlePlaceBlockTypeChanged = handlePlaceBlockTypeChanged;
 
 function registerDomButtonEventListeners(wasmModule: any) {
   const aButton = document.getElementById("a-button");
   const bButton = document.getElementById("b-button");
   const yButton = document.getElementById("y-button");
+  const blockPreviewBtn = document.getElementById("block-preview");
 
   const startEvent = isTouchDevice() ? "touchstart" : "mousedown";
   aButton.addEventListener(startEvent, () => {
@@ -90,6 +91,9 @@ function registerDomButtonEventListeners(wasmModule: any) {
   yButton.addEventListener(startEvent, () => {
     wasmModule.y_button_pressed();
   });
+  blockPreviewBtn.addEventListener(startEvent, () => {
+    wasmModule.block_preview_pressed();
+  });
   for (const event of ["touchend", "touchcancel", "mouseup", "mouseleave"]) {
     aButton.addEventListener(event, () => {
       wasmModule.a_button_released();
@@ -99,6 +103,9 @@ function registerDomButtonEventListeners(wasmModule: any) {
     });
     yButton.addEventListener(event, () => {
       wasmModule.y_button_released();
+    });
+    blockPreviewBtn.addEventListener(event, () => {
+      wasmModule.block_preview_released();
     });
   }
 }
