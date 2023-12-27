@@ -82,6 +82,23 @@
   }
 }
 
+.block-preview-container {
+  position: absolute;
+  bottom: 18px;
+  left: 0px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#block-preview-canvas {
+  width: 120px;
+  height: 120px;
+  background: transparent;
+  image-rendering: pixelated;
+}
+
 * {
   box-sizing: border-box;
   touch-action: manipulation;
