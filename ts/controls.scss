@@ -40,6 +40,7 @@
     width: 100%;
     display: flex;
     justify-content: space-between;
+    align-items: end;
 
     pointer-events: all;
 
@@ -84,10 +85,10 @@
 
 .block-preview-container {
   background: rgb(0, 0, 0, 0.33);
-  padding: 8px;
-  width: 100px;
-  height: 100px;
-  border-radius: 8px;
+  padding: 6px;
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
 }
 
 #block-preview-canvas {
