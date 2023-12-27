@@ -206,12 +206,16 @@ cfg_if::cfg_if! {
 // The largest the world can be in xz dimension
 pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 // How many chunks are visible in xz dimension
-pub const VISIBLE_CHUNK_WIDTH: usize = 8;
+pub const VISIBLE_CHUNK_WIDTH: usize = 12;
+// Estimate of farthest z distance that is rendered
+pub const Z_FAR: f32 = 92.0;
     } else {
 // The largest the world can be in xz dimension
 pub const MAX_CHUNK_WORLD_WIDTH: usize = 1024;
 // How many chunks are visible in xz dimension
 pub const VISIBLE_CHUNK_WIDTH: usize = 32;
+// Estimate of farthest z distance that is rendered
+pub const Z_FAR: f32 = 250.0;
     }
 }
 

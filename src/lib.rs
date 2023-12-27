@@ -360,9 +360,15 @@ impl Scene {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shadow_map.wgsl"))),
         });
 
+        // The main shader is a handlebars template so we can change some compile-time constants
+        let handlebars = handlebars::Handlebars::new();
+        let shader_wgsl_str = handlebars.render_template(include_str!("shader.wgsl"), &serde_json::json!({
+            "z_far": world::Z_FAR,
+        })).expect("Failed to render shader template");
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Main Shader"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(&shader_wgsl_str)),
         });
 
         log::info!("Creating shadow map render pipeline");
