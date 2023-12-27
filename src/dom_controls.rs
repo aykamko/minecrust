@@ -18,6 +18,7 @@ pub enum DomControlsUserEvent {
     TranslationJoystickMoved { vector: (f64, f64) },
     TranslationJoystickReleased,
     WindowResized { size: winit::dpi::LogicalSize<u32> },
+    WebPointerLockLost,
 }
 
 struct EventLoopGlobalState {
@@ -97,6 +98,10 @@ pub fn web_window_resized(width: u32, height: u32) {
     send_dom_controls_user_event(DomControlsUserEvent::WindowResized {
         size: winit::dpi::LogicalSize { width, height },
     });
+}
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn web_pointer_lock_lost() {
+    send_dom_controls_user_event(DomControlsUserEvent::WebPointerLockLost);
 }
 
 #[cfg(target_arch = "wasm32")]

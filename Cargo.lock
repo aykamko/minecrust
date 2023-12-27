@@ -1299,6 +1299,7 @@ dependencies = [
  "getrandom 0.2.8",
  "glam",
  "image 0.24.5",
+ "instant",
  "itertools",
  "log",
  "nalgebra",

@@ -38,9 +38,10 @@ function getMobileOperatingSystem() {
 let atlasImage: HTMLImageElement | null = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
+  const wasmContainer = document.getElementById("wasm-container")
   if (getMobileOperatingSystem() !== "unknown") {
     // Disable "mouse" events on game when on mobile
-    document.getElementById("wasm-container").style.pointerEvents = "none";
+    wasmContainer.style.pointerEvents = "none";
   }
 
   atlasImage = await loadImage('./minecruft_atlas.png');
@@ -108,6 +109,12 @@ function registerDomButtonEventListeners(wasmModule: any) {
       wasmModule.block_preview_released();
     });
   }
+
+  document.addEventListener("pointerlockchange", () => {
+    if (!document.pointerLockElement) {
+      wasmModule.web_pointer_lock_lost();
+    }
+  }, false);
 }
 
 // Ensure touches occur rapidly

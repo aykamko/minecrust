@@ -1300,6 +1300,7 @@ pub fn run(width: usize, height: usize) {
             .and_then(|doc| {
                 let dst = doc.get_element_by_id("wasm-container")?;
                 let canvas = web_sys::Element::from(window.canvas());
+                canvas.set_attribute("id", "wasm-canvas").ok()?;
                 dst.append_child(&canvas).ok()?;
                 Some(())
             })
@@ -1334,6 +1335,9 @@ pub fn run(width: usize, height: usize) {
 
     let spawner = Spawner::new();
 
+    // HACK: on Chrome, the cursor cannot be locked again within ~1.3 second of it being unlocked.
+    let mut last_cursor_lost_time = instant::Instant::now();
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -1357,21 +1361,38 @@ pub fn run(width: usize, height: usize) {
                             }
                         }
                         (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
-                            window.set_cursor_visible(true);
                             window
                                 .set_cursor_grab(winit::window::CursorGrabMode::None)
                                 .expect("Failed to release curosr");
                             cursor_grabbed = false;
+                            last_cursor_lost_time = instant::Instant::now();
+                            window.set_cursor_visible(true);
                         }
-                        _ => {
+                        (Some(_), ElementState::Pressed) => {
+                            if !cursor_grabbed {
+                                return;
+                            }
                             game.state.camera_controller.process_window_event(&event);
                             game.state.world_state.process_window_event(&event);
                         }
+                        (Some(_), ElementState::Released) => {
+                            // Always allow released events to prevent stuck keys
+                            game.state.camera_controller.process_window_event(&event);
+                            game.state.world_state.process_window_event(&event);
+                        }
+                        _ => ()
                     }
                 }
                 WindowEvent::MouseInput { state, button, .. } => match (state, button) {
                     (ElementState::Pressed, MouseButton::Left) => {
                         if !cursor_grabbed {
+                            if last_cursor_lost_time.elapsed().as_secs_f32() < 1.3 {
+                                // HACK: on Chrome, the cursor cannot be locked again within ~1.3 second of it being unlocked.
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    return;
+                                }
+                            }
                             window
                                 .set_cursor_grab(winit::window::CursorGrabMode::Locked)
                                 .expect("Failed to grab curosr");
@@ -1424,6 +1445,13 @@ pub fn run(width: usize, height: usize) {
                             game.state.surface_config.height as i32,
                         ));
                     }
+                }
+                DomControlsUserEvent::WebPointerLockLost => {
+                    cursor_grabbed = false;
+                    last_cursor_lost_time = instant::Instant::now();
+                    window
+                        .set_cursor_grab(winit::window::CursorGrabMode::None)
+                        .expect("Failed to release curosr");
                 }
                 _ => {
                     game.state

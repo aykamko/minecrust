@@ -1787,7 +1787,9 @@ impl WorldState {
                     }
                 }
 
+                #[cfg(target_arch = "wasm32")]
                 let prev_place_block_type = self.place_block_type;
+
                 match input.virtual_keycode {
                     Some(VirtualKeyCode::Key1) => self.place_block_type = BlockType::Stone,
                     Some(VirtualKeyCode::Key2) => self.place_block_type = BlockType::Dirt,

@@ -33,6 +33,7 @@ palette = "0.5"
 nalgebra = "0.31"
 parry3d = "0.11"
 game-loop = { version = "1.0.0", features = ["winit"] }
+instant = "0.1.12"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = {version = "0.2", default-features = false, features = ["js"]}
