@@ -185,11 +185,34 @@ import("../pkg/index").then((wasmModule) => {
 
   registerDomButtonEventListeners(wasmModule);
 
-  let pitchYawJoystick: nipplejs.JoystickManager;
-  let translationJoystick: nipplejs.JoystickManager;
-  const joysticks = mountJoysticks(wasmModule);
-  pitchYawJoystick = joysticks[0];
-  translationJoystick = joysticks[1];
+  // Delay mounting joysticks to avoid a bug where the joysticks are
+  // centered incorrectly on mobile
+  const JOYSTICK_MOUNT_DELAY = 400;
+
+  let pitchYawJoystick: nipplejs.JoystickManager | null = null;
+  let translationJoystick: nipplejs.JoystickManager | null = null;
+
+  const wasmContainer = document.getElementById("wasm-container")
+  const observerCanvasMounted = (mutationsList: any, observer: any) => {
+    for (const mutation of mutationsList) {
+      if (mutation.type === 'childList') {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeName === 'CANVAS' && node.id === 'wasm-canvas') {
+            if (pitchYawJoystick) pitchYawJoystick.destroy();
+            if (translationJoystick) translationJoystick.destroy();
+            setTimeout(() => {
+              const joysticks = mountJoysticks(wasmModule);
+              pitchYawJoystick = joysticks[0];
+              translationJoystick = joysticks[1];
+            }, JOYSTICK_MOUNT_DELAY);
+            observer.disconnect();
+          }
+        }
+      }
+    }
+  };
+  const observer = new MutationObserver(observerCanvasMounted);
+  observer.observe(wasmContainer, { childList: true, subtree: true });
 
   window.addEventListener("resize", () => {
     const viewportWidth = document.documentElement.clientWidth;
@@ -197,13 +220,13 @@ import("../pkg/index").then((wasmModule) => {
     wasmModule.web_window_resized(viewportWidth, viewportHeight);
 
     // We recreate joysticks, otherwise they start to behave weirdly
-    pitchYawJoystick.destroy();
-    translationJoystick.destroy();
+    if (pitchYawJoystick) pitchYawJoystick.destroy();
+    if (translationJoystick) translationJoystick.destroy();
     setTimeout(() => {
       const joysticks = mountJoysticks(wasmModule);
       pitchYawJoystick = joysticks[0];
       translationJoystick = joysticks[1];
-    }, 500);
+    }, JOYSTICK_MOUNT_DELAY);
   });
 
   const viewportWidth = document.documentElement.clientWidth;

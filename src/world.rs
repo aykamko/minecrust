@@ -12,6 +12,8 @@ use nalgebra as na;
 use parry3d::shape::{Cuboid, Cylinder};
 
 use super::instance::InstanceRaw;
+#[cfg(target_arch = "wasm32")]
+use crate::dom_controls;
 use cgmath::{prelude::*, MetricSpace, Point3, Vector3};
 use collision::Continuous;
 use rand::Rng;
@@ -20,8 +22,6 @@ use std::convert::Into;
 use std::fmt;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
-#[cfg(target_arch = "wasm32")]
-use crate::dom_controls;
 
 const VERBOSE_LOGS: bool = false;
 macro_rules! vprintln {
@@ -1557,18 +1557,6 @@ impl WorldState {
             self.character_entity.acceleration -= camera_right_xz * XZ_ACCEL;
         }
 
-        // Handle translation joystick
-        let (joystick_z, joystick_x) = self.input_state.last_translation_joystick_vector;
-        // lower sensitivity
-        let (joystick_z, joystick_x) = (joystick_z * 0.75, joystick_x * 0.75);
-        if joystick_x != 0.0 {
-            self.character_entity.acceleration +=
-                camera_forward_xz * (joystick_x as f32) * XZ_ACCEL;
-        }
-        if joystick_z != 0.0 {
-            self.character_entity.acceleration += camera_right_xz * (joystick_z as f32) * XZ_ACCEL;
-        }
-
         let curr_velocity_xz = glam::Vec3::new(
             self.character_entity.velocity.x,
             0.0,
@@ -1587,6 +1575,20 @@ impl WorldState {
 
         // Apply acceleration to velocity
         self.character_entity.velocity += self.character_entity.acceleration;
+
+        // Handle translation joystick. Apply it to velocity directly rather than acceleration, more responsive controls this way
+        let (joystick_z, joystick_x) = self.input_state.last_translation_joystick_vector;
+        let mut joystick_velocity_xz = glam::Vec3::ZERO;
+        if joystick_x != 0.0 {
+            joystick_velocity_xz += camera_forward_xz * (joystick_x as f32) * MAX_XZ_VELOCITY * 0.75;
+        }
+        if joystick_z != 0.0 {
+            joystick_velocity_xz += camera_right_xz * (joystick_z as f32) * MAX_XZ_VELOCITY * 0.75;
+        }
+        if joystick_velocity_xz != glam::Vec3::ZERO {
+            self.character_entity.velocity.x = joystick_velocity_xz.x;
+            self.character_entity.velocity.z = joystick_velocity_xz.z;
+        }
 
         let next_velocity_xz = glam::Vec3::new(
             self.character_entity.velocity.x,
@@ -1857,8 +1859,8 @@ impl WorldState {
                 self.place_block_type = next_block_type;
                 #[cfg(target_arch = "wasm32")]
                 dom_controls::place_block_type_changed(&self.place_block_type.to_string());
-            },
-            _ => ()
+            }
+            _ => (),
         }
     }
 }
