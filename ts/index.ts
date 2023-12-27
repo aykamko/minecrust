@@ -139,11 +139,7 @@ export default function preventDoubleTapZoom(event: any) {
   lastTapAt = tapAt;
 }
 
-import("../pkg/index").then((wasmModule) => {
-  console.log("WASM Loaded");
-
-  registerDomButtonEventListeners(wasmModule);
-
+function mountJoysticks(wasmModule: any) {
   const pitchYawJoystickElem = document.getElementById("pitch-yaw-joystick");
   const pitchYawJoystick = nipplejs.create({
     zone: pitchYawJoystickElem,
@@ -181,10 +177,33 @@ import("../pkg/index").then((wasmModule) => {
     preventDoubleTapZoom(event)
   );
 
+  return [pitchYawJoystick, translationJoystick];
+}
+
+import("../pkg/index").then((wasmModule) => {
+  console.log("WASM Loaded");
+
+  registerDomButtonEventListeners(wasmModule);
+
+  let pitchYawJoystick: nipplejs.JoystickManager;
+  let translationJoystick: nipplejs.JoystickManager;
+  const joysticks = mountJoysticks(wasmModule);
+  pitchYawJoystick = joysticks[0];
+  translationJoystick = joysticks[1];
+
   window.addEventListener("resize", () => {
     const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = document.documentElement.clientHeight;
     wasmModule.web_window_resized(viewportWidth, viewportHeight);
+
+    // We recreate joysticks, otherwise they start to behave weirdly
+    pitchYawJoystick.destroy();
+    translationJoystick.destroy();
+    setTimeout(() => {
+      const joysticks = mountJoysticks(wasmModule);
+      pitchYawJoystick = joysticks[0];
+      translationJoystick = joysticks[1];
+    }, 500);
   });
 
   const viewportWidth = document.documentElement.clientWidth;
