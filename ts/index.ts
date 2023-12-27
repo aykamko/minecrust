@@ -3,6 +3,7 @@ import controls from "./controls.scss";
 controls;
 import loader from "./loader.scss";
 loader;
+import { loadImage, cropImage } from "./blockDisplay";
 
 import * as nipplejs from "nipplejs";
 document.addEventListener("gesturestart", (e) => e.preventDefault());
@@ -34,11 +35,15 @@ function getMobileOperatingSystem() {
   return "unknown";
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+let atlasImage: HTMLImageElement | null = null;
+
+document.addEventListener("DOMContentLoaded", async () => {
   if (getMobileOperatingSystem() !== "unknown") {
     // Disable "mouse" events on game when on mobile
     document.getElementById("wasm-container").style.pointerEvents = "none";
   }
+
+  atlasImage = await loadImage('./minecruft_atlas.png');
 });
 
 function isTouchDevice() {
@@ -50,8 +55,23 @@ function isTouchDevice() {
 }
 
 // Called from Rust code when the user chooses a different block to place
-function handlePlaceBlockChanged(eventData: any) {
-  console.log("Event from Rust:", eventData);
+function handlePlaceBlockChanged(blockTypeStr: string) {
+  if (!atlasImage) return;
+  console.log("Block type changed to: " + blockTypeStr);
+
+  let atlasIdxByBlockType: { [key: string]: [number, number] } = {
+    "Dirt": [2, 0],
+    "Stone": [2, 3],
+    "Sand": [0, 1],
+    "OakPlank": [2, 4],
+    "Glass": [2, 1],
+  };
+  if (blockTypeStr in atlasIdxByBlockType) {
+    let blockTypeIdx = atlasIdxByBlockType[blockTypeStr];
+    let blockPreviewCanvas = cropImage(atlasImage, blockTypeIdx[0] * 16, blockTypeIdx[1] * 16, 16, 16);
+    blockPreviewCanvas.id = "block-preview-canvas";
+    document.getElementById("block-preview-canvas").replaceWith(blockPreviewCanvas);
+  }
 }
 (window as any).handlePlaceBlockChanged = handlePlaceBlockChanged;
 
