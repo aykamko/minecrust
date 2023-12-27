@@ -177,4 +177,8 @@ import("../pkg/index").then((wasmModule) => {
   const viewportHeight = document.documentElement.clientHeight;
 
   wasmModule.run(viewportWidth, viewportHeight);
+}).catch((error) => {
+  if (!error.message.startsWith("Using exceptions for control flow,")) {
+    throw error;
+  }
 });
