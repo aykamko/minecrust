@@ -33,7 +33,7 @@ use crate::world::ChunkDataType;
 
 static RENDER_WIREFRAME: bool = false;
 static RENDER_LIGHT_DEBUG_DATA: bool = false;
-static RENDER_CHARACTER_ENTITY: bool = true;
+static RENDER_CHARACTER_ENTITY: bool = false;
 
 #[allow(dead_code)]
 const VERBOSE_LOGS: bool = false;
