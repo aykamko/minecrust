@@ -49,6 +49,12 @@ function isTouchDevice() {
   );
 }
 
+// Called from Rust code when the user chooses a different block to place
+function handlePlaceBlockChanged(eventData: any) {
+  console.log("Event from Rust:", eventData);
+}
+(window as any).handlePlaceBlockChanged = handlePlaceBlockChanged;
+
 function registerDomButtonEventListeners(wasmModule: any) {
   const aButton = document.getElementById("a-button");
   const bButton = document.getElementById("b-button");
@@ -144,7 +150,6 @@ import("../pkg/index").then((wasmModule) => {
   window.addEventListener("resize", () => {
     const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = document.documentElement.clientHeight;
-    console.log(`new size is ${viewportWidth}x${viewportHeight}`);
     wasmModule.web_window_resized(viewportWidth, viewportHeight);
   });
 

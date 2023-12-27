@@ -88,3 +88,14 @@ pub fn web_window_resized(width: u32, height: u32) {
         size: winit::dpi::LogicalSize { width, height },
     });
 }
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+extern "C" {
+    // Define the JavaScript function signature
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn handlePlaceBlockChanged(eventData: &JsValue);
+}

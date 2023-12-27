@@ -17,8 +17,13 @@ use collision::Continuous;
 use rand::Rng;
 use std::collections::HashSet;
 use std::convert::Into;
+use std::fmt;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use crate::dom_controls;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
 
 const VERBOSE_LOGS: bool = false;
 macro_rules! vprintln {
@@ -47,6 +52,28 @@ pub enum BlockType {
     TreeLeaves4,
     RedFlower,
     OakPlank,
+}
+
+impl fmt::Display for BlockType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BlockType::Empty => write!(f, "Empty"),
+            BlockType::Debug => write!(f, "Debug"),
+            BlockType::Dirt => write!(f, "Dirt"),
+            BlockType::Grass => write!(f, "Grass"),
+            BlockType::Sand => write!(f, "Sand"),
+            BlockType::Stone => write!(f, "Stone"),
+            BlockType::Water => write!(f, "Water"),
+            BlockType::Glass => write!(f, "Glass"),
+            BlockType::Tree => write!(f, "Tree"),
+            BlockType::TreeLeaves1 => write!(f, "TreeLeaves1"),
+            BlockType::TreeLeaves2 => write!(f, "TreeLeaves2"),
+            BlockType::TreeLeaves3 => write!(f, "TreeLeaves3"),
+            BlockType::TreeLeaves4 => write!(f, "TreeLeaves4"),
+            BlockType::RedFlower => write!(f, "RedFlower"),
+            BlockType::OakPlank => write!(f, "OakPlank"),
+        }
+    }
 }
 
 impl BlockType {
@@ -1535,7 +1562,8 @@ impl WorldState {
         // lower sensitivity
         let (joystick_z, joystick_x) = (joystick_z * 0.75, joystick_x * 0.75);
         if joystick_x != 0.0 {
-            self.character_entity.acceleration += camera_forward_xz * (joystick_x as f32) * XZ_ACCEL;
+            self.character_entity.acceleration +=
+                camera_forward_xz * (joystick_x as f32) * XZ_ACCEL;
         }
         if joystick_z != 0.0 {
             self.character_entity.acceleration += camera_right_xz * (joystick_z as f32) * XZ_ACCEL;
@@ -1759,13 +1787,20 @@ impl WorldState {
                     }
                 }
 
+                let prev_place_block_type = self.place_block_type;
                 match input.virtual_keycode {
                     Some(VirtualKeyCode::Key1) => self.place_block_type = BlockType::Dirt,
                     Some(VirtualKeyCode::Key2) => self.place_block_type = BlockType::Stone,
                     Some(VirtualKeyCode::Key3) => self.place_block_type = BlockType::OakPlank,
                     Some(VirtualKeyCode::Key4) => self.place_block_type = BlockType::Glass,
                     Some(VirtualKeyCode::Key5) => self.place_block_type = BlockType::Sand,
-                    _ => ()
+                    _ => (),
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                if prev_place_block_type != self.place_block_type {
+                    let block_type = JsValue::from_str(&self.place_block_type.to_string());
+                    dom_controls::handlePlaceBlockChanged(&block_type);
                 }
             }
             _ => (),
