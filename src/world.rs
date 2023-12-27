@@ -1760,21 +1760,11 @@ impl WorldState {
                 }
 
                 match input.virtual_keycode {
-                    Some(VirtualKeyCode::Key1) => {
-                        self.place_block_type = BlockType::Dirt;
-                    }
-                    Some(VirtualKeyCode::Key2) => {
-                        self.place_block_type = BlockType::Stone;
-                    }
-                    Some(VirtualKeyCode::Key3) => {
-                        self.place_block_type = BlockType::OakPlank;
-                    },
-                    Some(VirtualKeyCode::Key4) => {
-                        self.place_block_type = BlockType::Glass;
-                    },
-                    Some(VirtualKeyCode::Key5) => {
-                        self.place_block_type = BlockType::Sand;
-                    },
+                    Some(VirtualKeyCode::Key1) => self.place_block_type = BlockType::Dirt,
+                    Some(VirtualKeyCode::Key2) => self.place_block_type = BlockType::Stone,
+                    Some(VirtualKeyCode::Key3) => self.place_block_type = BlockType::OakPlank,
+                    Some(VirtualKeyCode::Key4) => self.place_block_type = BlockType::Glass,
+                    Some(VirtualKeyCode::Key5) => self.place_block_type = BlockType::Sand,
                     _ => ()
                 }
             }
