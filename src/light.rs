@@ -20,7 +20,7 @@ pub struct LightUniformRaw {
     position: [f32; 3],
     _padding: u32,
     color: [f32; 3],
-    _padding2: u32,
+    pub is_underwater: u32, // HACK: this should be in a separate uniform but I'm stuffing here because I'm lazy
     light_space_matrix: [[f32; 4]; 4],
 }
 
@@ -70,7 +70,7 @@ impl LightUniform {
             position: self.position.into(),
             _padding: 0,
             color: self.color.into(),
-            _padding2: 0,
+            is_underwater: 0,
             light_space_matrix,
         }
     }

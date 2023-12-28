@@ -889,10 +889,14 @@ impl Game {
         );
 
         state.light_uniform.update_light_space_proj(&state.camera);
+
+        // HACK: janky way to tell shader that we're under water
+        let mut raw_light_uniform = state.light_uniform.to_raw();
+        raw_light_uniform.is_underwater = state.world_state.character_entity.is_underwater as u32;
         state.queue.write_buffer(
             &scene.light_buf,
             0,
-            bytemuck::cast_slice(&[state.light_uniform.to_raw()]),
+            bytemuck::cast_slice(&[raw_light_uniform]),
         );
 
         #[derive(PartialEq)]

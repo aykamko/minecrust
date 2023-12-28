@@ -75,6 +75,7 @@ var<uniform> camera_position: CameraUniform;
 struct Light {
     position: vec3<f32>,
     color: vec3<f32>,
+    is_underwater: u32,
     light_space_matrix: mat4x4<f32>,
 }
 @group(2) @binding(0)
@@ -386,6 +387,12 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput {
     let lighted_color = (ambient_color + (1.0 - shadow) * (diffuse_color + specular_color)) * color.xyz; 
     frag_out.depth = select(vertex.clip_position.z, 1.1, base_color.a == 0.0);
     frag_out.color = vec4<f32>(lighted_color, color.a);
+
+    // Make things more dark blue underwater
+    if (light.is_underwater != 0u) {
+        frag_out.color = frag_out.color * vec4<f32>(0.3, 0.3, 1.0, 1.0);
+    }
+
     return frag_out;
 
     // var shadow_debug = shadow_calculation_rbsm(vertex.light_space_position);

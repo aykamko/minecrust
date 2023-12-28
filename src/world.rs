@@ -294,6 +294,7 @@ pub struct CharacterEntity {
     velocity: glam::Vec3,
     acceleration: glam::Vec3,
     pub prev_position: glam::Vec3,
+    pub is_underwater: bool,
 }
 
 impl CharacterEntity {
@@ -381,6 +382,7 @@ impl WorldState {
             velocity: glam::Vec3::new(0.0, 0.0, 0.0),
             acceleration: glam::Vec3::new(0.0, 0.0, 0.0),
             prev_position: initial_pos,
+            is_underwater: false,
         };
 
         Self {
@@ -535,7 +537,9 @@ impl WorldState {
                         {
                             block_type = BlockType::Water;
                         }
-                        if (*neighbor.block).block_type == BlockType::RedFlower && neighbor.this_shared_face == Face::Top {
+                        if (*neighbor.block).block_type == BlockType::RedFlower
+                            && neighbor.this_shared_face == Face::Top
+                        {
                             (*neighbor.block).block_type = BlockType::Empty;
                         }
                     }
@@ -1595,7 +1599,8 @@ impl WorldState {
         let (joystick_z, joystick_x) = self.input_state.last_translation_joystick_vector;
         let mut joystick_velocity_xz = glam::Vec3::ZERO;
         if joystick_x != 0.0 {
-            joystick_velocity_xz += camera_forward_xz * (joystick_x as f32) * MAX_XZ_VELOCITY * 0.75;
+            joystick_velocity_xz +=
+                camera_forward_xz * (joystick_x as f32) * MAX_XZ_VELOCITY * 0.75;
         }
         if joystick_z != 0.0 {
             joystick_velocity_xz += camera_right_xz * (joystick_z as f32) * MAX_XZ_VELOCITY * 0.75;
@@ -1751,6 +1756,17 @@ impl WorldState {
         // Apply the final position and velocity to the character
         self.character_entity.prev_position = self.character_entity.position;
         self.character_entity.position = potential_new_pos.into();
+
+        // Update if character is underwater
+        const WATER_LEVEL_Y_ADJUST: f32 = 0.5 + 0.2; // +0.5 for eye level, -0.2 for water-level adjust
+        self.character_entity.is_underwater = self
+            .get_block(
+                self.character_entity.position.x as usize,
+                (self.character_entity.position.y + WATER_LEVEL_Y_ADJUST) as usize,
+                self.character_entity.position.z as usize,
+            )
+            .block_type
+            == BlockType::Water;
     }
 
     pub fn process_window_event(&mut self, event: &WindowEvent) {
