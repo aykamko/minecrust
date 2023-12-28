@@ -1,6 +1,5 @@
-// HACK: convert to raw css using webpack
-import controls from "./controls.scss";
-controls;
+import main from "./main.scss";
+main;
 import loader from "./loader.scss";
 loader;
 import { loadImage, cropImage } from "./blockDisplay";
@@ -12,6 +11,7 @@ document.addEventListener("gesturestart", (e) => e.preventDefault());
 const hasChromeAgent = navigator.userAgent.indexOf("Chrome") > -1;
 const hasSafariAgent = navigator.userAgent.indexOf("Safari") > -1;
 const isSafari = hasSafariAgent && !hasChromeAgent;
+
 
 /**
  * Determine the mobile operating system.
@@ -48,6 +48,17 @@ document.addEventListener("contextmenu", (event: any) => {
 let atlasImage: HTMLImageElement | null = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
+  const showPortraitOrientationWarning = () => {
+    const portraitWarning = document.getElementById("portrait-orientation-warning");
+    if (screen.orientation.type.includes("portrait")) {
+      portraitWarning.style.display = "flex";
+    } else {
+      portraitWarning.style.display = "none";
+    }
+  };
+  window.addEventListener("orientationchange", showPortraitOrientationWarning);
+  showPortraitOrientationWarning();
+
   const wasmContainer = document.getElementById("wasm-container")
   if (getMobileOperatingSystem() !== "unknown") {
     // Disable "mouse" events on game when on mobile
