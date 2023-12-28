@@ -77,7 +77,7 @@ impl fmt::Display for BlockType {
 impl BlockType {
     pub const DEFAULT_PLACE_BLOCK_TYPE: BlockType = BlockType::Stone;
 
-    pub fn is_semi_transluscent(&self) -> bool {
+    pub fn is_semi_translucent(&self) -> bool {
         match *self {
             BlockType::TreeLeaves1 => true,
             BlockType::TreeLeaves2 => true,
@@ -88,12 +88,12 @@ impl BlockType {
         }
     }
 
-    pub fn is_transluscent(&self) -> bool {
+    pub fn is_translucent(&self) -> bool {
         match *self {
             BlockType::Empty => true,
             BlockType::Water => true,
             BlockType::Glass => true,
-            x if x.is_semi_transluscent() => true,
+            x if x.is_semi_translucent() => true,
             _ => false,
         }
     }
@@ -256,9 +256,9 @@ pub fn get_world_center() -> Point3<usize> {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ChunkDataType {
     Opaque,
-    Transluscent,
+    Translucent,
     // Still generates a shadow
-    SemiTransluscent,
+    SemiTranslucent,
 }
 
 #[derive(Clone)]
@@ -460,8 +460,8 @@ impl WorldState {
                         .get_chunk_mut([chunk_x, chunk_z])
                         .blocks
                         .get_raw_ptr_mut(x, y - 1, z),
-                    other_shared_face: Face::Top,
                     this_shared_face: Face::Bottom,
+                    other_shared_face: Face::Top,
                 });
             }
 
@@ -475,8 +475,8 @@ impl WorldState {
                         .blocks
                         .get_raw_ptr_mut(0, y, z)
                 },
-                other_shared_face: Face::Right,
                 this_shared_face: Face::Left,
+                other_shared_face: Face::Right,
             });
             neighbors[3] = Some(Neighbor {
                 block: if x > 0 {
@@ -488,8 +488,8 @@ impl WorldState {
                         .blocks
                         .get_raw_ptr_mut(CHUNK_XZ_SIZE - 1, y, z)
                 },
-                other_shared_face: Face::Left,
                 this_shared_face: Face::Right,
+                other_shared_face: Face::Left,
             });
             neighbors[4] = Some(Neighbor {
                 block: if z < CHUNK_XZ_SIZE - 1 {
@@ -501,8 +501,8 @@ impl WorldState {
                         .blocks
                         .get_raw_ptr_mut(x, y, 0)
                 },
-                other_shared_face: Face::Back,
                 this_shared_face: Face::Front,
+                other_shared_face: Face::Back,
             });
             neighbors[5] = Some(Neighbor {
                 block: if z > 0 {
@@ -514,8 +514,8 @@ impl WorldState {
                         .blocks
                         .get_raw_ptr_mut(x, y, CHUNK_XZ_SIZE - 1)
                 },
-                other_shared_face: Face::Front,
                 this_shared_face: Face::Back,
+                other_shared_face: Face::Front,
             });
 
             // If we're breaking a block next to water, fill this block with water instead
@@ -554,7 +554,7 @@ impl WorldState {
                             .neighbors
                             .set(neighbor.other_shared_face, true);
                     }
-                    (x, BlockType::Water) if !x.is_transluscent() => {
+                    (x, BlockType::Water) if !x.is_translucent() => {
                         (*this_block)
                             .neighbors
                             .set(neighbor.this_shared_face, false);
@@ -565,7 +565,7 @@ impl WorldState {
                     (_, _) => {
                         (*neighbor.block)
                             .neighbors
-                            .set(neighbor.other_shared_face, !block_type.is_transluscent());
+                            .set(neighbor.other_shared_face, !block_type.is_translucent());
                     }
                 }
             }
@@ -890,11 +890,11 @@ impl WorldState {
         let mut opaque_instances = Vec::<InstanceRaw>::with_capacity(4096);
         let mut opaque_instance_distances = Vec::<i32>::with_capacity(4096);
 
-        let mut transluscent_instances = Vec::<InstanceRaw>::with_capacity(4096);
-        let mut transluscent_instance_distances = Vec::<i32>::with_capacity(4096);
+        let mut translucent_instances = Vec::<InstanceRaw>::with_capacity(4096);
+        let mut translucent_instance_distances = Vec::<i32>::with_capacity(4096);
 
-        let mut semi_transluscent_instances = Vec::<InstanceRaw>::with_capacity(4096);
-        let mut semi_transluscent_instance_distances = Vec::<i32>::with_capacity(4096);
+        let mut semi_translucent_instances = Vec::<InstanceRaw>::with_capacity(4096);
+        let mut semi_translucent_instance_distances = Vec::<i32>::with_capacity(4096);
 
         let chunk = self.get_chunk(chunk_idx);
 
@@ -928,15 +928,15 @@ impl WorldState {
                         1.0
                     };
 
-                    let (instance_vec, distance_vec) = if block.block_type.is_semi_transluscent() {
+                    let (instance_vec, distance_vec) = if block.block_type.is_semi_translucent() {
                         (
-                            &mut semi_transluscent_instances,
-                            &mut semi_transluscent_instance_distances,
+                            &mut semi_translucent_instances,
+                            &mut semi_translucent_instance_distances,
                         )
-                    } else if block.block_type.is_transluscent() {
+                    } else if block.block_type.is_translucent() {
                         (
-                            &mut transluscent_instances,
-                            &mut transluscent_instance_distances,
+                            &mut translucent_instances,
+                            &mut translucent_instance_distances,
                         )
                     } else {
                         (&mut opaque_instances, &mut opaque_instance_distances)
@@ -1072,10 +1072,10 @@ impl WorldState {
             }
         }
 
-        permutation::sort(&transluscent_instance_distances)
-            .apply_slice_in_place(&mut transluscent_instances);
-        permutation::sort(&semi_transluscent_instance_distances)
-            .apply_slice_in_place(&mut semi_transluscent_instances);
+        permutation::sort(&translucent_instance_distances)
+            .apply_slice_in_place(&mut translucent_instances);
+        permutation::sort(&semi_translucent_instance_distances)
+            .apply_slice_in_place(&mut semi_translucent_instances);
         permutation::sort(&opaque_instance_distances).apply_slice_in_place(&mut opaque_instances);
 
         ChunkData {
@@ -1088,12 +1088,12 @@ impl WorldState {
                     instance_data: opaque_instances,
                 },
                 TypedInstances {
-                    data_type: ChunkDataType::Transluscent,
-                    instance_data: transluscent_instances,
+                    data_type: ChunkDataType::Translucent,
+                    instance_data: translucent_instances,
                 },
                 TypedInstances {
-                    data_type: ChunkDataType::SemiTransluscent,
-                    instance_data: semi_transluscent_instances,
+                    data_type: ChunkDataType::SemiTranslucent,
+                    instance_data: semi_translucent_instances,
                 },
             ],
         }

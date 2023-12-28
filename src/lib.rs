@@ -83,7 +83,8 @@ struct Scene {
     chunk_render_descriptors: Vec<ChunkRenderDescriptor>,
     chunk_order: Vec<[usize; 2]>,
     depth_texture: texture::Texture,
-    pipeline: wgpu::RenderPipeline,
+    opaque_pipeline: wgpu::RenderPipeline,
+    translucent_pipeline: wgpu::RenderPipeline,
 
     shadow_map_texture: texture::Texture,
     shadow_map_pipeline: wgpu::RenderPipeline,
@@ -421,45 +422,52 @@ impl Scene {
             push_constant_ranges: &[],
         });
 
-        log::info!("Creating forward-pass render pipeline");
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: vertex_buffer_layouts,
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_config.format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent {
-                            operation: wgpu::BlendOperation::Add,
-                            src_factor: wgpu::BlendFactor::SrcAlpha,
-                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                        },
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: texture::Texture::DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
+        let create_forward_pass_pipeline = |cull_mode: Option<wgpu::Face>| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: vertex_buffer_layouts,
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: surface_config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                operation: wgpu::BlendOperation::Add,
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            },
+                            alpha: wgpu::BlendComponent::REPLACE,
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    cull_mode,
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: texture::Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+            })
+
+        };
+        log::info!("Creating forward-pass opaque render pipeline");
+        let opaque_pipeline = create_forward_pass_pipeline(Some(wgpu::Face::Back));
+
+        log::info!("Creating forward-pass translucent render pipeline");
+        let translucent_pipeline = create_forward_pass_pipeline(None);
 
         let pipeline_solid_color = if RENDER_CHARACTER_ENTITY {
             Some(
@@ -801,7 +809,8 @@ impl Scene {
             chunk_render_descriptors,
             chunk_order,
             depth_texture,
-            pipeline,
+            opaque_pipeline,
+            translucent_pipeline,
 
             shadow_map_pipeline,
             shadow_map_texture,
@@ -1096,7 +1105,7 @@ impl Game {
                         0..instance_buffer.len as _,
                     );
 
-                    rpass.set_pipeline(&self.scene.pipeline);
+                    rpass.set_pipeline(&self.scene.opaque_pipeline);
                 }
             }
         }
@@ -1157,7 +1166,7 @@ impl Game {
                 wgpu::IndexFormat::Uint16,
             );
 
-            for data_type in [ChunkDataType::Opaque, ChunkDataType::SemiTransluscent] {
+            for data_type in [ChunkDataType::Opaque, ChunkDataType::SemiTranslucent] {
                 for chunk_idx in scene.chunk_order.iter().rev() {
                     self.render_chunk(&mut rpass, *chunk_idx, data_type);
                 }
@@ -1199,7 +1208,7 @@ impl Game {
                     stencil_ops: None,
                 }),
             });
-            rpass.set_pipeline(&scene.pipeline);
+            rpass.set_pipeline(&scene.opaque_pipeline);
             rpass.set_bind_group(0, &scene.texture_bind_group, &[]);
             rpass.set_bind_group(1, &scene.camera_bind_group, &[]);
             rpass.set_bind_group(2, &scene.light_bind_group, &[]);
@@ -1226,7 +1235,7 @@ impl Game {
                     );
                     rpass.draw_indexed(0..scene.index_counts.character_entity as u32, 0, 0..1);
 
-                    rpass.set_pipeline(&scene.pipeline);
+                    rpass.set_pipeline(&scene.opaque_pipeline);
                     rpass.set_vertex_buffer(0, scene.vertex_buffers.blocks.slice(..));
                     rpass.set_index_buffer(
                         scene.index_buffers.blocks.slice(..),
@@ -1235,11 +1244,13 @@ impl Game {
                 }
             }
 
-            for data_type in [ChunkDataType::Transluscent, ChunkDataType::SemiTransluscent] {
+            rpass.set_pipeline(&scene.translucent_pipeline);
+            for data_type in [ChunkDataType::Translucent, ChunkDataType::SemiTranslucent] {
                 for chunk_idx in scene.chunk_order.iter().rev() {
                     self.render_chunk(&mut rpass, *chunk_idx, data_type);
                 }
             }
+            rpass.set_pipeline(&scene.opaque_pipeline);
 
             if RENDER_LIGHT_DEBUG_DATA {
                 // Draw light volume wireframe
@@ -1252,7 +1263,7 @@ impl Game {
                     );
                     rpass.draw_indexed(0..scene.index_counts.light_volume as u32, 0, 0..1);
 
-                    rpass.set_pipeline(&scene.pipeline);
+                    rpass.set_pipeline(&scene.opaque_pipeline);
                 }
             }
         }
