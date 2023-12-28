@@ -524,7 +524,9 @@ impl WorldState {
                 other_shared_face: Face::Front,
             });
 
-            // If we're breaking a block next to water, fill this block with water instead
+            // Special cases:
+            // 1. If we're breaking a block next to water, fill this block with water instead
+            // 2. If we're breaking a block with a flower above it, also remove the flower
             if block_type == BlockType::Empty {
                 for i in 0..6 {
                     if let Some(neighbor) = neighbors[i] {
@@ -532,6 +534,9 @@ impl WorldState {
                             && neighbor.this_shared_face != Face::Bottom
                         {
                             block_type = BlockType::Water;
+                        }
+                        if (*neighbor.block).block_type == BlockType::RedFlower && neighbor.this_shared_face == Face::Top {
+                            (*neighbor.block).block_type = BlockType::Empty;
                         }
                     }
                 }
