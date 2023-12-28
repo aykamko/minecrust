@@ -325,7 +325,7 @@ impl CharacterEntity {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum ButtonState {
     Pressed,
     Held,
@@ -1537,14 +1537,20 @@ impl WorldState {
         let gravity_y_accel: f32 = (game_loop.fixed_time_step().powi(2) * -9.807) as f32;
 
         // Apply gravity if not contacting floor
-        if is_contacting_floor {
-            if self.input_state.jump_button_state == ButtonState::Pressed {
+        self.character_entity.acceleration.y = 0.0;
+        if self.input_state.jump_button_state == ButtonState::Pressed {
+            // Jump button can only be "pressed" for one tick
+            self.input_state.jump_button_state = ButtonState::Held;
+            if is_contacting_floor || self.character_entity.is_underwater {
                 self.character_entity.acceleration.y = 0.05;
-            } else {
-                self.character_entity.acceleration.y = 0.0;
             }
-        } else {
-            self.character_entity.acceleration.y = gravity_y_accel;
+        }
+        if !is_contacting_floor && self.character_entity.acceleration.y == 0.0 {
+            self.character_entity.acceleration.y = if self.character_entity.is_underwater {
+                gravity_y_accel * 0.5
+            } else {
+                gravity_y_accel
+            };
         }
 
         const MAX_XZ_VELOCITY: f32 = 0.1;
@@ -1629,12 +1635,16 @@ impl WorldState {
         }
 
         // Clamp Y velocity
-        const MAX_POS_Y_VELOCITY: f32 = 0.1;
-        self.character_entity.velocity.y = self
-            .character_entity
-            .velocity
-            .y
-            .clamp(-1000.0, MAX_POS_Y_VELOCITY);
+        const MAX_Y_VELOCITY: f32 = 0.15;
+        const MAX_Y_VELOCITY_UNDERWATER: f32 = 0.05;
+        self.character_entity.velocity.y = self.character_entity.velocity.y.clamp(
+            -1000.0,
+            if self.character_entity.is_underwater {
+                MAX_Y_VELOCITY_UNDERWATER
+            } else {
+                MAX_Y_VELOCITY
+            },
+        );
 
         let mut potential_new_pos = self.character_entity.position + self.character_entity.velocity;
 
@@ -1761,6 +1771,7 @@ impl WorldState {
 
         // Update if character is underwater
         const WATER_CHECK_Y_ADJUST: f32 = 0.5 + (1.0 - WATER_BLOCK_Y_HEIGHT); // +0.5 for eye level, -0.2 for water-level adjust
+        let prev_underwater = self.character_entity.is_underwater;
         self.character_entity.is_underwater = self
             .get_block(
                 self.character_entity.position.x as usize,
@@ -1769,6 +1780,11 @@ impl WorldState {
             )
             .block_type
             == BlockType::Water;
+
+        if !prev_underwater && self.character_entity.is_underwater {
+            // Water can break a fall
+            self.character_entity.velocity.y /= 4.0;
+        }
     }
 
     pub fn process_window_event(&mut self, event: &WindowEvent) {
@@ -1788,17 +1804,18 @@ impl WorldState {
                 };
                 let mut jump_pressed = || {
                     let pressed = input.state == ElementState::Pressed;
-                    self.input_state.jump_button_state = match pressed {
-                        true => match self.input_state.jump_button_state {
+                    self.input_state.jump_button_state = if pressed {
+                        match self.input_state.jump_button_state {
                             ButtonState::Pressed => ButtonState::Held,
                             ButtonState::Held => ButtonState::Held,
                             _ => ButtonState::Pressed,
-                        },
-                        false => match self.input_state.jump_button_state {
+                        }
+                    } else {
+                        match self.input_state.jump_button_state {
                             ButtonState::Pressed => ButtonState::Released,
                             ButtonState::Held => ButtonState::Released,
                             _ => ButtonState::Idle,
-                        },
+                        }
                     }
                 };
 
