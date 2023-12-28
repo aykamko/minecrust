@@ -52,6 +52,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // TODO(aleks): this will probably break on touchscreen laptops, but oh well
     const buttonContainer = document.getElementsByClassName("button-container");
     (buttonContainer[0] as any).style.display = "none";
+    const joystickDivs = document.getElementsByClassName("joystick");
+    for (const joystickDiv of joystickDivs) {
+      (joystickDiv as any).style.visibility = "hidden";
+    }
   }
 
   atlasImage = await loadImage('./minecruft_atlas.png');
@@ -91,9 +95,9 @@ function registerDomButtonEventListeners(wasmModule: any) {
   bButton.addEventListener(startEvent, () => {
     wasmModule.b_button_pressed();
   });
-  yButton.addEventListener(startEvent, () => {
-    wasmModule.y_button_pressed();
-  });
+  // yButton.addEventListener(startEvent, () => {
+  //   wasmModule.y_button_pressed();
+  // });
   blockPreviewBtn.addEventListener(startEvent, () => {
     wasmModule.block_preview_pressed();
   });
@@ -104,9 +108,9 @@ function registerDomButtonEventListeners(wasmModule: any) {
     bButton.addEventListener(event, () => {
       wasmModule.b_button_released();
     });
-    yButton.addEventListener(event, () => {
-      wasmModule.y_button_released();
-    });
+    // yButton.addEventListener(event, () => {
+    //   wasmModule.y_button_released();
+    // });
     blockPreviewBtn.addEventListener(event, () => {
       wasmModule.block_preview_released();
     });
@@ -157,16 +161,30 @@ function mountJoysticks(wasmModule: any) {
     const pitchYawJoystickElem = document.getElementById("pitch-yaw-joystick");
     pitchYawJoystick = nipplejs.create({
       zone: pitchYawJoystickElem,
-      mode: "static",
-      position: { left: "50%", top: "50%" },
-      color: "black",
+      color: "transparent",
     });
+
+    let lastPitchYawStartTime = 0;
+    const SIMULATE_JUMP_DELAY = 100; // If we tap the joystick, simulate a jump
     pitchYawJoystick.on("move", function (_, data) {
-      console.log(data.vector);
+      const now = new Date().getTime();
+      if (now - lastPitchYawStartTime < SIMULATE_JUMP_DELAY) return;
+
+      console.log("Pitch/Yaw: ", data.vector);
       wasmModule.pitch_yaw_joystick_moved(data.vector.x, -data.vector.y);
     });
+    pitchYawJoystick.on("start", function (_, data) {
+      lastPitchYawStartTime = new Date().getTime();
+    });
     pitchYawJoystick.on("end", function (_, data) {
-      wasmModule.pitch_yaw_joystick_released();
+      const now = new Date().getTime();
+      if (now - lastPitchYawStartTime < SIMULATE_JUMP_DELAY) {
+        // Jump if we tap the joystick
+        wasmModule.y_button_pressed();
+        setTimeout(() => wasmModule.y_button_released(), 20);
+      } else {
+        wasmModule.pitch_yaw_joystick_released();
+      }
     });
     pitchYawJoystickElem.addEventListener("touchstart", (event) =>
       preventDoubleTapZoom(event)
@@ -177,9 +195,7 @@ function mountJoysticks(wasmModule: any) {
     );
     translationJoystick = nipplejs.create({
       zone: translationJoystickElem,
-      mode: "static",
-      position: { left: "50%", top: "50%" },
-      color: "black",
+      color: "transparent",
     });
     translationJoystick.on("move", function (_, data) {
       wasmModule.translation_joystick_moved(data.vector.x, data.vector.y);

@@ -21,6 +21,10 @@ canvas {
   width: 100px;
   height: 100px;
 
+  background: black;
+  opacity: 0.33;
+  border-radius: 50%;
+
   -webkit-touch-callout: none; /* iOS Safari */
   -webkit-user-select: none; /* Safari */
   -khtml-user-select: none; /* Konqueror HTML */
@@ -87,8 +91,8 @@ canvas {
 
     .button-container {
       position: absolute;
-      right: 45px;
-      bottom: 90px;
+      right: 102px;
+      bottom: 40px;
       transform: rotate(13deg);
       height: 100%;
       display: flex;
