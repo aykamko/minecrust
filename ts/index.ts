@@ -28,6 +28,8 @@ document.addEventListener("contextmenu", (event: any) => {
 let atlasImage: HTMLImageElement | null = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
+  (window as any).feather?.replace();
+
   const showPortraitOrientationWarning = () => {
     const portraitWarning = document.getElementById("portrait-orientation-warning");
     if (screen.orientation.type.includes("portrait")) {

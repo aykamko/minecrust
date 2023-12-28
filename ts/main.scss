@@ -85,6 +85,18 @@ canvas {
       position: relative;
     }
 
+    .button-container {
+      position: absolute;
+      right: 45px;
+      bottom: 90px;
+      transform: rotate(13deg);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+
     .button {
       flex: 1 0 auto;
       width: 60px;
@@ -96,6 +108,17 @@ canvas {
 
       font-size: 26px;
       color: white;
+
+      transform: rotate(-13deg); // cancel out rotation of container
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      > svg {
+        width: 32px;
+        height: 32px;
+      }
     }
 
     .y-button {
@@ -104,18 +127,6 @@ canvas {
 
     .b-button {
       margin: 0 0 15px 0;
-    }
-
-    .button-container {
-      position: absolute;
-      right: 45px;
-      bottom: 90px;
-      transform: rotate(13deg);
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
     }
   }
 }
