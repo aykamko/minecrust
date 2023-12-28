@@ -30,6 +30,26 @@ canvas {
                                   supported by Chrome, Edge, Opera and Firefox */
 }
 
+.controls-info-popup {
+  position: absolute;
+  color: white;
+  font-weight: 500;
+  line-height: 1.4;
+  background: rgb(0,0,0,0.7);
+  padding: 20px;
+  left: 20px;
+  bottom: 20px;
+  border-radius: 8px;
+}
+
+.control-label {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  padding: 2px 3px;
+  background: rgb(40, 40, 40);
+  border-radius: 4px;
+}
+
 .gameboy {
   position: absolute;
   width: 100%;

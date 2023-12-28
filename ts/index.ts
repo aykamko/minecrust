@@ -39,12 +39,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("orientationchange", showPortraitOrientationWarning);
   showPortraitOrientationWarning();
 
+  const controlsInfoPopup = document.getElementById("controls-info-popup");
   const wasmContainer = document.getElementById("wasm-container")
   if (isTouchDevice()) {
     // Disable "mouse" events on game when on mobile
     wasmContainer.style.pointerEvents = "none";
+    controlsInfoPopup.style.display = "none";
   } else {
     // Hide button controls on desktop
+    // TODO(aleks): this will probably break on touchscreen laptops, but oh well
     const buttonContainer = document.getElementsByClassName("button-container");
     (buttonContainer[0] as any).style.display = "none";
   }
@@ -106,12 +109,6 @@ function registerDomButtonEventListeners(wasmModule: any) {
       wasmModule.block_preview_released();
     });
   }
-
-  document.addEventListener("pointerlockchange", () => {
-    if (!document.pointerLockElement) {
-      wasmModule.web_pointer_lock_lost();
-    }
-  }, false);
 }
 
 // Ensure touches occur rapidly
@@ -200,6 +197,16 @@ import("../pkg/index").then((wasmModule) => {
   registerDomButtonEventListeners(wasmModule);
   mountJoysticks(wasmModule);
 
+  const controlsInfoPopup = document.getElementById("controls-info-popup");
+  document.addEventListener("pointerlockchange", () => {
+    if (!document.pointerLockElement) {
+      wasmModule.web_pointer_lock_lost();
+      if (!isTouchDevice()) controlsInfoPopup.style.display = "block";
+    } else {
+      if (!isTouchDevice()) controlsInfoPopup.style.display = "none";
+    }
+  }, false);
+
   const wasmContainer = document.getElementById("wasm-container")
   const observerCanvasMounted = (mutationsList: any, observer: any) => {
     for (const mutation of mutationsList) {
@@ -229,10 +236,8 @@ import("../pkg/index").then((wasmModule) => {
 
   let resizeTimeout: any;
   window.addEventListener("resize", () => {
-    console.log("resize event");
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      console.log("resizing canvas");
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = document.documentElement.clientHeight;
       wasmModule.web_window_resized(viewportWidth, viewportHeight);
