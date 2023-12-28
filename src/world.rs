@@ -233,6 +233,8 @@ const WATER_HEIGHT: u16 = 26;
 
 const MAX_BREAK_DISTANCE: usize = 6;
 
+const WATER_BLOCK_Y_HEIGHT: f32 = 0.8;
+
 // Goal: infinite world generation
 
 // Today: whole world is represented as one contiguous 3D array
@@ -1009,7 +1011,7 @@ impl WorldState {
                     } else {
                         if !block.neighbors.get(Face::Top) {
                             let y_offset = if block.block_type == BlockType::Water {
-                                0.8
+                                WATER_BLOCK_Y_HEIGHT
                             } else {
                                 1.0
                             };
@@ -1758,11 +1760,11 @@ impl WorldState {
         self.character_entity.position = potential_new_pos.into();
 
         // Update if character is underwater
-        const WATER_LEVEL_Y_ADJUST: f32 = 0.5 + 0.2; // +0.5 for eye level, -0.2 for water-level adjust
+        const WATER_CHECK_Y_ADJUST: f32 = 0.5 + (1.0 - WATER_BLOCK_Y_HEIGHT); // +0.5 for eye level, -0.2 for water-level adjust
         self.character_entity.is_underwater = self
             .get_block(
                 self.character_entity.position.x as usize,
-                (self.character_entity.position.y + WATER_LEVEL_Y_ADJUST) as usize,
+                (self.character_entity.position.y + WATER_CHECK_Y_ADJUST) as usize,
                 self.character_entity.position.z as usize,
             )
             .block_type

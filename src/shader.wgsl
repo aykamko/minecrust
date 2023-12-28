@@ -390,7 +390,7 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput {
 
     // Make things more dark blue underwater
     if (light.is_underwater != 0u) {
-        frag_out.color = frag_out.color * vec4<f32>(0.3, 0.3, 1.0, 1.0);
+        frag_out.color = frag_out.color * vec4<f32>(0.3, 0.3, 0.8, 1.0);
     }
 
     return frag_out;
