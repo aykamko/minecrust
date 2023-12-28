@@ -1245,8 +1245,8 @@ impl Game {
             }
 
             rpass.set_pipeline(&scene.translucent_pipeline);
-            for data_type in [ChunkDataType::Translucent, ChunkDataType::SemiTranslucent] {
-                for chunk_idx in scene.chunk_order.iter().rev() {
+            for chunk_idx in scene.chunk_order.iter().rev() {
+                for data_type in [ChunkDataType::Translucent, ChunkDataType::SemiTranslucent] {
                     self.render_chunk(&mut rpass, *chunk_idx, data_type);
                 }
             }

@@ -90,6 +90,11 @@ impl BlockType {
 
     pub fn is_translucent(&self) -> bool {
         match *self {
+            // BlockType::TreeLeaves1 => true,
+            // BlockType::TreeLeaves2 => true,
+            // BlockType::TreeLeaves3 => true,
+            // BlockType::TreeLeaves4 => true,
+            // BlockType::RedFlower => true,
             BlockType::Empty => true,
             BlockType::Water => true,
             BlockType::Glass => true,
@@ -259,6 +264,7 @@ pub enum ChunkDataType {
     Translucent,
     // Still generates a shadow
     SemiTranslucent,
+    TranslucentAndSemiTranslucent,
 }
 
 #[derive(Clone)]
