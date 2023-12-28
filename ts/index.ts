@@ -12,32 +12,12 @@ const hasChromeAgent = navigator.userAgent.indexOf("Chrome") > -1;
 const hasSafariAgent = navigator.userAgent.indexOf("Safari") > -1;
 const isSafari = hasSafariAgent && !hasChromeAgent;
 
-
-/**
- * Determine the mobile operating system.
- * This function returns one of 'iOS', 'Android', 'Windows Phone', or 'unknown'.
- *
- * Source: https://stackoverflow.com/questions/21741841/detecting-ios-android-operating-system
- */
-function getMobileOperatingSystem() {
-  var userAgent =
-    navigator.userAgent || navigator.vendor || (window as any).opera;
-
-  // Windows Phone must come first because its UA also contains "Android"
-  if (/windows phone/i.test(userAgent)) {
-    return "Windows Phone";
-  }
-
-  if (/android/i.test(userAgent)) {
-    return "Android";
-  }
-
-  // iOS detection from: http://stackoverflow.com/a/9039885/177710
-  if (/iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream) {
-    return "iOS";
-  }
-
-  return "unknown";
+function isTouchDevice() {
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    (navigator as any).msMaxTouchPoints > 0
+  );
 }
 
 // Disable right-click menu
@@ -60,21 +40,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   showPortraitOrientationWarning();
 
   const wasmContainer = document.getElementById("wasm-container")
-  if (getMobileOperatingSystem() !== "unknown") {
+  if (isTouchDevice()) {
     // Disable "mouse" events on game when on mobile
     wasmContainer.style.pointerEvents = "none";
+  } else {
+    // Hide button controls on desktop
+    const buttonContainer = document.getElementsByClassName("button-container");
+    (buttonContainer[0] as any).style.display = "none";
   }
 
   atlasImage = await loadImage('./minecruft_atlas.png');
 });
-
-function isTouchDevice() {
-  return (
-    "ontouchstart" in window ||
-    navigator.maxTouchPoints > 0 ||
-    (navigator as any).msMaxTouchPoints > 0
-  );
-}
 
 // Called from Rust code when the user chooses a different block to place
 function handlePlaceBlockTypeChanged(blockTypeStr: string) {
@@ -160,58 +136,69 @@ export default function preventDoubleTapZoom(event: any) {
   lastTapAt = tapAt;
 }
 
+// Delay mounting joysticks to avoid a bug where the joysticks are
+// centered incorrectly on mobile
+const JOYSTICK_MOUNT_DELAY = 400;
+
+let joystickMountTimeout: any;
+let pitchYawJoystick: nipplejs.JoystickManager | null = null;
+let translationJoystick: nipplejs.JoystickManager | null = null;
+
 function mountJoysticks(wasmModule: any) {
-  const pitchYawJoystickElem = document.getElementById("pitch-yaw-joystick");
-  const pitchYawJoystick = nipplejs.create({
-    zone: pitchYawJoystickElem,
-    mode: "static",
-    position: { left: "50%", top: "50%" },
-    color: "black",
-  });
-  pitchYawJoystick.on("move", function (_, data) {
-    console.log(data.vector);
-    wasmModule.pitch_yaw_joystick_moved(data.vector.x, -data.vector.y);
-  });
-  pitchYawJoystick.on("end", function (_, data) {
-    wasmModule.pitch_yaw_joystick_released();
-  });
-  pitchYawJoystickElem.addEventListener("touchstart", (event) =>
-    preventDoubleTapZoom(event)
-  );
+  if (!isTouchDevice()) {
+    // No joysticks on desktop
+    return;
+  }
 
-  const translationJoystickElem = document.getElementById(
-    "translation-joystick"
-  );
-  const translationJoystick = nipplejs.create({
-    zone: translationJoystickElem,
-    mode: "static",
-    position: { left: "50%", top: "50%" },
-    color: "black",
-  });
-  translationJoystick.on("move", function (_, data) {
-    wasmModule.translation_joystick_moved(data.vector.x, data.vector.y);
-  });
-  translationJoystick.on("end", function (_, data) {
-    wasmModule.translation_joystick_released();
-  });
-  translationJoystickElem.addEventListener("touchstart", (event) =>
-    preventDoubleTapZoom(event)
-  );
+  clearTimeout(joystickMountTimeout);
+  if (pitchYawJoystick) pitchYawJoystick.destroy();
+  if (translationJoystick) translationJoystick.destroy();
 
-  return [pitchYawJoystick, translationJoystick];
+  setTimeout(() => {
+    const pitchYawJoystickElem = document.getElementById("pitch-yaw-joystick");
+    pitchYawJoystick = nipplejs.create({
+      zone: pitchYawJoystickElem,
+      mode: "static",
+      position: { left: "50%", top: "50%" },
+      color: "black",
+    });
+    pitchYawJoystick.on("move", function (_, data) {
+      console.log(data.vector);
+      wasmModule.pitch_yaw_joystick_moved(data.vector.x, -data.vector.y);
+    });
+    pitchYawJoystick.on("end", function (_, data) {
+      wasmModule.pitch_yaw_joystick_released();
+    });
+    pitchYawJoystickElem.addEventListener("touchstart", (event) =>
+      preventDoubleTapZoom(event)
+    );
+
+    const translationJoystickElem = document.getElementById(
+      "translation-joystick"
+    );
+    translationJoystick = nipplejs.create({
+      zone: translationJoystickElem,
+      mode: "static",
+      position: { left: "50%", top: "50%" },
+      color: "black",
+    });
+    translationJoystick.on("move", function (_, data) {
+      wasmModule.translation_joystick_moved(data.vector.x, data.vector.y);
+    });
+    translationJoystick.on("end", function (_, data) {
+      wasmModule.translation_joystick_released();
+    });
+    translationJoystickElem.addEventListener("touchstart", (event) =>
+      preventDoubleTapZoom(event)
+    );
+  }, JOYSTICK_MOUNT_DELAY);
 }
 
 import("../pkg/index").then((wasmModule) => {
   console.log("WASM Loaded");
 
   registerDomButtonEventListeners(wasmModule);
-
-  // Delay mounting joysticks to avoid a bug where the joysticks are
-  // centered incorrectly on mobile
-  const JOYSTICK_MOUNT_DELAY = 400;
-
-  let pitchYawJoystick: nipplejs.JoystickManager | null = null;
-  let translationJoystick: nipplejs.JoystickManager | null = null;
+  mountJoysticks(wasmModule);
 
   const wasmContainer = document.getElementById("wasm-container")
   const observerCanvasMounted = (mutationsList: any, observer: any) => {
@@ -229,13 +216,7 @@ import("../pkg/index").then((wasmModule) => {
               });
             }
 
-            if (pitchYawJoystick) pitchYawJoystick.destroy();
-            if (translationJoystick) translationJoystick.destroy();
-            setTimeout(() => {
-              const joysticks = mountJoysticks(wasmModule);
-              pitchYawJoystick = joysticks[0];
-              translationJoystick = joysticks[1];
-            }, JOYSTICK_MOUNT_DELAY);
+            mountJoysticks(wasmModule);
 
             observer.disconnect();
           }
@@ -257,13 +238,7 @@ import("../pkg/index").then((wasmModule) => {
       wasmModule.web_window_resized(viewportWidth, viewportHeight);
 
       // We recreate joysticks, otherwise they start to behave weirdly
-      if (pitchYawJoystick) pitchYawJoystick.destroy();
-      if (translationJoystick) translationJoystick.destroy();
-      setTimeout(() => {
-        const joysticks = mountJoysticks(wasmModule);
-        pitchYawJoystick = joysticks[0];
-        translationJoystick = joysticks[1];
-      }, JOYSTICK_MOUNT_DELAY);
+      mountJoysticks(wasmModule);
     }, 400);
   });
 
