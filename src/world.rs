@@ -560,7 +560,7 @@ impl WorldState {
                             .neighbors
                             .set(neighbor.other_shared_face, true);
                     }
-                    (x, BlockType::Water) if !x.is_translucent() => {
+                    (_, BlockType::Water) => {
                         (*this_block)
                             .neighbors
                             .set(neighbor.this_shared_face, false);
