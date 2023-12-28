@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 futures = "0.3"
 bytemuck = { version = "1.9.1", features = ["derive"] }
-winit = "0.27"
+winit = "0.28"
 wgpu = "0.14"
 cgmath = "0.17"
 image = { version = "0.24", default-features = false, features = ["png"] }

@@ -6,7 +6,12 @@ loader;
 import { loadImage, cropImage } from "./blockDisplay";
 
 import * as nipplejs from "nipplejs";
+
 document.addEventListener("gesturestart", (e) => e.preventDefault());
+
+const hasChromeAgent = navigator.userAgent.indexOf("Chrome") > -1;
+const hasSafariAgent = navigator.userAgent.indexOf("Safari") > -1;
+const isSafari = hasSafariAgent && !hasChromeAgent;
 
 /**
  * Determine the mobile operating system.
@@ -34,6 +39,11 @@ function getMobileOperatingSystem() {
 
   return "unknown";
 }
+
+// Disable right-click menu
+document.addEventListener("contextmenu", (event: any) => {
+  event.preventDefault();
+});
 
 let atlasImage: HTMLImageElement | null = null;
 
@@ -198,6 +208,16 @@ import("../pkg/index").then((wasmModule) => {
       if (mutation.type === 'childList') {
         for (const node of mutation.addedNodes) {
           if (node.nodeName === 'CANVAS' && node.id === 'wasm-canvas') {
+
+            // Request pointer lock in Safari in JS. Doesn't work from winit Rust in Safari
+            if (isSafari) {
+              node.addEventListener("click", async () => {
+                if (document.pointerLockElement !== node) {
+                  await node.requestPointerLock();
+                }
+              });
+            }
+
             if (pitchYawJoystick) pitchYawJoystick.destroy();
             if (translationJoystick) translationJoystick.destroy();
             setTimeout(() => {
@@ -205,6 +225,7 @@ import("../pkg/index").then((wasmModule) => {
               pitchYawJoystick = joysticks[0];
               translationJoystick = joysticks[1];
             }, JOYSTICK_MOUNT_DELAY);
+
             observer.disconnect();
           }
         }
@@ -214,19 +235,25 @@ import("../pkg/index").then((wasmModule) => {
   const observer = new MutationObserver(observerCanvasMounted);
   observer.observe(wasmContainer, { childList: true, subtree: true });
 
+  let resizeTimeout: any;
   window.addEventListener("resize", () => {
-    const viewportWidth = document.documentElement.clientWidth;
-    const viewportHeight = document.documentElement.clientHeight;
-    wasmModule.web_window_resized(viewportWidth, viewportHeight);
+    console.log("resize event");
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      console.log("resizing canvas");
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      wasmModule.web_window_resized(viewportWidth, viewportHeight);
 
-    // We recreate joysticks, otherwise they start to behave weirdly
-    if (pitchYawJoystick) pitchYawJoystick.destroy();
-    if (translationJoystick) translationJoystick.destroy();
-    setTimeout(() => {
-      const joysticks = mountJoysticks(wasmModule);
-      pitchYawJoystick = joysticks[0];
-      translationJoystick = joysticks[1];
-    }, JOYSTICK_MOUNT_DELAY);
+      // We recreate joysticks, otherwise they start to behave weirdly
+      if (pitchYawJoystick) pitchYawJoystick.destroy();
+      if (translationJoystick) translationJoystick.destroy();
+      setTimeout(() => {
+        const joysticks = mountJoysticks(wasmModule);
+        pitchYawJoystick = joysticks[0];
+        translationJoystick = joysticks[1];
+      }, JOYSTICK_MOUNT_DELAY);
+    }, 400);
   });
 
   const viewportWidth = document.documentElement.clientWidth;
