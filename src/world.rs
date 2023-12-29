@@ -935,7 +935,7 @@ impl WorldState {
                     let mut highlight_adjust = 1.0;
                     if let Some(highlighted_block) = self.highlighted_block {
                         if highlighted_block == [world_x, y, world_z] {
-                            highlight_adjust = 1.3;
+                            highlight_adjust = 1.8;
                         }
                     }
 
