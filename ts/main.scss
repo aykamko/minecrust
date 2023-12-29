@@ -32,6 +32,10 @@ canvas {
   -ms-user-select: none; /* Internet Explorer/Edge */
   user-select: none; /* Non-prefixed version, currently
                                   supported by Chrome, Edge, Opera and Firefox */
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .controls-info-popup {
@@ -52,6 +56,13 @@ canvas {
   padding: 2px 3px;
   background: rgb(40, 40, 40);
   border-radius: 4px;
+}
+
+.joystick-hint {
+  color: white;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .gameboy {

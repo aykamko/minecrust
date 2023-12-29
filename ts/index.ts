@@ -20,6 +20,14 @@ function isTouchDevice() {
   );
 }
 
+const HIDE_JOYSTICK_HINTS_AFTER_N_JUMPS = 3;
+function hideJoystickHints() {
+  const joystickHints = document.getElementsByClassName("joystick-hint");
+  for (const joystickHint of joystickHints) {
+    (joystickHint as any).style.display = "none";
+  }
+}
+
 // Disable right-click menu
 document.addEventListener("contextmenu", (event: any) => {
   event.preventDefault();
@@ -29,17 +37,6 @@ let atlasImage: HTMLImageElement | null = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   (window as any).feather?.replace();
-
-  const showPortraitOrientationWarning = () => {
-    const portraitWarning = document.getElementById("portrait-orientation-warning");
-    if (screen.orientation.type.includes("portrait")) {
-      portraitWarning.style.display = "flex";
-    } else {
-      portraitWarning.style.display = "none";
-    }
-  };
-  window.addEventListener("orientationchange", showPortraitOrientationWarning);
-  showPortraitOrientationWarning();
 
   const controlsInfoPopup = document.getElementById("controls-info-popup");
   const wasmContainer = document.getElementById("wasm-container")
@@ -165,6 +162,7 @@ function mountJoysticks(wasmModule: any) {
     });
 
     let lastPitchYawStartTime = 0;
+    let jumpCount = 0;
     const SIMULATE_JUMP_DELAY = 100; // If we tap the joystick, simulate a jump
     pitchYawJoystick.on("move", function (_, data) {
       const now = new Date().getTime();
@@ -180,8 +178,11 @@ function mountJoysticks(wasmModule: any) {
       const now = new Date().getTime();
       if (now - lastPitchYawStartTime < SIMULATE_JUMP_DELAY) {
         // Jump if we tap the joystick
+        jumpCount += 1;
         wasmModule.y_button_pressed();
         setTimeout(() => wasmModule.y_button_released(), 20);
+
+        if (jumpCount === HIDE_JOYSTICK_HINTS_AFTER_N_JUMPS) hideJoystickHints();
       } else {
         wasmModule.pitch_yaw_joystick_released();
       }
@@ -225,24 +226,38 @@ import("../pkg/index").then((wasmModule) => {
     }
   }, false);
 
+  const handleCanvasDidMount = (canvasElem: HTMLCanvasElement) => {
+    // Request pointer lock in Safari in JS. Doesn't work from winit Rust in Safari
+    if (isSafari) {
+      canvasElem.addEventListener("click", async () => {
+        if (document.pointerLockElement !== canvasElem) {
+          await canvasElem.requestPointerLock();
+        }
+      });
+    }
+
+    const showPortraitOrientationWarning = () => {
+      const portraitWarning = document.getElementById("portrait-orientation-warning");
+      if (screen.orientation.type.includes("portrait")) {
+        portraitWarning.style.display = "flex";
+      } else {
+        portraitWarning.style.display = "none";
+      }
+    };
+    window.addEventListener("orientationchange", showPortraitOrientationWarning);
+    showPortraitOrientationWarning();
+
+
+    mountJoysticks(wasmModule);
+  };
+
   const wasmContainer = document.getElementById("wasm-container")
   const observerCanvasMounted = (mutationsList: any, observer: any) => {
     for (const mutation of mutationsList) {
       if (mutation.type === 'childList') {
         for (const node of mutation.addedNodes) {
           if (node.nodeName === 'CANVAS' && node.id === 'wasm-canvas') {
-
-            // Request pointer lock in Safari in JS. Doesn't work from winit Rust in Safari
-            if (isSafari) {
-              node.addEventListener("click", async () => {
-                if (document.pointerLockElement !== node) {
-                  await node.requestPointerLock();
-                }
-              });
-            }
-
-            mountJoysticks(wasmModule);
-
+            handleCanvasDidMount(node);
             observer.disconnect();
           }
         }
