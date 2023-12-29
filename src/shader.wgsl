@@ -359,7 +359,7 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput {
 
     var distance_from_camera = length(vertex.world_position);
     var zfar: f32 = {{z_far}}; // Handlerbars template
-    var z_fade_start: f32 = zfar - 30.0;
+    var z_fade_start: f32 = {{z_fade_start}}; // Handlerbars template
     var distance_alpha_adjust: f32 = max(0.0, distance_from_camera - z_fade_start) / (zfar - z_fade_start);
 
     var color = base_color * vertex.color_adjust;

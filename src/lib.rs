@@ -365,6 +365,7 @@ impl Scene {
         let handlebars = handlebars::Handlebars::new();
         let shader_wgsl_str = handlebars.render_template(include_str!("shader.wgsl"), &serde_json::json!({
             "z_far": world::Z_FAR,
+            "z_fade_start": world::Z_FADE_START,
         })).expect("Failed to render shader template");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
