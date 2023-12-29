@@ -25,6 +25,7 @@ As for my motivation, I've always had a deep respect for game developers. I used
 - A single Rust codebase that runs on all platforms: Web and Native (MacOS, Windows, Linux). Huge thanks to [wgpu](https://github.com/gfx-rs/wgpu) and [wasm-pack](https://github.com/rustwasm/wasm-pack) for enabling this
 - ~~Beautiful~~ Custom artwork by yours truly
 - You can build a house in it 🏠
+- "Completed" in ~100 hours, but non-consecutively. 60% Summer 2022, 20% Winter 2022, 20% Winter 2023
 
 ## Things to improve that I will realistically never do
 
