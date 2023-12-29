@@ -25,7 +25,7 @@ use std::{borrow::Cow, cell::RefCell, collections::HashSet, future::Future, mem,
 use wgpu::{util::DeviceExt, SurfaceTexture};
 use winit::{
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoopBuilder},
+    event_loop::{ControlFlow, EventLoopBuilder, EventLoopWindowTarget},
 };
 use world::CHUNK_XZ_SIZE;
 
@@ -1292,7 +1292,7 @@ impl Game {
 use wasm_bindgen::prelude::*;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn run(width: usize, height: usize) {
+pub async fn run(width: usize, height: usize) {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -1364,7 +1364,9 @@ pub fn run(width: usize, height: usize) {
     // HACK: on Chrome, the cursor cannot be locked again within ~1.3 second of it being unlocked.
     let mut last_cursor_lost_time = instant::Instant::now();
 
-    event_loop.run(move |event, _, control_flow| {
+    let event_handler = move |event: Event<_>,
+                              _: &EventLoopWindowTarget<DomControlsUserEvent>,
+                              control_flow: &mut ControlFlow| {
         *control_flow = ControlFlow::Poll;
 
         match event {
@@ -1513,7 +1515,16 @@ pub fn run(width: usize, height: usize) {
 
             _ => (),
         }
-    });
+    };
+
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+           use winit::platform::web::EventLoopExtWebSys;
+           event_loop.spawn(event_handler);
+        } else {
+           event_loop.run(event_handler);
+        }
+    };
 }
 
 /// A wrapper for `pop_error_scope` futures that panics if an error occurs.

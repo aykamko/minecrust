@@ -283,7 +283,18 @@ import("../pkg/index").then((wasmModule) => {
   const viewportWidth = document.documentElement.clientWidth;
   const viewportHeight = document.documentElement.clientHeight;
 
-  wasmModule.run(viewportWidth, viewportHeight);
+  try {
+    wasmModule.run(viewportWidth, viewportHeight).catch((error) => {
+      console.log("blah");
+      if (!error.message.startsWith("Using exceptions for control flow,")) {
+        throw error;
+      }
+    });
+  } catch (error) {
+    if (!error.message.startsWith("Using exceptions for control flow,")) {
+      throw error;
+    }
+  }
 }).catch((error) => {
   if (!error.message.startsWith("Using exceptions for control flow,")) {
     throw error;
