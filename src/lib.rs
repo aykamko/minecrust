@@ -363,10 +363,15 @@ impl Scene {
 
         // The main shader is a handlebars template so we can change some compile-time constants
         let handlebars = handlebars::Handlebars::new();
-        let shader_wgsl_str = handlebars.render_template(include_str!("shader.wgsl"), &serde_json::json!({
-            "z_far": world::Z_FAR,
-            "z_fade_start": world::Z_FADE_START,
-        })).expect("Failed to render shader template");
+        let shader_wgsl_str = handlebars
+            .render_template(
+                include_str!("shader.wgsl"),
+                &serde_json::json!({
+                    "z_far": world::Z_FAR,
+                    "z_fade_start": world::Z_FADE_START,
+                }),
+            )
+            .expect("Failed to render shader template");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Main Shader"),
@@ -462,7 +467,6 @@ impl Scene {
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
             })
-
         };
         log::info!("Creating forward-pass opaque render pipeline");
         let opaque_pipeline = create_forward_pass_pipeline(Some(wgpu::Face::Back));
@@ -1302,7 +1306,9 @@ pub fn run(width: usize, height: usize) {
     unsafe {
         dom_controls::set_global_event_loop_proxy(&event_loop);
         #[cfg(target_arch = "wasm32")]
-        dom_controls::place_block_type_changed(&world::BlockType::DEFAULT_PLACE_BLOCK_TYPE.to_string());
+        dom_controls::place_block_type_changed(
+            &world::BlockType::DEFAULT_PLACE_BLOCK_TYPE.to_string(),
+        );
     }
 
     let window = winit::window::WindowBuilder::new()
@@ -1331,8 +1337,6 @@ pub fn run(width: usize, height: usize) {
 
     let mut game = block_on(Game::new(&window));
 
-    let mut curr_modifier_state: winit::event::ModifiersState =
-        winit::event::ModifiersState::empty();
     let mut cursor_grabbed = false;
 
     let mut left_mouse_clicked = false;
@@ -1370,17 +1374,14 @@ pub fn run(width: usize, height: usize) {
                         *control_flow = ControlFlow::Exit;
                     }
                 }
-                WindowEvent::ModifiersChanged(modifiers) => {
-                    curr_modifier_state = modifiers;
-                }
+                // WindowEvent::ModifiersChanged(modifiers) => {
+                //     curr_modifier_state = modifiers;
+                // }
                 WindowEvent::KeyboardInput { input, .. } => {
                     match (input.virtual_keycode, input.state) {
-                        // Toggle flying mode with Ctrl+/
+                        // Toggle flying mode with Slash
                         (Some(VirtualKeyCode::Slash), ElementState::Pressed) => {
-                            if curr_modifier_state.ctrl() {
-                                game.state.world_state.is_flying =
-                                    !game.state.world_state.is_flying;
-                            }
+                            game.state.world_state.is_flying = !game.state.world_state.is_flying;
                         }
                         (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
                             window
@@ -1402,7 +1403,7 @@ pub fn run(width: usize, height: usize) {
                             game.state.camera_controller.process_window_event(&event);
                             game.state.world_state.process_window_event(&event);
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
                 WindowEvent::MouseInput { state, button, .. } => match (state, button) {
@@ -1479,9 +1480,7 @@ pub fn run(width: usize, height: usize) {
                     game.state
                         .camera_controller
                         .process_web_dom_button_event(&event);
-                    game.state
-                        .world_state
-                        .process_web_dom_button_event(&event);
+                    game.state.world_state.process_web_dom_button_event(&event);
                 }
             },
 
