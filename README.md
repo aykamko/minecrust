@@ -21,7 +21,7 @@ As for my motivation, I've always had a deep respect for game developers. I used
 - Infinite, procedurally generated terrain. Dynamic memory management to achieve infinite world
 - Physics simulation and collision detection for the playable character
 - Custom shaders for shadows, diffuse reflection, and specular reflection
-- It's fast. Runs at >30 FPS on most phones and laptops
+- It's fast. Profile-guided optimization to achieve >30 FPS on most phones and laptops
 - A single Rust codebase that runs on all platforms: Web and Native (MacOS, Windows, Linux). Huge thanks to [wgpu](https://github.com/gfx-rs/wgpu) and [wasm-pack](https://github.com/rustwasm/wasm-pack) for enabling this
 - ~~Beautiful~~ Custom artwork by yours truly
 - You can build a house in it 🏠
