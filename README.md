@@ -26,9 +26,6 @@ As for my motivation, I've always had a deep respect for game developers. I used
 - ~~Beautiful~~ Custom artwork by yours truly
 - You can build a house in it 🏠
 
-## Notable Tech
-
-
 ## Things to improve that I will realistically never do
 
 - Camera movement with mouse is very sensitive, could use smoothing
