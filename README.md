@@ -31,6 +31,7 @@ As for my motivation, I've always had a deep respect for game developers. I used
 
 ## Things to improve that I will realistically never do
 
+- Camera movement with mouse is very sensitive, could use smoothing
 - Increase draw distance on mobile
   - Probably need to implement view-frustum culling for this to be feasible
 - Ability to save the world and load it up later
