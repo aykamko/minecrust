@@ -1,4 +1,4 @@
-# Minecrust
+# Minecrust ⛏️
 
 A Minecraft clone that runs in the browser, written from scratch in Rust.
 
