@@ -1,7 +1,5 @@
 import main from "./main.scss";
 main;
-import loader from "./loader.scss";
-loader;
 import { loadImage, cropImage } from "./blockDisplay";
 
 import * as nipplejs from "nipplejs";
@@ -79,15 +77,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 }
 
 (window as any).updateGameStateLoadProgress = (loadProgress: number) => {
-  const loadProgressBar = document.getElementById("load-progress") as HTMLProgressElement;
-  loadProgressBar.value = loadProgress * 100;
-  loadProgressBar.replaceWith(loadProgressBar); // Hack for Safari to update 
+  const progressInner = document.getElementById("progress-inner") as HTMLDivElement;
+  progressInner.style.width = `${Math.max(loadProgress, 0.1) * 100}%`;
+  // loadProgressBar.value = loadProgress * 100;
+  // loadProgressBar.replaceWith(loadProgressBar); // Hack for Safari to update 
   console.log("Load progress", loadProgress * 100);
 }
 
-(window as any).handleGameReady = () => {
+(window as any).handleGameReady = (_: any) => {
   const loadProgressBar = document.getElementById("load-progress") as HTMLProgressElement;
   loadProgressBar.remove();
+
+  document.getElementById("wasm-container").style.opacity = "100";
 
   const showPortraitOrientationWarning = () => {
     const portraitWarning = document.getElementById("portrait-orientation-warning");
@@ -292,6 +293,8 @@ import("../pkg/index").then((wasmModule) => {
 
   const viewportWidth = document.documentElement.clientWidth;
   const viewportHeight = document.documentElement.clientHeight;
+
+  document.getElementById("wasm-container").style.opacity = "0";
 
   // async
   wasmModule.run(viewportWidth, viewportHeight);

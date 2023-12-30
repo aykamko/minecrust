@@ -191,3 +191,33 @@ canvas {
   left: calc(50% - 150px);
   bottom: 50%;
 }
+
+.progress-container {
+  background: rgb(0, 0, 0, 0.15);
+  border-radius: 6px;
+  position: absolute;
+  width: 300px;
+  left: calc(50% - 150px);
+  bottom: 50%;
+}
+
+#progress-inner {
+  border-radius: 6px;
+  background: rgb(0, 0, 0, 0.33);
+  height: 12px;
+  width: 5%;
+}
+
+#canvas-loading-white-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  z-index: -1;
+}
+
+#wasm-container {
+  z-index: -2;
+}
