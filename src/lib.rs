@@ -791,7 +791,7 @@ impl Scene {
             world_state.set_render_descriptor_idx(chunk_data.position, render_descriptor_idx);
             
             #[cfg(target_arch = "wasm32")] {
-                wasm_utils::update_game_state_load_progress((chunk_i + 1) as f64 / num_chunks as f64);
+                wasm_utils::js_update_game_state_load_progress((chunk_i + 1) as f64 / num_chunks as f64);
                 chunk_i += 1;
                 // Yield to JS to prevent page from getting stuck
                 wasm_utils::yield_().await;
@@ -1368,13 +1368,7 @@ pub async fn run(width: usize, height: usize) {
     // Remove Loader element from DOM
     #[cfg(target_arch = "wasm32")]
     {
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                let loader_elem = doc.get_element_by_id("loader")?;
-                loader_elem.remove();
-                Some(())
-            });
+        wasm_utils::js_handle_game_ready();
     }
 
     let updates_per_second = 100;

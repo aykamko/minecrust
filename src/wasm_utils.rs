@@ -28,9 +28,18 @@ extern "C" {
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen(js_namespace = window)]
     fn updateGameStateLoadProgress(eventData: &JsValue);
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(js_namespace = window)]
+    fn handleGameReady();
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn update_game_state_load_progress(load_progress: f64) {
+pub fn js_update_game_state_load_progress(load_progress: f64) {
     updateGameStateLoadProgress(&JsValue::from_f64(load_progress));
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn js_handle_game_ready() {
+    handleGameReady();
 }
