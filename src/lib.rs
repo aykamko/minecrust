@@ -729,12 +729,12 @@ impl Scene {
 
         let mut chunk_render_descriptors: Vec<ChunkRenderDescriptor> = vec![];
 
+        #[cfg(target_arch = "wasm32")]
+        let mut chunk_i = 0;
+        #[cfg(target_arch = "wasm32")]
+        let num_chunks = chunk_dims[0] * chunk_dims[1];
         for (chunk_x, chunk_z) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
             log::info!("Creating chunk render descriptor for {},{}", chunk_x, chunk_z);
-            
-            #[cfg(target_arch = "wasm32")]
-            // Yield to JS to prevent page from getting stuck
-            wasm_utils::yield_().await;
 
             let chunk_data = &all_chunk_data[[chunk_x, chunk_z]];
 
@@ -789,6 +789,13 @@ impl Scene {
             });
             let render_descriptor_idx = chunk_render_descriptors.len() - 1;
             world_state.set_render_descriptor_idx(chunk_data.position, render_descriptor_idx);
+            
+            #[cfg(target_arch = "wasm32")] {
+                wasm_utils::update_game_state_load_progress((chunk_i + 1) as f64 / num_chunks as f64);
+                chunk_i += 1;
+                // Yield to JS to prevent page from getting stuck
+                wasm_utils::yield_().await;
+            }
         }
 
         let depth_texture = texture::Texture::create_depth_texture(
