@@ -1,4 +1,6 @@
 use minecrust::run;
+
+#[cfg(not(target_arch = "wasm32"))]
 use futures::executor::block_on;
 
 fn main() {

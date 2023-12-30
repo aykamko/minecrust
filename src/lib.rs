@@ -29,9 +29,6 @@ use winit::{
 };
 use world::CHUNK_XZ_SIZE;
 
-#[cfg(not(target_arch = "wasm32"))]
-use futures::executor::block_on;
-
 use crate::world::ChunkDataType;
 
 static RENDER_WIREFRAME: bool = false;
@@ -1352,13 +1349,7 @@ pub async fn run(width: usize, height: usize) {
     }
 
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            let mut game = Game::new(&window).await;
-        } else {
-            let mut game = block_on(Game::new(&window));
-        }
-    };
+    let mut game = Game::new(&window).await;
 
     let mut cursor_grabbed = false;
 
