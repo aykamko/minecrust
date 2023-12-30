@@ -31,7 +31,7 @@ extern "C" {
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen(js_namespace = window)]
-    fn handleGameReady();
+    fn handleGameReady(_: &JsValue);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -41,5 +41,5 @@ pub fn js_update_game_state_load_progress(load_progress: f64) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn js_handle_game_ready() {
-    handleGameReady();
+    handleGameReady(&JsValue::UNDEFINED);
 }
