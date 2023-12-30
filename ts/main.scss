@@ -1,4 +1,6 @@
 * {
+  box-sizing: border-box;
+  touch-action: manipulation;
   user-select: none;
 }
 
@@ -183,7 +185,9 @@ canvas {
   z-index: 1000;
 }
 
-* {
-  box-sizing: border-box;
-  touch-action: manipulation;
+#load-progress {
+  position: absolute;
+  width: 300px;
+  left: calc(50% - 150px);
+  bottom: 50%;
 }

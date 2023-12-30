@@ -79,10 +79,30 @@ function handlePlaceBlockTypeChanged(blockTypeStr: string) {
 }
 (window as any).handlePlaceBlockTypeChanged = handlePlaceBlockTypeChanged;
 
-function updateGameStateLoadProgress(loadProgress: Number) {
-  console.log("Load progress", loadProgress);
+function updateGameStateLoadProgress(loadProgress: number) {
+  const loadProgressBar = document.getElementById("load-progress") as HTMLProgressElement;
+  loadProgressBar.value = loadProgress * 100;
+  loadProgressBar.replaceWith(loadProgressBar); // Hack for Safari to update 
+  console.log("Load progress", loadProgress * 100);
 }
 (window as any).updateGameStateLoadProgress = updateGameStateLoadProgress;
+
+function handleGameReady() {
+  const loadProgressBar = document.getElementById("load-progress") as HTMLProgressElement;
+  loadProgressBar.remove();
+
+  const showPortraitOrientationWarning = () => {
+    const portraitWarning = document.getElementById("portrait-orientation-warning");
+    if (screen.orientation.type.includes("portrait")) {
+      portraitWarning.style.display = "flex";
+    } else {
+      portraitWarning.style.display = "none";
+    }
+  };
+  window.addEventListener("orientationchange", showPortraitOrientationWarning);
+  showPortraitOrientationWarning();
+}
+(window as any).handleGameReady = handleGameReady;
 
 function registerDomButtonEventListeners(wasmModule: any) {
   const aButton = document.getElementById("a-button");
@@ -240,18 +260,6 @@ import("../pkg/index").then((wasmModule) => {
         }
       });
     }
-
-    const showPortraitOrientationWarning = () => {
-      const portraitWarning = document.getElementById("portrait-orientation-warning");
-      if (screen.orientation.type.includes("portrait")) {
-        portraitWarning.style.display = "flex";
-      } else {
-        portraitWarning.style.display = "none";
-      }
-    };
-    window.addEventListener("orientationchange", showPortraitOrientationWarning);
-    showPortraitOrientationWarning();
-
 
     mountJoysticks(wasmModule);
   };
