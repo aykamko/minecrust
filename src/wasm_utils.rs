@@ -1,4 +1,10 @@
 #[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
+
+#[cfg(target_arch = "wasm32")]
 // Yield to Javascript
 pub async fn yield_() {
     sleep_ms(0).await;
@@ -15,4 +21,16 @@ pub async fn sleep_ms(millis: i32) {
     };
     let p = js_sys::Promise::new(&mut cb);
     wasm_bindgen_futures::JsFuture::from(p).await.unwrap();
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+extern "C" {
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(js_namespace = window)]
+    fn updateGameStateLoadProgress(eventData: &JsValue);
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn update_game_state_load_progress(load_progress: f64) {
+    updateGameStateLoadProgress(&JsValue::from_f64(load_progress));
 }

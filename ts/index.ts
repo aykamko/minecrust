@@ -79,6 +79,11 @@ function handlePlaceBlockTypeChanged(blockTypeStr: string) {
 }
 (window as any).handlePlaceBlockTypeChanged = handlePlaceBlockTypeChanged;
 
+function updateGameStateLoadProgress(loadProgress: Number) {
+  console.log("Load progress", loadProgress);
+}
+(window as any).updateGameStateLoadProgress = updateGameStateLoadProgress;
+
 function registerDomButtonEventListeners(wasmModule: any) {
   const aButton = document.getElementById("a-button");
   const bButton = document.getElementById("b-button");
