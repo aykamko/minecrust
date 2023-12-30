@@ -41,9 +41,9 @@ yarn start
 
 ## Things to improve that I will realistically never do
 
-- Camera movement with mouse is very sensitive, could use smoothing
 - Increase draw distance on mobile
   - Probably need to implement view-frustum culling for this to be feasible
+- Camera movement with external mouse feels very sensitive, could use smoothing
 - Ability to save the world and load it up later
 - Better shadows
   - Antialiasing
