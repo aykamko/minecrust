@@ -1169,6 +1169,7 @@ dependencies = [
  "image 0.24.5",
  "instant",
  "itertools",
+ "js-sys",
  "log",
  "nalgebra",
  "noise",

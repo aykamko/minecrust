@@ -16,10 +16,10 @@ pub mod texture;
 pub mod vec_extra;
 pub mod vertex;
 pub mod world;
+pub mod wasm_utils;
 
 use cgmath::Point3;
 use dom_controls::DomControlsUserEvent;
-use futures::executor::block_on;
 use spawner::Spawner;
 use std::{borrow::Cow, cell::RefCell, collections::HashSet, future::Future, mem, pin::Pin, task};
 use wgpu::{util::DeviceExt, SurfaceTexture};
@@ -28,6 +28,9 @@ use winit::{
     event_loop::{ControlFlow, EventLoopBuilder, EventLoopWindowTarget},
 };
 use world::CHUNK_XZ_SIZE;
+
+#[cfg(not(target_arch = "wasm32"))]
+use futures::executor::block_on;
 
 use crate::world::ChunkDataType;
 
@@ -727,6 +730,12 @@ impl Scene {
         let mut chunk_render_descriptors: Vec<ChunkRenderDescriptor> = vec![];
 
         for (chunk_x, chunk_z) in iproduct!(0..chunk_dims[0], 0..chunk_dims[1]) {
+            log::info!("Creating chunk render descriptor for {},{}", chunk_x, chunk_z);
+            
+            #[cfg(target_arch = "wasm32")]
+            // Yield to JS to prevent page from getting stuck
+            wasm_utils::yield_().await;
+
             let chunk_data = &all_chunk_data[[chunk_x, chunk_z]];
 
             let mut annotated_instance_buffers: Vec<AnnotatedInstanceBuffer> = vec![];
@@ -1335,7 +1344,14 @@ pub async fn run(width: usize, height: usize) {
             .expect("Couldn't append canvas to document body.");
     }
 
-    let mut game = block_on(Game::new(&window));
+
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            let mut game = Game::new(&window).await;
+        } else {
+            let mut game = block_on(Game::new(&window));
+        }
+    };
 
     let mut cursor_grabbed = false;
 
@@ -1519,10 +1535,10 @@ pub async fn run(width: usize, height: usize) {
 
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-           use winit::platform::web::EventLoopExtWebSys;
-           event_loop.spawn(event_handler);
+            use winit::platform::web::EventLoopExtWebSys;
+            event_loop.spawn(event_handler);
         } else {
-           event_loop.run(event_handler);
+            event_loop.run(event_handler);
         }
     };
 }
