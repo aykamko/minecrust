@@ -27,6 +27,18 @@ As for my motivation, I've always had a deep respect for game developers. I used
 - You can build a house in it 🏠
 - "Completed" in ~100 hours, but non-consecutively. 60% Summer 2022, 20% Winter 2022, 20% Winter 2023
 
+## How to Run
+
+Native App
+```bash
+cargo run --release
+```
+
+Web App
+```bash
+yarn start
+```
+
 ## Things to improve that I will realistically never do
 
 - Camera movement with mouse is very sensitive, could use smoothing
