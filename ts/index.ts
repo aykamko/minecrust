@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 // Called from Rust code when the user chooses a different block to place
-function handlePlaceBlockTypeChanged(blockTypeStr: string) {
+(window as any).handlePlaceBlockTypeChanged = (blockTypeStr: string) => {
   if (!atlasImage) return;
   // console.log("Block type changed to: " + blockTypeStr);
 
@@ -77,17 +77,15 @@ function handlePlaceBlockTypeChanged(blockTypeStr: string) {
     document.getElementById("block-preview-canvas").replaceWith(blockPreviewCanvas);
   }
 }
-(window as any).handlePlaceBlockTypeChanged = handlePlaceBlockTypeChanged;
 
-function updateGameStateLoadProgress(loadProgress: number) {
+(window as any).updateGameStateLoadProgress = (loadProgress: number) => {
   const loadProgressBar = document.getElementById("load-progress") as HTMLProgressElement;
   loadProgressBar.value = loadProgress * 100;
   loadProgressBar.replaceWith(loadProgressBar); // Hack for Safari to update 
   console.log("Load progress", loadProgress * 100);
 }
-(window as any).updateGameStateLoadProgress = updateGameStateLoadProgress;
 
-function handleGameReady() {
+(window as any).handleGameReady = () => {
   const loadProgressBar = document.getElementById("load-progress") as HTMLProgressElement;
   loadProgressBar.remove();
 
@@ -102,7 +100,6 @@ function handleGameReady() {
   window.addEventListener("orientationchange", showPortraitOrientationWarning);
   showPortraitOrientationWarning();
 }
-(window as any).handleGameReady = handleGameReady;
 
 function registerDomButtonEventListeners(wasmModule: any) {
   const aButton = document.getElementById("a-button");
@@ -256,7 +253,7 @@ import("../pkg/index").then((wasmModule) => {
     if (isSafari) {
       canvasElem.addEventListener("click", async () => {
         if (document.pointerLockElement !== canvasElem) {
-          await canvasElem.requestPointerLock();
+          canvasElem.requestPointerLock();
         }
       });
     }

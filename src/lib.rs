@@ -1369,6 +1369,8 @@ pub async fn run(width: usize, height: usize) {
     #[cfg(target_arch = "wasm32")]
     {
         wasm_utils::js_handle_game_ready();
+        // Yield to JS to prevent page from getting stuck
+        wasm_utils::yield_().await;
     }
 
     let updates_per_second = 100;
