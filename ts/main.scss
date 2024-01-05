@@ -221,3 +221,11 @@ canvas {
 #wasm-container {
   z-index: -2;
 }
+
+.github-button-container {
+  display: block;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  opacity: 0.66;
+}
