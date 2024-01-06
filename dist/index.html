@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Minecrust</title>
+    <link rel="icon" type="image/png" href="./favicon.png">
+    <link
+      href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css"
+      rel="stylesheet"
+      integrity="sha384-T8Gy5hrqNKT+hzMclPo118YTQO6cYprQmhrYwIiQ/3axmI1hQomh7Ud2hPOy8SP1"
+      crossorigin="anonymous"
+    />
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
+    <link href="./reset.css" rel="stylesheet" type="text/css" />
+    <link href="./main.css" rel="stylesheet" type="text/css" />
+    <script src="./index.js"></script>
+  </head>
+
+  <body>
+    <div id="portrait-orientation-warning" class="portrait-orientation-warning">
+      <div class="portrait-orientation-warning-text">
+        Please rotate your phone to landscape mode ✨
+      </div>
+    </div>
+    <div class="github-button-container">
+      <!-- <a class="github-button" href="https://github.com/aykamko/minecrust" data-color-scheme="no-preference: dark_high_contrast; light: light_high_contrast; dark: dark_high_contrast;" data-icon="octicon-star" aria-label="Star aykamko/minecrust on GitHub">Star</a> -->
+      <a class="github-button" href="https://github.com/aykamko/minecrust" data-color-scheme="no-preference: dark_high_contrast; light: light_high_contrast; dark: dark_high_contrast;" data-icon="octicon-star" data-size="large" data-show-count="true" aria-label="Star aykamko/minecrust on GitHub">Star</a>
+    </div>
+    <div id="load-progress" class="progress-container">
+      <div id="progress-inner"></div>
+    </div>
+    <div id="controls-info-popup" class="controls-info-popup">
+      <span class="control-label">WASD</span> to move<br />
+      <span class="control-label">Space</span> to jump<br />
+      <span class="control-label">Click</span> to break<br />
+      <span class="control-label">Right-Click</span> to place<br />
+      <span class="control-label">1 2 3 4 5</span> to select block type<br />
+      <span class="control-label">/</span> to toggle flying mode<br />
+    </div>
+    <div class="gameboy">
+      <div class="controls">
+        <div id="translation-joystick" class="joystick">
+          <div class="joystick-hint">Move</div>
+        </div>
+        <div id="block-preview" class="block-preview-container">
+          <canvas id="block-preview-canvas"></canvas>
+        </div>
+        <div class="right-side">
+          <div class="button-container">
+            <button id="b-button" class="button b-button"><i data-feather="box"></i></button>
+            <button id="a-button" class="button">️<i data-feather="x"></i></button>
+          </div>
+          <div id="pitch-yaw-joystick" class="joystick">
+            <div class="joystick-hint">Look +<br/>Tap to Jump</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="wasm-container"></div>
+  </body>
+</html>
