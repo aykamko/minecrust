@@ -20,6 +20,8 @@ function isTouchDevice() {
 
 const HIDE_JOYSTICK_HINTS_AFTER_N_JUMPS = 3;
 function hideJoystickHints() {
+  return; // HACK: always show joystick hints, users are confused
+
   const joystickHints = document.getElementsByClassName("joystick-hint");
   for (const joystickHint of joystickHints) {
     (joystickHint as any).style.display = "none";
